@@ -9,10 +9,11 @@ Consolidated technical record for Agent Warden. Each major section below was pre
 - [Identity service](#identity-service) — SVID issuance, OIDC delegation, action signing, attestation, federation
 - [Agent onboarding (WAO)](#agent-onboarding-wao) — registration, capability envelope, lifecycle, chain v3
 - [Console config page](#console-config-page) — `/config` diagnostic surface
+- [Operator authentication](#operator-authentication) — console + HIL human auth, RBAC, cross-channel identity
+- [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Threat model](#threat-model) — STRIDE-organized, layer-by-layer
 - [Runbooks](#runbooks) — five on-call failure modes
-- [Roadmap](#roadmap) — Tier 3 epic plan (E1–E6)
 
 ---
 
@@ -1015,6 +1016,243 @@ The v1 page does not include a "(future) Operator preferences" placeholder card.
 
 ---
 
+## Operator authentication
+
+
+Console + HIL human-auth surface — what an operator presents to the console, how the console proves an approver to HIL, and how Slack / Teams approvers anchor cross-channel clicks to a stable operator identity. Companion to "Console config page" (the read-only `/config` diagnostic) and the HIL section of `README.md`.
+
+**Module status:** **shipped 2026-05-03 → 2026-05-07.** WebAuthn approver auth shipped 2026-05-03; OIDC + basic-admin + RBAC + Slack / Teams self-link 2026-05-04…06; viewer-route gating 2026-05-07. Touches `warden-hil` (passkey credentials, session cookie, `Authn::*` server-side stamping) and `warden-console` (auth-mode selector, ceremony proxy, `/me/identities`, viewer / approver gates).
+
+### 1. What this closes
+
+Pre-2026-05-03, WebAuthn was the only auth path. That was a dealbreaker for buyers with existing OIDC SSO and there was no solo-evaluation mode. Cross-channel approvers (Slack / Teams) had no way to anchor their clicks to a stable operator identity, so chain rows could carry inconsistent `decided_by` values across channels. Read routes had no viewer-or-better gate, so a misconfigured deploy could leak audit data to anyone who hit the URL.
+
+### 2. Auth modes
+
+Four modes selected via `WARDEN_CONSOLE_AUTH={disabled|basic-admin|webauthn|oidc}`:
+
+| Mode | Use case | Bind constraint |
+|---|---|---|
+| `disabled` | dev / CI; mirrors `WARDEN_HIL_AUTH_DISABLED=true` under a console-side switch | loopback only (`--bind 127.0.0.1`) |
+| `basic-admin` | solo evaluation; single hardcoded user from `WARDEN_CONSOLE_ADMIN_USER` + `WARDEN_CONSOLE_ADMIN_PASS_BCRYPT` | refuses non-loopback bind unless `WARDEN_CONSOLE_ALLOW_BASIC_ADMIN_NETWORK=true` |
+| `webauthn` | self-hosted small-team default; HIL holds passkey credentials, console proxies the ceremony | none |
+| `oidc` | production with existing SSO; generic OIDC code flow against any compliant IdP | none |
+
+Mode selection is a runtime knob, not a build-time choice — operators flip modes without rebuilding.
+
+### 3. RBAC
+
+Two static roles, mapped via OIDC `groups` claim, config-as-code only:
+
+- `viewer` — read-only access to audit / chain / agent registry / config / exports / velocity / stats / HIL queue / sim / live tail.
+- `approver` — viewer + ability to decide HIL pending items.
+
+Group mapping lives in console config:
+
+```yaml
+auth:
+  oidc:
+    approver_groups: ["security-team", "finance-ops"]
+    viewer_groups: ["engineering", "compliance"]
+```
+
+No user table. No admin role (admin surface = `wardenctl` + direct identity API). No runtime role exceptions. The IdP is the source of truth.
+
+The viewer-route gates (`require_viewer` / `require_viewer_api`) sit in front of every console read route; no-session HTML page requests get a `303 → /login`, no-session SSE / JSON requests get `401`. `disabled` mode short-circuits both gates with a synthetic Approver session for dev / CI. The HIL-queue template carries a `can_approve` flag so OIDC viewers see the queue contents but no Approve / Deny / Modify buttons.
+
+### 4. Cross-channel identity
+
+Slack and Teams approvers self-link via a `/me/identities` page in the console using Slack / Teams OAuth. Console persists the link in a small `user_identities` table:
+
+```sql
+CREATE TABLE user_identities (
+  oidc_sub      TEXT PRIMARY KEY,
+  slack_user_id TEXT UNIQUE,
+  teams_user_id TEXT UNIQUE,
+  linked_at     TIMESTAMP NOT NULL,
+  last_verified TIMESTAMP NOT NULL
+);
+```
+
+A Slack / Teams approve click looks up `user_id → oidc_sub` via this table. **If no mapping exists, the click is rejected** with "your Slack identity is not linked — link via the console first." This forces every chain row to consistently stamp the same identity (`oidc:<sub>`) regardless of which channel the approval came from.
+
+**Schema caveat:** the table sketches a key on `oidc_sub`, but `webauthn` and `basic-admin` modes don't produce OIDC subs. Implementation chose nullable per-mode columns (`oidc_sub` / `webauthn_name` / `basic_username`) with a CHECK constraint that exactly one is set. Reversible — the PK choice doesn't bind the wire format.
+
+Buyers create their own Slack / Teams app from a manifest published in `warden-console/docs/` (`slack-app-manifest.json` / `teams-app-manifest.md`) — no marketplace presence.
+
+### 5. Chain `decided_by` schema
+
+The literal `"warden-console"` value was replaced 2026-05-03 — HIL now stamps `decided_by` server-side from the verified principal:
+
+- `webauthn:{name}` — WebAuthn mode (shipped 2026-05-03).
+- `oidc:<sub>` — OIDC mode; also stamped on Slack / Teams clicks after self-link (the OAuth-linked `oidc_sub` flows through, not the underlying channel id).
+- `basic:<username>` — basic-admin mode (auditor reads this and immediately knows the deployment was running in basic-admin mode).
+
+The chain row also carries an `approver_assertion` JSON blob — extension hook for stronger per-decision claims:
+
+- WebAuthn: `{ "method": "webauthn", "credential_id": "...", "iat": ... }`
+- OIDC: `{ "method": "oidc-session", "sub": "...", "iat": ... }`
+- Basic: `{ "method": "basic-admin", "username": "..." }` (intentionally cheap — no chain-of-trust to assert)
+
+Existing WebAuthn rows in the chain don't get the field retroactively; only rows produced after the field landed carry it. No chain-version bump required; the field is additive.
+
+### 6. Console → HIL trust
+
+The trust path is **mode-dependent** because WebAuthn already has a stronger primitive and we don't tear it out:
+
+- **WebAuthn mode (today, unchanged):** HIL is the credential authority. The console proxies WebAuthn ceremonies and shuttles HIL's session cookie back to the browser; subsequent `/decide` calls attach the HIL cookie and HIL stamps `decided_by` from the verified principal.
+- **OIDC / basic-admin / disabled:** HIL has no credential to verify, so console and HIL share a bearer secret (`WARDEN_HIL_DECIDE_TOKEN`). Console verifies OIDC (or basic-admin), stamps `decided_by`, and presents the bearer on `/decide`. HIL trusts the request-body `decided_by` *only when* a valid bearer is present; without the bearer, the existing `Authn::Disabled` fallback applies. **Both processes refuse to boot if the configured mode requires the token and it is missing.**
+
+The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via warden-identity SVIDs (deferred service-mesh work, see "Threat model — Open items") will replace it uniformly across all modes including WebAuthn.
+
+### 7. Mechanical defaults
+
+- OIDC token validation: JWKS, 1-hour cache TTL, reactive refresh on signature failure.
+- Session: server-side encrypted cookie via `tower-sessions`, 8-hour rolling lifetime.
+- Logout: clears server session, optionally calls IdP `end_session_endpoint`.
+- CSRF: htmx + origin-check + per-session token; no separate state cookie.
+- IdPs tested in CI: Keycloak (dockerizable). Quickstart docs only for Google / Okta / Azure AD / Auth0 — no CI fixtures (their public test infra is unreliable).
+
+### 8. Future extensions
+
+Triggers, not commitments — listed so a future contributor knows the hooks are deliberate, not accidental:
+
+- **Per-decision WebAuthn step-up over OIDC sessions** — first design-partner from FinTech (PSD2 SCA), defense (FIPS / DoD impact level), or healthcare (HIPAA technical safeguards). The WebAuthn primitives already exist; v2 wires them as a step-up gating individual `/decide` calls on top of OIDC sessions, rather than a parallel auth mode.
+- **Runtime role-management UI** — first buyer who demands non-GitOps role exceptions. Until then, config-as-code is sufficient.
+- **Admin role + agent-registry UI in console** — first user who explicitly wants agent CRUD outside `wardenctl`. Until then, `wardenctl` + direct identity API are sufficient.
+- **Four-eyes / separation-of-duties** — first buyer demanding per-human approval limits or "two distinct approvers required." This also triggers an upgrade from self-link to a more rigorous identity unification scheme.
+
+---
+
+## Regulatory export
+
+
+EU AI Act Article 11 / 12 audit-bundle export from the existing hash chain. Operator-fetched, operator-stored, signed, time-window scoped. Companion to the cold-tier `/export` (Iceberg + Parquet analytics snapshots) but with a different audience: external regulators, not internal analysts.
+
+**Module status:** **shipped 2026-05-07 (slices 1 + 2 + 3).** Lives in `warden-ledger` + `warden-identity` (new `POST /sign/blob`) + `warden-sdk` + `wardenctl`. No chain-version change.
+
+### 1. What this closes
+
+The existing `/export` produces Parquet for analytics; no auditor expects to reach for Parquet tooling. The Regulatory export gives auditors NDJSON + a verifiable manifest + a detached ed25519 signature in a tarball they can untar with `tar` and verify with `openssl` and `sha256sum`. The bundle is independently verifiable without a Warden binary in scope.
+
+### 2. Articles in scope
+
+- **EU AI Act Article 11** (technical documentation) and **Article 12** (automatic logging records) only.
+- **Articles 14-15** (human oversight, accuracy) need operator-supplied prose; slice 3 covers prose embedding but doesn't auto-derive the content.
+- **GDPR Article 30** has a different surface (data categories, recipients) and isn't auto-derivable from forensic events; deferred until a buyer asks.
+
+### 3. Bundle format
+
+`.tar.gz` containing:
+
+```
+manifest.json                 — schema v3, signed
+manifest.sig                  — detached ed25519 sig (128 hex chars + LF)
+entries.ndjson                — one LedgerEntry per line, seq ASC
+technical_documentation.md    — operator-supplied prose (optional)
+README.txt                    — auditor verification checklist (7 steps)
+```
+
+NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more readily than Parquet tooling. Detached signature rather than embedded — keeps the `manifest.json` byte-stable across signing implementations. Half-open window `[from, to)`. Empty windows return a valid bundle with `row_count: 0` (auditors expect a verifiable artifact even for "we logged nothing"). Operator stores; Warden does not retain bundles server-side.
+
+### 4. Wire surface
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/export/regulatory?from=…&to=…[&include_exports=true]` (warden-ledger) | optional `text/markdown` (≤ 1 MiB) | `application/gzip` (`.tar.gz`) |
+| POST | `/sign/blob` (warden-identity) | `{ digest_hex, audience }` | `{ signature, key_id, algorithm: "ed25519", digest_alg: "sha256", signed_at }` |
+
+`POST /export/regulatory` is the auditor-facing export. `POST /sign/blob` is the new signing primitive on warden-identity (sibling to `/sign`, same caller-allowlist gate, audience-tagged forensic event), wired via `WARDEN_IDENTITY_URL` + `WARDEN_LEDGER_SPIFFE` and routed through `warden-ledger::identity_client::ManifestSigner` / `HttpManifestSigner`.
+
+### 5. Manifest schema (v3)
+
+```jsonc
+{
+  "schema_version": "3",
+  "generated_at": "2026-05-07T12:34:56Z",
+  "window": { "from": "...", "to": "..." },
+  "row_count": 1234,
+  "seq_lo": 5000,
+  "seq_hi": 6233,
+  "chain_state": {
+    "prev_hash_at_window_start": "...",
+    "entry_hash_at_window_end": "..."
+  },
+  "ndjson_sha256": "...",
+  "article_scope": ["EU-AI-Act-Article-11", "EU-AI-Act-Article-12"],
+  "signature": {
+    "sidecar": "manifest.sig",
+    "algorithm": "ed25519",
+    "digest_alg": "sha256",
+    "key_id": "...",
+    "signed_at": "..."
+  },
+  "technical_documentation": {     // optional, slice 3
+    "filename": "technical_documentation.md",
+    "sha256": "...",
+    "byte_size": 2048
+  },
+  "parquet_pointers": [             // optional, with ?include_exports=true
+    {
+      "snapshot_id": "...",
+      "written_at": "...",
+      "data_uri": "...",
+      "manifest_uri": "...",
+      "data_sha256": "...",
+      "byte_size": 1234567,
+      "row_count": 50000,
+      "seq_lo": 4000,
+      "seq_hi": 6500
+    }
+  ]
+}
+```
+
+The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so `technical_documentation` and `parquet_pointers` are signed transitively — tampering with the prose breaks both signature verification and a cheap recompute. v1 was the unsigned shape (slice 1); v2 added the `signature` envelope (slice 2); v3 added the optional `technical_documentation` and `parquet_pointers` blocks (slice 3). v3 with neither optional field populated is byte-identical to v2 aside from `schema_version`.
+
+### 6. Auditor verification recipe
+
+The README.txt embedded in the bundle spells out a 7-step recipe:
+
+1. Untar the bundle.
+2. Verify `entries.ndjson` byte-hash matches `manifest.json`'s `ndjson_sha256`.
+3. Verify chain continuity from `chain_state.prev_hash_at_window_start` through every NDJSON row to `chain_state.entry_hash_at_window_end`.
+4. (Optional) Verify `technical_documentation.md` byte-hash matches `manifest.technical_documentation.sha256`.
+5. Blank `manifest.signature` → `null`, re-serialize pretty-printed JSON, sha256.
+6. `ed25519_verify` the digest from step 5 against `manifest.sig` using the operator-published public key (`key_id` in `manifest.signature`).
+7. (Optional) For each entry in `manifest.parquet_pointers`, fetch `data_uri`, sha256, compare to `data_sha256`.
+
+Steps 1-3 are the chain-integrity check; steps 5-6 are the signature check; steps 4 and 7 cover the optional artifacts. Steps 2 + 3 alone establish the chain row data is authentic; step 6 adds non-repudiation against the signing key.
+
+### 7. Operator-supplied prose
+
+`POST /export/regulatory` accepts an optional `text/markdown` (or any `text/*`) request body up to 1 MiB, embedded verbatim as `technical_documentation.md`. The manifest's `technical_documentation` sub-object commits to `{ filename, sha256, byte_size }`; the signature commits transitively. 1 MiB is the hard cap (`413 payload_too_large` on overrun); operators with longer documentation typically reference it as a URL inside the markdown rather than embed.
+
+### 8. Parquet pointers
+
+`?include_exports=true` triggers a seq-overlap scan against the `exports` table; pointers for cold-tier snapshots whose seq range overlaps the window land in `manifest.parquet_pointers`. The auditor can independently fetch the snapshots to cross-check analytical aggregates against the chain rows.
+
+### 9. CLI
+
+```
+wardenctl regulatory export \
+  --from <RFC3339> --to <RFC3339> \
+  [--readme <PATH>] [--include-exports] \
+  [--ledger-url <URL>] \
+  --output bundle.tar.gz
+```
+
+Lives under a new top-level `regulatory` verb (own surface — distinct from `agents`; no identity gate today since the ledger doesn't gate `/export/regulatory`). The CLI is a thin pass-through to `LedgerClient::regulatory_export(window, RegulatoryExportOptions { readme, include_exports })` on `warden-sdk`.
+
+### 10. Failure & fallback semantics
+
+- **Identity unreachable** → `503 signing_unavailable`. Fail-closed: the ledger never emits an unsigned bundle. Operator runbook is "Identity service unreachable" in the [Runbooks](#runbooks) section.
+- **Empty window** → `200 OK` with a valid bundle, `row_count: 0`.
+- **Body too large** → `413 payload_too_large`.
+- **Body content-type not `text/*`** → ignored as readme; the bundle is produced without `technical_documentation.md`.
+
+---
+
 ## Demo experience
 
 
@@ -1453,8 +1691,9 @@ SHA-256 hash-chained, SQLite-backed forensic store. Subscribes to
 
 #### Repudiation
 
-The chain is append-only and signed. The export bundle (planned E6
-deliverable) is the long-term audit artifact.
+The chain is append-only and signed. The export bundle (see
+[Regulatory export](#regulatory-export)) is the long-term audit
+artifact.
 
 #### Information disclosure
 
@@ -1570,11 +1809,11 @@ year-2 product question (out of scope, see "Out of scope" below).
 
 #### Operator authentication
 
-E1 covers the full operator surface: OIDC for bootstrap, WebAuthn for
-step-up on Yellow-tier approvals, basic-admin role for agent
-lifecycle, RBAC, Slack/Teams self-link for cross-channel identity.
-Viewer-route gating remains open (E1 mod viewer-route — see
-`ROADMAP.md`).
+The full operator surface lives in [Operator
+authentication](#operator-authentication): OIDC for bootstrap,
+WebAuthn for step-up on Yellow-tier approvals, basic-admin for solo
+evaluation, RBAC, Slack / Teams self-link for cross-channel
+identity, and viewer-or-better gates on every console read route.
 
 #### Time
 
@@ -1602,7 +1841,7 @@ threats are real but addressed elsewhere or deferred deliberately.
   Bonus (Brain's model is separate from any agent's primary LLM).
 - **Multi-tenant isolation in the console.** Today the console is
   single-tenant per deployment. Multi-tenant SaaS is a year-2
-  product question (see `ROADMAP.md` "Out of scope").
+  product question.
 - **Client-side typosquatting against `vanteguardlabs.com`.** Domain
   hygiene, not a Warden control.
 - **DoS that requires resource limits the deployment guide already
