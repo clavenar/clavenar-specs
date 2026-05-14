@@ -2322,9 +2322,9 @@ signature, every SVID, and every grant becomes attacker-controlled. The
 ledger chain itself is recoverable (deterministic from the prev rows),
 but the **signature** layer of v2/v3 is not. The deployment recovery
 posture is: rotate the signing key, re-issue SVIDs, force every agent
-to re-onboard. Documented in [Runbooks](#runbooks) "identity service
-unreachable" with a follow-on "identity compromise" runbook
-**TODO: write that runbook as a follow-on supply-chain slice.**
+to re-onboard. Documented in [Runbooks](#runbooks) §5 "identity
+service unreachable" (operational outage) and §6 "issuer-key
+compromise" (this incident class).
 
 ### warden-console
 
