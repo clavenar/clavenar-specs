@@ -1776,6 +1776,140 @@ in-memory, and runs each input through both. The live engine in
 AppState is never touched. `mode=replace` filters out the named
 rule before adding the candidate; `mode=add` only appends.
 
+### 7.6 Self-Learn miner (Phase 7)
+
+Phase 6 (Policy Lab) lets operators **validate** a draft rule against
+real traffic. Phase 7 closes the upstream gap: it lets the system
+**propose** a rule by mining recurring patterns from that same
+traffic, scoring each candidate via the existing Lab pipeline, and
+surfacing a ranked list of one-click-Accept proposals.
+
+Three new surfaces wire it together. No new service.
+
+**`POST /policies/mine` (policy-engine, internal mTLS router)**
+
+```json
+{
+  "corpus":               [ /* PolicyInput */, … ],         // capped at 5000
+  "historical_verdicts":  [ /* PolicyDecision */, … ],      // same length
+  "max_candidates":       12,                                // server caps at 20
+  "ask_brain":            true                               // optional
+}
+```
+
+Response on 200:
+
+```json
+{
+  "candidates": [
+    {
+      "id":              "5f4b9c…",                          // ephemeral UUID
+      "kind":            "after_hours",                      // detector class
+      "rule_name":       "after_hours_bulk_export_v1",
+      "one_liner":       "12% of bulk_export Allow calls happen off-hours.",
+      "rationale":       "Off-hours bulk operations…",       // present when ask_brain && brain reachable
+      "brain_enriched":  true,
+      "rego_body":       "package warden.authz\n…",
+      "compile_ok":      true,
+      "evidence_count":  142,
+      "score":           87.4,                                // ∈ [0, 100]
+      "lab_replay": {
+        "allow_to_deny":       0,
+        "allow_to_yellow":     142,
+        "deny_to_allow":       0,
+        "deny_to_yellow":      0,
+        "yellow_to_allow":     0,
+        "yellow_to_deny":      0,
+        "unchanged":           4856,
+        "catalog_regressions": 0
+      }
+    }, …
+  ],
+  "corpus_size":         5000,
+  "candidates_dropped":  3,                                  // compile-fail or regression
+  "evaluated_in_ms":     412
+}
+```
+
+Five deterministic detectors fire over the corpus:
+
+- **after_hours** — `tool_type` cohorts whose Allow rate outside
+  Mon-Fri 09:00-18:00 UTC exceeds 5%.
+- **arg_cap** — `(tool_type, numeric-arg-key)` cohorts whose p99 is
+  ≥ 2× the p95.
+- **unattested_method** — `(agent_kind, method)` cohorts with ≥ 30%
+  of calls missing attestation AND a non-zero attested baseline.
+- **velocity_spike** — `recent_request_count` cohorts where the peak
+  exceeds `median + 3σ`.
+- **intent_score_drift** — Allow rows clustering at `intent_score >
+  0.4` for tools whose global baseline is lower.
+
+Each detector aggregates threshold metrics — never raw `arguments`
+values. The renderer emits one Rego file per pattern using `format!`
+templates; the candidate is then compile-checked via the existing
+`validation::validate` path before scoring.
+
+Scoring formula:
+```text
+raw     = allow_to_deny * 1.0 + allow_to_yellow * 0.5
+evscale = sqrt(evidence_count)
+pen     = 1 + catalog_regressions * 100
+score   = (raw * evscale / pen).min(100)
+```
+Candidates whose `catalog_regressions > 0` are dropped before
+ranking. The remaining list is sorted descending by `score`, with
+stable tie-break on `rule_name`.
+
+**`POST /explain-pattern` (brain, plain-HTTP health port)**
+
+```json
+{
+  "kind":            "after_hours",
+  "tool_type":       "bulk_export",
+  "threshold":       { "off_hours_pct": 0.12 },
+  "evidence_count":  142
+}
+```
+
+Response on 200:
+
+```json
+{
+  "one_liner": "12 % of bulk_export Allow calls happen after 22:00 UTC…",
+  "rationale": "Off-hours bulk operations without a human on call surface in…"
+}
+```
+
+**PII contract.** The request body holds only the pattern kind, the
+tool name, an aggregated `threshold` object, and an `evidence_count`.
+The wire struct (`ExplainPatternRequest` in `warden-brain/src/wire.rs`)
+is the enforcement boundary — the policy-engine miner constructs the
+request from aggregated metrics only, and the prompt itself refuses
+to use any raw request data if it ever leaks through. A `tests/`
+assertion pins both halves of the contract.
+
+The endpoint lives on the brain's plain-HTTP health listener (port
+9081 by default) so the policy-engine miner can call it without
+mTLS. The wire shape contains no PII, the health port is internal-
+only by network topology, and the only caller is the admin-gated
+miner — at most 20 calls per mine run. Brain unconfigured or
+unreachable → miner falls back to template explanations and stamps
+each candidate with `brain_enriched: false`.
+
+**Accept flow (no new endpoint).** Operator clicks Accept on a
+candidate card → console POSTs the candidate's `rego_body` to the
+existing `POST /policies` create endpoint with the Phase 7 addition
+`active: false`. The new policy lands in the policy store with
+`active=0`, visible in `/policies` but not loaded into the engine.
+Operator clicks **Activate** from the policy detail page when ready
+— same lifecycle as a hand-authored rule.
+
+`CreatePolicyRequest.active` (the new field) is optional; omitting
+it preserves the pre-Phase-7 default (`active=true`). Inactive
+drafts skip the candidate-engine build step entirely — the body
+still passes `validate()`, but compose-time composition against the
+active bundle is deferred until activation.
+
 ### 8. Authorization
 
 Adds a third role to the existing two-role hierarchy in `warden-console/src/auth_session.rs`:
