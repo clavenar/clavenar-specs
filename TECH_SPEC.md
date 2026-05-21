@@ -14,6 +14,7 @@ Consolidated technical record for Agent Warden. Each major section below was pre
 - [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
+- [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
 - [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (designed; implementation v1.x+3)
@@ -2034,6 +2035,294 @@ The eight architectural decisions resolved by the `/grill-me` walkthrough, all c
 6. New `Role::Admin` at top of hierarchy, Viewer reads + Admin writes, fail-closed on missing OIDC mapping (not reuse Approver, not per-policy ACL).
 7. Required free-text `reason` on every mutation; defer two-person approval (not no-guardrails, not critical-policy-only protection).
 8. Build-then-persist-then-swap ordering, optimistic concurrency via `expected_current_version`, boot-time integrity check (not pessimistic locking, not last-write-wins).
+
+---
+
+## Policy catalog
+
+Companion to [Console policy management](#console-policy-management). Where that section's `/policies` surface manages the *active* rule set — Create / Update / Activate / Deactivate / Rollback — this section adds a *library* on top: the on-disk `policies/templates/` directory becomes a browseable, filter-able, one-click-installable catalog with structured metadata.
+
+**Module status:** **shipped.** Lives in `warden-policy-engine` (frontmatter parser, catalog metadata columns on the `policies` table, four new HTTP endpoints under `/policies/templates`), `warden-console` (`/policies/library` page with filter sidebar + card grid + drill-down detail + install action + htmx lab-preview, plus metadata badges on the active `/policies` index), `warden-sdk` (mirror wire types + four async client methods), and `warden-ctl` (`wardenctl policy scaffold` offline generator + `wardenctl policy library {list,install}` engine-talking). End-to-end coverage in `warden-e2e/MANUAL_TESTS.md` S-LIB-01..05, F-LIB-10..14, D-LIB-20.
+
+Design decided by a `/grill-me` walkthrough. Nine architectural decisions resolved in sequence (audience, metadata source, target size, catalog-vs-active separation, frontmatter schema, library UX, install flow, phasing, authoring model). This section is the consolidated record.
+
+### 1. What this closes
+
+`warden-policy-engine` has shipped a "starter pack" of `.rego` templates under `policies/templates/` since the [Console policy management](#console-policy-management) section landed. Today an operator who wants to use one:
+
+1. Reads the template README to find a candidate.
+2. `cp policies/templates/<name>.rego policies/<name>.rego` on the policy-engine container.
+3. Restarts the container so the file-system seed picks it up.
+
+The README is plain prose; there's no machine-readable metadata to filter by, no way to preview a rule's impact before installation, and the install itself bypasses the audit trail that operator-authored creates land on. As the catalog has grown past 80 templates, the prose README is no longer scannable — operators reach for `cat` and `grep` instead.
+
+This section closes those gaps:
+
+| Gap | Today | After this section |
+|---|---|---|
+| Discovery | Read the template README in prose; `cat` files to see what each gates | `/policies/library` card grid with domain / severity / framework / tier / tool-surface filters |
+| Metadata | Domain phrase in a comment header, parsed by humans only | Seven structured frontmatter fields parsed at seed + on every save into the `policies` SQLite row |
+| Install audit | `cp` happens out-of-band; no chain row | `POST /policies/templates/{name}/install` reuses the create-path's transaction and emits a `policy.installed_from_template` chain row |
+| Pre-install preview | None; operator reads the rego and guesses | htmx `Preview impact` button replays the candidate against the bundled chaos catalog and renders the same diff tile as `/policies/<name>/lab/run` |
+| CLI authoring | `wardenctl generate-policy <name>` emits one of seven legacy templates verbatim | `wardenctl policy scaffold` mints a fresh template skeleton with frontmatter pre-filled + tier-conditional rule blocks; `wardenctl policy library list/install` mirrors the console flow |
+
+The catalog is *not* a new policy-authoring product. Operators still edit Rego files. The value is collapsing "find → cp → restart" to "filter → click → see in `/policies`" and giving the install a proper audit trail.
+
+### 2. Scope and non-goals
+
+**In scope (v1):**
+
+- Frontmatter schema with seven fields (Domain, Severity, Frameworks, Tags, Tier, Tool surface, Summary) plus continuity with the legacy `Template:` / `Purpose:` / `Inputs:` / `Edit:` block (parsed-and-ignored).
+- Additive `ALTER TABLE policies ADD COLUMN` migration for the seven metadata columns. Existing prod DBs upgrade in place on next boot; no row rewrite.
+- Boot-time refresh: every restart re-parses the current-version body of every (non-deleted) policy and reconciles the columns. Operators editing a `.rego` file with new frontmatter values see them surface without any explicit save.
+- Four HTTP endpoints under `/policies/templates*` on `warden-policy-engine`.
+- `policy.installed_from_template` as a new chain-v3 event kind. Identical payload schema to `policy.created`; the kind itself is the differentiator so forensic queries can split library installs from operator-authored creates.
+- Library lab preview against the bundled chaos catalog (6 attacks). Replay against ledger corpus stays on the operator-Lab surface — that's a different audience and a different latency budget.
+- Sidebar + card grid UI at `/policies/library`. Filtering is server-side via GET query params; URL holds the state so links are sharable.
+- Read-only Library detail view at `/policies/library/{name}` with Install affordance gated on `Role::Admin`.
+- Metadata badges on `/policies` (active index) rows so operators see Domain / Severity / Frameworks inline.
+- `wardenctl policy scaffold` (offline, no engine call) + `wardenctl policy library {list, install}` (engine-talking) on `warden-ctl`.
+
+**Explicitly out of scope (v1 non-goals):**
+
+- Auto-Lab on detail-page load. The endpoint is wired and the button is template-ready, but the page currently requires an explicit operator click — auto-replay against the catalog on every detail-page render would be noise on the engine. Operator-triggered preview only.
+- "Install all in domain X" bulk action. The filter URL is already a complete spec of the templates the operator wants, so a bulk-install endpoint would be ~10 lines; deferred to a follow-up once operators report wanting it.
+- Editing a template in-place via the console. Templates are filesystem source-of-truth; the active-policy edit flow on `/policies/<name>/edit` remains the only console editor. Library is read-only.
+- Community / third-party template marketplace. Versioning, signing, trust-on-first-use, distribution — all of that lives behind a separate plan once the curated catalog stabilises at 100-200 entries.
+- Archetype / DSL layer over Rego. At ~85 templates the file-per-policy model still scales; if the catalog grows past 500 a parametric layer becomes interesting.
+- Frontmatter linting at engine boot. Today the parser is tolerant (missing fields stay NULL); a strict linter that rejects templates with empty frontmatter is a follow-up once authoring drift is observable.
+- Compliance-framework view as a first-class navigation surface (`/policies/library/by-framework/HIPAA`). The frontmatter carries it; the URL filter (`?framework=HIPAA`) gives the same answer. A dedicated route is a polish iteration.
+
+### 3. Frontmatter schema
+
+Every `.rego` (and `.json`) file in `policies/` and `policies/templates/` carries a structured comment block at the top. The engine's parser reads consecutive `#`-prefixed lines until the first non-comment line (typically `package warden.authz`); within the comment block, any `# Key: Value` line whose Key matches the recognised set populates a column on the policy's row.
+
+```rego
+# Template:     phi_egress
+# Domain:       healthcare
+# Severity:     high
+# Frameworks:   HIPAA, HITRUST
+# Tags:         phi, pii, egress, attestation
+# Tier:         mixed
+# Tool surface: phi_export, send_email
+# Summary:      Deny PHI exports unattested; review attested; flag PHI fields in send_email.
+# Purpose:      ...multi-line prose...
+# Inputs:       input.tool_type, input.attestation
+# Edit:         The phi_field_needles set is the load-bearing knob.
+
+package warden.authz
+```
+
+| Field | Cardinality | Semantics |
+|---|---|---|
+| `Domain` | scalar | Industry / use-case slug (`healthcare`, `finance`, `telecom`, `cross-cutting`, …). Drives `/policies/library` sidebar + `/policies` row badge. Free-form by design — the operator's deployment may not match any prior taxonomy. |
+| `Severity` | scalar enum | `low` \| `medium` \| `high` \| `critical`. Drives the colored pill in the UI (slate / amber / orange / red). |
+| `Frameworks` | CSV | Compliance frameworks the rule maps to (`HIPAA`, `SOC2`, `PCI-DSS`, …). Multi-value lets a single rule satisfy several compliance asks. |
+| `Tags` | CSV | Free-form keywords (`pii`, `egress`, `ato`, `attestation`, …). Catches the long tail of cross-cutting concerns that don't deserve a column of their own. |
+| `Tier` | scalar enum | `deny` \| `review` \| `mixed`. Documents the rule's default verdict — useful for `?tier=deny` filtering when an operator wants only hard-floor rules. |
+| `Tool surface` | CSV | MCP tool names the rule references. Powers cross-linking with `/demo` scenarios and `/policies/mine` candidates. |
+| `Summary` | scalar | One-line description. Appears as the card subtitle in `/policies/library` and is what operators read first. |
+
+Parsing rules:
+- Keys are case-insensitive (`# domain:` and `# Domain:` parse identically; canonical form is title-case to match the visible templates).
+- Multi-value fields accept comma-separated; whitespace is trimmed; empty entries dropped.
+- Duplicate keys: last-wins. (Rare; the lint surface to catch duplicates is deferred.)
+- Missing fields stay `None` / empty Vec; the UI renders an em-dash or just omits the badge row.
+- The legacy `Template:` / `Purpose:` / `Inputs:` / `Edit:` keys are pass-through — they appear in the prose-rendered Purpose block but the catalog parser ignores them. This preserves the README convention every starter template already followed.
+- Unrecognised keys (anything not in the recognised set above) are silently ignored, which keeps frontmatter forward-compatible: a future `# Authors:` or `# Last reviewed:` field can be added by writers without breaking the parser.
+
+The parser lives in `warden-policy-engine/src/frontmatter.rs`. It is exposed at the module surface and consumed both by the seeder (`storage::seed_from_dir`) and the refresh helper (`storage::refresh_frontmatter_from_bodies`); the operator-create + operator-update write paths call a transactional `update_policy_frontmatter` helper so any write through `/policies/new` or `PUT /policies/{name}` also reconciles the metadata columns inside the same SQLite transaction as the version row insert.
+
+### 4. Data model (additive)
+
+Seven columns added to the existing `policies` table via additive `ALTER TABLE ADD COLUMN`:
+
+```sql
+ALTER TABLE policies ADD COLUMN domain TEXT;
+ALTER TABLE policies ADD COLUMN severity TEXT;
+ALTER TABLE policies ADD COLUMN frameworks TEXT;   -- CSV-joined for arrays
+ALTER TABLE policies ADD COLUMN tags TEXT;          -- CSV-joined
+ALTER TABLE policies ADD COLUMN tier TEXT;
+ALTER TABLE policies ADD COLUMN tool_surface TEXT;  -- CSV-joined
+ALTER TABLE policies ADD COLUMN summary TEXT;
+```
+
+Each probe is wrapped in a `has_column` guard (matching the pattern `warden-ledger::init_schema` already uses for chain v2 / v3 column additions), so re-running `init_schema` on a DB that already has the columns is a no-op. Existing rows on a pre-upgrade DB get NULL values; the first boot of the new binary calls `refresh_frontmatter_from_bodies`, which re-parses the current-version body of every non-deleted policy and writes the columns in a single transaction.
+
+Multi-value fields (`frameworks`, `tags`, `tool_surface`) are stored CSV-joined at the SQLite layer for the same reason chain v3 stores its `payload_json` as a TEXT blob: the column is a transport, not a queryable index. The wire types in `warden-sdk` and the public Rust types in `storage::PolicyRow` expose them as `Vec<String>`; `storage::split_csv` and `storage::join_csv` handle the boundary. An empty vec maps to NULL in SQLite, not an empty string.
+
+### 5. Wire API (`warden-policy-engine`)
+
+```
+GET    /policies/templates                              list catalog with installed bool (Viewer)
+GET    /policies/templates/{name}                       one template's body + frontmatter (Viewer)
+POST   /policies/templates/{name}/install               install into active set (Admin)
+POST   /policies/templates/{name}/lab/run               replay against chaos catalog (Admin) — see §7
+```
+
+`{name}` is the bare filename including extension (e.g. `phi_egress.rego`). Path-traversal is rejected at the engine — names containing `/`, `\`, `..`, or lacking a `.rego` / `.json` extension return `400 Bad Request` before any filesystem access.
+
+`GET /policies/templates` returns a JSON array of `PolicyTemplate` envelopes, sorted by name:
+
+```json
+[
+  {
+    "name": "phi_egress.rego",
+    "content_type": "rego",
+    "domain": "healthcare",
+    "severity": "high",
+    "frameworks": ["HIPAA", "HITRUST"],
+    "tags": ["phi", "pii", "egress", "attestation"],
+    "tier": "mixed",
+    "tool_surface": ["phi_export", "send_email"],
+    "summary": "Deny PHI exports unattested; review attested; flag PHI fields in send_email.",
+    "installed": true
+  },
+  …
+]
+```
+
+`installed: true` iff a `policies` row with the same `name` exists and is not soft-deleted. The join is computed server-side at request time; the engine never persists the flag.
+
+`GET /policies/templates/{name}` returns the same shape plus `body` (raw `.rego` source) and `body_sha256` (hex digest). 404 on a name that doesn't exist on disk; 400 on a path-traversal attempt.
+
+`POST /policies/templates/{name}/install` takes `{reason, actor_sub, actor_idp}` and reuses the create-path's `apply_create` helper with `event_kind = "policy.installed_from_template"`. Returns the same `MutationResponse` shape as `POST /policies` — `name`, `version: 1`, `body_sha256`, `current_version: 1`, `active: true`, `event_kind: "policy.installed_from_template"`.
+
+`POST /policies/templates/{name}/lab/run` takes `{mode, replace_rule_name, inputs}` and reuses the batch-evaluator's `run_batch` helper. The `candidate_name` and `candidate_rego` are sourced from the on-disk file instead of the request body. Return shape is the unmodified `EvaluateBatchResponse` — identical to `/policies/evaluate-batch` so console reuses its existing Lab-results renderer.
+
+### 6. Install flow
+
+A library install differs from `POST /policies` in exactly one place: the chain-v3 event kind on the outbox row. Everything else is shared:
+
+1. The `install_template` handler reads the template body from disk (`<policy_dir>/templates/<name>`) and infers `content_type` from the extension. 404 / 400 surface here.
+2. Composes a `CreatePolicyRequest` (the SDK's own request type) with the on-disk body + the operator's reason + their session sub / idp.
+3. Calls `write_api::apply_create(state, req, "policy.installed_from_template")`.
+4. `apply_create` runs the exact create flow [§6 of Console policy management](#console-policy-management) describes — validate, build candidate engine, single transaction with insert-policy + insert-version + update-frontmatter + enqueue-outbox, swap the live engine — but the outbox payload's `event_kind` is the library variant.
+
+Two consequences fall out for free:
+
+- **No new validation paths.** Compile-error 400s and `UNIQUE policies.name` 409s look identical between operator-create and library-install. The console maps both into its existing inline-error banner.
+- **No new audit-replay paths.** `warden-ledger` consumes `policy.installed_from_template` via the same handler as `policy.created` — chain v3 is event-kind-polymorphic and the payload schema is unchanged.
+
+A 409 from the engine surfaces in the console as a re-rendered detail page with the error in a red banner above the body; the install form is replaced by the "Already installed → View it in the active set" affordance, so the operator's next click goes to the live policy rather than retrying. The destructive-tier walk for this path is `F-LIB-11` in `MANUAL_TESTS.md`.
+
+### 7. Library lab preview
+
+`POST /policies/templates/{name}/lab/run` is a thin wrapper around the same `run_batch` helper [§7.5 of Console policy management](#console-policy-management) (Policy Lab) uses. Differences:
+
+- The candidate body is read from disk by `name` instead of supplied in the request.
+- The console-side handler hard-codes the corpus to the chaos catalog (6 inputs) on this path; ledger-corpus replay stays on the operator-Lab page. The rationale: library-lab is the "should I install this?" smoke test before commit — deterministic, fast, no ledger dep. Operators wanting full-corpus replay install the template first, then visit `/policies/<name>/lab` which already supports the ledger-corpus path.
+- The htmx target is a fragment of the same `PolicyLabResultsTemplate` Askama struct the operator-Lab uses, so the diff tile renders identically in both places.
+
+The endpoint exists in the engine and is wired in the console handler, but the `Preview impact` button itself is not yet placed in the `/policies/library/{name}` template — F-LIB-12 in `MANUAL_TESTS.md` walks the endpoint via direct `curl` while the UI button is pending.
+
+### 8. SDK + CLI surfaces
+
+`warden-sdk` exposes four new types and four new async methods on `PoliciesClient`:
+
+```rust
+pub struct PolicyTemplate { /* 7 frontmatter fields + name + content_type + installed */ }
+pub struct PolicyTemplateDetail {
+    #[serde(flatten)] pub template: PolicyTemplate,
+    pub body: String,
+    pub body_sha256: String,
+}
+pub struct InstallTemplateRequest<'a> { reason, actor_sub, actor_idp }
+pub struct LabTemplateRequest { mode, replace_rule_name, inputs }
+
+impl PoliciesClient {
+    pub async fn list_templates(&self) -> Result<Vec<PolicyTemplate>, WardenError>;
+    pub async fn get_template(&self, name: &str) -> Result<PolicyTemplateDetail, WardenError>;
+    pub async fn install_template(&self, name: &str, req: &InstallTemplateRequest<'_>)
+        -> Result<MutationResponse, WardenError>;
+    pub async fn lab_template(&self, name: &str, req: &LabTemplateRequest)
+        -> Result<EvaluateBatchResponse, WardenError>;
+}
+```
+
+The seven new fields on `PolicyRow` are all `#[serde(default)]` — older engines (pre-frontmatter) deserialize cleanly; SDK callers see empty `Vec<String>` / `None` for the metadata when the engine hasn't been upgraded.
+
+`warden-ctl` ships two new subcommands under the existing `policy` umbrella:
+
+```
+wardenctl policy scaffold --name <slug> --domain <d> --tier <deny|review|mixed> --severity <s> \
+                          [--frameworks <csv>] [--tags <csv>] [--tool-surface <csv>] \
+                          [--summary <text>] [--output <path>] [--force] [--stdout]
+
+wardenctl policy library list [--domain <d>]... [--severity <s>]... [--framework <f>]... \
+                              [--tier <t>]... [--installed-only | --not-installed] \
+                              [--json] [--policy-url <url>]
+
+wardenctl policy library install <name> --reason <r> [--actor-sub <s>] [--actor-idp <i>] \
+                                 [--policy-url <url>]
+```
+
+`scaffold` is offline-only — no engine call, pure filesystem write of a syntactically-valid `.rego` skeleton with frontmatter pre-filled, named tool sets seeded from `--tool-surface`, and tier-conditional `deny` / `review` rule blocks. The generated file compiles cleanly against `warden.authz` and is immediately consumable by `wardenctl policy test`. `--name` is path-traversal-guarded (`[a-z0-9_]+` only).
+
+`library list` filters the catalog client-side after a single `GET /policies/templates` call — the SDK returns the full set, the CLI applies the operator's flags. Multi-value flags are OR-within-facet, AND-across-facets, matching the console's URL semantics exactly. `library install` returns `ExitCode::Conflict` on 409 and `ExitCode::Validation` on 404 per the [§9.3 exit-code spec](#agent-onboarding-wao).
+
+### 9. Console UI
+
+Two new pages plus an edit on the existing `/policies` index:
+
+- **`GET /policies/library`** — filter sidebar (Domain / Severity / Frameworks / Tier checkboxes + free-text search) on the left; responsive card grid (1 / 2 / 3 columns at sm / md / xl breakpoints) on the right. Each card shows name (mono), summary, domain text, severity-colored pill, tier pill, framework chips. Filter state lives in the URL (`?domain=healthcare&framework=HIPAA`); the sidebar form submits as GET so reloads + browser-back preserve state. Viewer sees an amber "Read-only access" banner above the grid.
+- **`GET /policies/library/{name}`** — breadcrumb header (`Library / <domain>`), summary, badge row (severity, tier, frameworks, tags), tool-surface code chips, bold-highlighted rule body in a `<pre>` block with the body sha256 in the corner. The Install panel below is rendered only when `Role::Admin && !installed`; for installed templates a green "Already installed → View it in the active set" banner takes its place. The htmx-swap target for the lab preview is in place; the button itself is the deferred polish step.
+- **`GET /policies`** — each row's Name cell carries a secondary line with domain text + severity pill + framework chips, all pulled from the now-extended `warden_sdk::PolicyRow`. The page header grows a `Browse library` button (visible to Viewer-or-better) alongside the existing `Mine candidates` / `New policy` admin buttons.
+
+Discoverability is via the `/policies` header button rather than a dedicated `base.html` nav entry — the top nav already runs 10 deep on desktop. The `data-nav-prefix="/policies"` attribute on the existing Policies link covers `/policies/library*` for the active-tab highlight.
+
+### 10. Test surface
+
+| Layer | Test | What it pins |
+|---|---|---|
+| Engine | `warden-policy-engine/src/frontmatter.rs` `#[cfg(test)]` (13 tests) | Parser tolerance: full happy path, missing fields, unknown-key passthrough, legacy preamble compat, blank-line tolerance, case-insensitive keys, CSV trim/empty-drop, duplicate-key last-wins, JSON body, empty body, indented comments, no-colon comment. |
+| Engine | `tests/storage_test.rs` (3 new) | `seed_persists_frontmatter_into_columns`, `refresh_populates_frontmatter_on_pre_existing_rows`, `refresh_skips_soft_deleted_rows`. |
+| Engine | `tests/library_test.rs` (8) | Full HTTP-layer coverage of all four `/policies/templates*` endpoints through the live axum router: list+installed flags, detail+sha, 404, install happy + 409 + 404, lab diff envelope, lab-on-missing-file error envelope. |
+| Engine | `tests/templates_test.rs::all_templates_compile` | Loads every `.rego` in `policies/templates/` via regorus. Any backfilled-frontmatter file that breaks rego compile fails loud here. |
+| SDK | `warden-sdk/src/policies.rs` `mod tests` (7 new) | Round-trip + back-compat for `PolicyRow`, `PolicyTemplate`, `PolicyTemplateDetail`; serialization of `InstallTemplateRequest` / `LabTemplateRequest` (including `skip_serializing_if = "Option::is_none"`). |
+| CLI | `warden-ctl/src/cmd/policy_scaffold.rs` `#[cfg(test)]` (10) | Frontmatter content, tier-conditional rule blocks (deny / review / mixed), tool-surface validation, slug guard, file write + force + refuse-overwrite. |
+| CLI | `warden-ctl/src/cmd/policy_library.rs` `#[cfg(test)]` (7) | Filter composition (AND-across-facets, OR-within-facet, installed-only / not-installed, severity+tier AND), URL resolution. |
+| End-to-end | `warden-e2e/MANUAL_TESTS.md` S-LIB-01..05, F-LIB-10..14, D-LIB-20 | Operator-walk scripts for the library list / filter / detail / install flow, the 409 conflict path, the lab preview against the chaos catalog, the Viewer read-only gating, the `wardenctl policy library` CLI round-trip, and path-traversal rejection. |
+
+### 11. Content baseline
+
+Shipped at this section's landing: **85 templates** across **19 domains**.
+
+- **15 industry domains** (~2-6 templates each): healthcare, finance, legal, coding, hr, devops, manufacturing, ml, ecommerce, government, education, insurance, support, marketing, logistics, telecom.
+- **4 new industry domains** (4 templates each): payments-fintech, energy-utilities, capital-markets, cybersecurity-ops.
+- **1 cross-cutting umbrella** (9 templates): governance + attestation + the seven generic patterns (pii_egress, prod_db_writes, money_moves, agent_impersonation, prompt_injection, off_hours_actions, rate_limit_review).
+
+Authoring conventions:
+
+- Filename = template name; the engine's parser asserts the `# Template:` field matches the filename.
+- Column-aligned frontmatter — 16-char key column (`# Tool surface:` is the driver) so the colons line up. Multi-line continuations indent 15 spaces past the `#`.
+- Named tool sets at the top of each file, prefixed with the template name (`phi_egress_tools`, `kyc_bypass_tools`, …) to prevent collisions when the engine merges every file into a single `package warden.authz`.
+- Deny messages start with `Violation:`, review messages with `Review:` — the chain operator-triage tooling matches against the prefix.
+
+A growth target of 100-200 templates is documented as the operator-UX threshold where filter sidebar + grouping become essential. The catalog stays below 500 in v1 — past 500 a parametric / archetype layer (TOML-driven instead of hand-Rego) becomes more attractive than another wave of hand-authored files.
+
+### 12. What this section deliberately does not include
+
+- **Per-template lab fixtures** (a positive-deny + positive-review + negative-allow trio shipped alongside each rule). The shape is interesting and a follow-up plan exists; v1 leans on the chaos-catalog smoke + the `all_templates_compile` test as the regression net.
+- **A query language richer than facet checkboxes + free-text search.** Operators who want "templates that fire on `phi_export` OR `bulk_export`" can issue two queries today. A unified `q=phi_export OR bulk_export` parser is unwarranted at 85 templates.
+- **Template versioning.** A template's body on disk is the source of truth; once installed, the active policy versions independently. Diff between template-as-of-today and the installed version is `wardenctl policy library get-template <name> | diff - <(wardenctl policy get <name> --body)` — useful but not first-class.
+- **Soft delete of a template.** Templates aren't mutable state; removing one is a `git rm` + redeploy. Already-installed copies stay installed.
+- **Per-template RBAC.** Library install is `Role::Admin`; finer-grained "this admin can install HIPAA templates but not government templates" is out of scope.
+- **Notifications on template-set changes.** A new template landing in `policies/templates/` doesn't notify operators — they discover it on their next library visit. Push notification of new templates is plausible once the catalog has external authors; not yet.
+
+### 13. Decisions resolved during design
+
+The nine `/grill-me` answers that pinned this section (chronological):
+
+1. **Audience: operators adopting Warden** — not demo visitors, not compliance buyers, not security researchers. `/policies/library` is the bottleneck surface; the library serves operators.
+2. **Metadata source: frontmatter inside the `.rego`** — not sidecar TOML, not DB-only, not central catalog. Round-trips with rego edits; community PRs touch one file.
+3. **Target size: 100-200 hand-curated** — not 50-80 lean, not 300-500 archetype-driven, not 1000+ community-extended. Determines the metadata + filter UX is essential not optional.
+4. **Catalog model: library-only with one-click install** — not all-active-by-default, not pack-based, not hybrid starter set. Preserves the existing template-vs-active distinction.
+5. **Frontmatter: 7-field standard** — not lean 4-field, not comprehensive 13-field, not loose key:value. Powers filter sidebar + framework view + /demo cross-links.
+6. **Library UX: filter sidebar + card grid** — not domain-grouped accordion, not search-first single page, not marketplace shop tiles. Multi-axis filtering at 200 entries needs persistent sidebar.
+7. **Install flow: lab-preview → confirm install** — not direct one-click, not cart bulk-apply, not filesystem copy + reload. Try-before-activate is the operator concern.
+8. **Phasing: big-bang ship** — not infra-first or thinnest-slice or content-first. Single major version delivers the whole surface together.
+9. **Authoring: scaffolder + hand-craft hybrid** — not LLM-assisted, not pure hand-write, not archetype-driven. `wardenctl policy scaffold` emits the skeleton; humans fill the body.
 
 ---
 
