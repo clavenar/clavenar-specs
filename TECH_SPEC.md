@@ -2112,7 +2112,7 @@ The catalog is *not* a new policy-authoring product. Operators still edit Rego f
 - "Install all in domain X" bulk action. The filter URL is already a complete spec of the templates the operator wants, so a bulk-install endpoint would be ~10 lines; deferred to a follow-up once operators report wanting it.
 - Editing a template in-place via the console. Templates are filesystem source-of-truth; the active-policy edit flow on `/policies/<name>/edit` remains the only console editor. Library is read-only.
 - Community / third-party template marketplace. Versioning, signing, trust-on-first-use, distribution — all of that lives behind a separate plan once the curated catalog stabilises at 100-200 entries.
-- Archetype / DSL layer over Rego. At ~85 templates the file-per-policy model still scales; if the catalog grows past 500 a parametric layer becomes interesting.
+- Archetype / DSL layer over Rego. At ~135 templates the file-per-policy model still scales; if the catalog grows past 500 a parametric layer becomes interesting.
 - Frontmatter linting at engine boot. Today the parser is tolerant (missing fields stay NULL); a strict linter that rejects templates with empty frontmatter is a follow-up once authoring drift is observable.
 - Compliance-framework view as a first-class navigation surface (`/policies/library/by-framework/HIPAA`). The frontmatter carries it; the URL filter (`?framework=HIPAA`) gives the same answer. A dedicated route is a polish iteration.
 
@@ -2309,10 +2309,11 @@ Discoverability is via the `/policies` header button rather than a dedicated `ba
 
 ### 11. Content baseline
 
-Shipped at this section's landing: **85 templates** across **19 domains**.
+Shipped at this section's landing: **135 templates** across **22 domains**.
 
-- **15 industry domains** (~2-6 templates each): healthcare, finance, legal, coding, hr, devops, manufacturing, ml, ecommerce, government, education, insurance, support, marketing, logistics, telecom.
-- **4 new industry domains** (4 templates each): payments-fintech, energy-utilities, capital-markets, cybersecurity-ops.
+- **15 well-covered industry domains** (≥4 templates each): healthcare, finance, legal, coding, hr, devops, manufacturing, ml, ecommerce, government, education, insurance, support, marketing, logistics, telecom — most lifted to ≥6 in the 137-template catalog-expansion pass.
+- **4 expansion industry domains** (4 templates each): payments-fintech, energy-utilities, capital-markets, cybersecurity-ops.
+- **3 catalog-expansion domains** (6 templates each): ai-governance (meta-policies on the agents warden proxies), biotech-pharma (21 CFR Part 11 / GxP / clinical-trial integrity), public-sector-municipal (FOIL / voting / permits / emergency alerts).
 - **1 cross-cutting umbrella** (9 templates): governance + attestation + the seven generic patterns (pii_egress, prod_db_writes, money_moves, agent_impersonation, prompt_injection, off_hours_actions, rate_limit_review).
 
 Authoring conventions:
@@ -2327,7 +2328,7 @@ A growth target of 100-200 templates is documented as the operator-UX threshold 
 ### 12. What this section deliberately does not include
 
 - **Per-template lab fixtures** (a positive-deny + positive-review + negative-allow trio shipped alongside each rule). The shape is interesting and a follow-up plan exists; v1 leans on the chaos-catalog smoke + the `all_templates_compile` test as the regression net.
-- **A query language richer than facet checkboxes + free-text search.** Operators who want "templates that fire on `phi_export` OR `bulk_export`" can issue two queries today. A unified `q=phi_export OR bulk_export` parser is unwarranted at 85 templates.
+- **A query language richer than facet checkboxes + free-text search.** Operators who want "templates that fire on `phi_export` OR `bulk_export`" can issue two queries today. A unified `q=phi_export OR bulk_export` parser is unwarranted at 135 templates.
 - **Template versioning.** A template's body on disk is the source of truth; once installed, the active policy versions independently. Diff between template-as-of-today and the installed version is `wardenctl policy library get-template <name> | diff - <(wardenctl policy get <name> --body)` — useful but not first-class.
 - **Soft delete of a template.** Templates aren't mutable state; removing one is a `git rm` + redeploy. Already-installed copies stay installed.
 - **Per-template RBAC.** Library install is `Role::Admin`; finer-grained "this admin can install HIPAA templates but not government templates" is out of scope.
