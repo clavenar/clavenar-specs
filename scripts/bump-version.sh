@@ -42,4 +42,29 @@ git -c user.name=VanteguardLabs -c user.email=vanteguardlabs@gmail.com \
     commit -m "bump to ${new}"
 git push origin main
 
+# Mirror into warden-website/public/version.json so a local-dev clone
+# of the website (`cd warden-website && python -m http.server` etc.)
+# shows the bumped version in the footer immediately on next pull —
+# without waiting for an env deploy.sh run. The prod / dev compose
+# stacks override this with the env-local version.json bind-mount,
+# so this file's value is only ever seen outside the deployed stacks.
+#
+# Sibling repo; do the stage/commit/push in its own subshell so a
+# dirty website tree doesn't poison the exit status of the version
+# bump itself. The "if file changed" guard means a no-op bump
+# (script ran twice, second time same version) doesn't churn the
+# website repo's history.
+website_dir="../warden-website"
+if [ -f "${website_dir}/public/version.json" ]; then
+    printf '{"version":"%s"}\n' "$new" > "${website_dir}/public/version.json"
+    if ! git -C "$website_dir" diff --quiet -- public/version.json; then
+        (cd "$website_dir" \
+            && git add public/version.json \
+            && git -c user.name=VanteguardLabs -c user.email=vanteguardlabs@gmail.com \
+                  commit -m "Mirror VERSION ${new} into public/version.json" \
+            && git push origin main) \
+            || echo "[VERSION] website mirror commit failed (dirty tree?); local file updated" >&2
+    fi
+fi
+
 echo "[VERSION] ${old} → ${new}"
