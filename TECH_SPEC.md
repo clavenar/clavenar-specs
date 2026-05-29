@@ -3265,6 +3265,108 @@ sourced from `current.load()`.
 
 ---
 
+## Egress Inspector
+
+The proxy inspects every tool-call **request** (Brain `/inspect` + Policy
+Rego, resolved before any upstream call) but historically never inspected
+the upstream tool **response**. A benign-looking request (`search.web`,
+Retrieval intent) can pass the request pipeline yet return sensitive data —
+secrets, credentials, regulated PII/PHI, or a bulk record dump — in the
+response body. The Egress Inspector closes that blind spot: it scans the
+upstream response before relaying it to the agent.
+
+**Threat-model note.** Because the response must be fetched to be
+inspected, Warden blocks the response from reaching the **agent** — it
+cannot un-compute what the upstream already produced. The block still
+prevents the agent (and anything downstream of it) from receiving the
+data. This is the correct and only model for a response-inspecting proxy.
+
+### Flow
+
+1. After `forward_upstream` returns on the `Authorized` or HIL-approved
+   arm, the proxy runs a cheap **inline pre-filter** on the response body
+   (`warden-proxy/src/egress.rs`): Shannon entropy `>` threshold OR size
+   `>` threshold. Neither tripping ⇒ relay unchanged (no LLM call).
+2. On a trip, the proxy POSTs the body to Brain `POST /scan-response`
+   (below). The body is sent **unmasked** — detecting the PII is the point.
+3. The proxy maps `(exfiltration_risk, confidence)` to a disposition:
+
+   | Condition | Disposition |
+   |---|---|
+   | `clean`, or confidence below review threshold | **Allow** (optionally tagged `egress_suspicious`) |
+   | `high`/`critical` and confidence ≥ `DENY_CONFIDENCE` (0.95) | **Inline deny** — HTTP 403, response withheld |
+   | confidence ≥ `REVIEW_CONFIDENCE` (0.5), gray zone | **Escalate to HIL** with a redacted sample; approve ⇒ relay, deny/expire ⇒ 403 |
+   | response over `MAX_RESPONSE_BYTES` (10 MB) on a scanned tool | **Inline deny** (oversize exfil) |
+
+4. **Fail-open.** A Brain `/scan-response` error (unreachable / 503 /
+   parse) or a HIL-unreachable on the gray-zone path relays the response
+   and logs a warning. Egress is defense-in-depth on top of the
+   already-authorized request — a Brain or HIL blip must not turn into a
+   proxy outage. (Contrast the *request* pipeline, which fails closed.)
+
+5. **Off by default.** The whole layer is inert unless
+   `WARDEN_PROXY_EGRESS_SCAN_TOOLS` names at least one MCP method.
+
+### Brain wire shape — `POST /scan-response`
+
+A response-only detector, distinct from `/inspect`: it is **not cached**
+(response bodies are high-variance), skips the intent / drift / injection /
+malicious / supply-chain fan-out, and runs only PII/secret entity scanning.
+Mounted on the mTLS inspect router (same SPIFFE allowlist as `/inspect`).
+Returns `503` on LLM error so the proxy fails open.
+
+Request:
+
+```json
+{ "correlation_id": "<uuid>", "agent_id": "...", "method": "search.web",
+  "response_body": "<raw upstream result/error JSON, unmasked>" }
+```
+
+Response (`ScanResponseVerdict`):
+
+```json
+{ "exfiltration_risk": "clean|suspicious|high|critical",
+  "confidence": 0.0,
+  "detected_entities": ["SSN", "AWS_ACCESS_KEY"],
+  "reasoning": "one short sentence" }
+```
+
+`detected_entities` carries entity **type** labels only — never raw
+values — so the verdict is safe to log and show an approver. The detector
+model is configured by `detectors.scan_response` in
+`WARDEN_BRAIN_MODELS_FILE`; unset falls back to the `pii` provider.
+
+### Forensic recording (Layer 4)
+
+The egress verdict rides the proxy's existing consolidated forensic row —
+**no new chain version, no new ledger columns**. The decision is the
+queryable `signal` column (vocabulary extended with `egress_violation`,
+`egress_review_denied`, `egress_review_approved`, `egress_suspicious`,
+`would_deny_egress`, `would_pend_egress`); the risk + entity types append
+to `reasoning` as `| egress: <detail>`. An inline-deny row reads
+`authorized: false` with `intent_category = "EgressBlocked"`. Rows join
+the originating request by `correlation_id`. In `WARDEN_MODE=observe` the
+layer classifies but never blocks or escalates — it records the
+`would_deny_egress` / `would_pend_egress` signal and forwards regardless.
+
+### Configuration
+
+| Service | Var | Default |
+|---|---|---|
+| proxy | `WARDEN_PROXY_EGRESS_SCAN_TOOLS` (CSV of MCP methods) | `""` (off) |
+| proxy | `WARDEN_BRAIN_SCAN_URL` | `WARDEN_BRAIN_URL` with `/inspect`→`/scan-response` |
+| proxy | `WARDEN_PROXY_EGRESS_ENTROPY_THRESHOLD` | `6.5` |
+| proxy | `WARDEN_PROXY_EGRESS_SIZE_THRESHOLD_BYTES` | `65536` |
+| proxy | `WARDEN_PROXY_MAX_RESPONSE_BYTES` | `10000000` |
+| proxy | `WARDEN_PROXY_EGRESS_DENY_CONFIDENCE` | `0.95` |
+| proxy | `WARDEN_PROXY_EGRESS_REVIEW_CONFIDENCE` | `0.5` |
+| brain | `detectors.scan_response` (YAML) | unset → `pii` provider |
+
+Per-tool entropy baselines (to suppress naturally-high-entropy tools) are
+a documented future tunable; v1 uses one global threshold.
+
+---
+
 ## Threat model
 
 The five system-wide threats Warden treats as in-scope, plus where
