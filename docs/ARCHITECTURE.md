@@ -1,18 +1,18 @@
-# Agent Warden — architecture
+# Clavenar — architecture
 
 System-wide architecture diagrams. The wire contracts behind every box and
 arrow live in [`../TECH_SPEC.md`](../TECH_SPEC.md); this file is the
 visual index. Five views, top-down by abstraction:
 
-1. [System Context](#1-system-context) — who talks to Warden, and what
-   external services Warden depends on.
+1. [System Context](#1-system-context) — who talks to Clavenar, and what
+   external services Clavenar depends on.
 2. [Container View](#2-container-view) — the four-layer hot path plus
    the orchestrators around it.
 3. [Deployment Topology](#3-deployment-topology) — how `prod` and `dev`
    share a host-side Caddy.
 4. [Demo-Prefix End-to-End](#4-demo-prefix-end-to-end) — visitor →
    token → cookie → correlation ID, the per-visitor isolation flow.
-5. [Trust Chain](#5-trust-chain) — every credential Warden issues,
+5. [Trust Chain](#5-trust-chain) — every credential Clavenar issues,
    from CA root down to the per-action ed25519 signature.
 
 Per-repo behavior diagrams live in each service's own `docs/SEQUENCES.md`.
@@ -22,11 +22,11 @@ Per-repo behavior diagrams live in each service's own `docs/SEQUENCES.md`.
 ```mermaid
 flowchart LR
   Visitor[Visitor — browser]
-  Operator[Operator — console, wardenctl]
+  Operator[Operator — console, clavenarctl]
   Agent[AI Agent — any LLM]
   Upstream[Upstream MCP target]
 
-  subgraph Warden[Agent Warden]
+  subgraph Clavenar[Clavenar]
     direction TB
     Edge[Caddy + console + website + demo-mint]
     Core[proxy + brain + policy + ledger + HIL + identity]
@@ -71,34 +71,34 @@ flowchart TD
   Browser[Browser — visitor or operator]
 
   subgraph L1[Layer 1 — Data Plane]
-    Proxy[warden-proxy 8443]
+    Proxy[clavenar-proxy 8443]
   end
 
   subgraph L2L3[Layer 2 plus Layer 3 — Semantic plus Governance]
-    Brain[warden-brain 8081]
-    Policy[warden-policy-engine 8082]
+    Brain[clavenar-brain 8081]
+    Policy[clavenar-policy-engine 8082]
   end
 
   subgraph L4[Layer 4 — Forensic Store]
-    Ledger[warden-ledger 8083]
+    Ledger[clavenar-ledger 8083]
   end
 
-  Bus[NATS — warden.forensic, warden.forensic.identity, warden.federation.jti]
+  Bus[NATS — clavenar.forensic, clavenar.forensic.identity, clavenar.federation.jti]
 
   subgraph Orch[Orchestrators]
-    HIL[warden-hil 8084]
-    Identity[warden-identity 8086]
-    Sandbox[warden-sandbox — path-dep into proxy]
-    DeepReview[warden-deep-review]
-    DemoMint[warden-demo-mint]
-    Simulator[warden-simulator]
-    UpstreamStub[warden-upstream-stub — demo target]
+    HIL[clavenar-hil 8084]
+    Identity[clavenar-identity 8086]
+    Sandbox[clavenar-sandbox — path-dep into proxy]
+    DeepReview[clavenar-deep-review]
+    DemoMint[clavenar-demo-mint]
+    Simulator[clavenar-simulator]
+    UpstreamStub[clavenar-upstream-stub — demo target]
   end
 
   subgraph Edge[Edge plus UI]
     Caddy[Caddy — TLS terminator]
-    Console[warden-console 8085]
-    Website[warden-website — static]
+    Console[clavenar-console 8085]
+    Website[clavenar-website — static]
   end
 
   Agent -->|mTLS MCP| Proxy
@@ -109,11 +109,11 @@ flowchart TD
   Proxy -->|annotate blast-radius| Sandbox
   Proxy -->|mTLS MCP forward| Upstream
   Proxy -->|mTLS MCP forward — demo path| UpstreamStub
-  Proxy -->|publish warden.forensic| Bus
+  Proxy -->|publish clavenar.forensic| Bus
 
   Bus -->|consume + persist| Ledger
   Ledger -->|verify-jws via JWKS| Identity
-  Identity -->|publish warden.forensic.identity| Bus
+  Identity -->|publish clavenar.forensic.identity| Bus
 
   HIL -->|annotated by| Sandbox
   DeepReview -->|consume sample| Bus
@@ -203,7 +203,7 @@ flowchart LR
   Browser -->|console-dev.vanteguardlabs.com — operator only| HostCaddy
   Agent -->|mTLS — 8443 or 19443| P_proxy
 
-  HostCaddy -->|warden.…| P_website
+  HostCaddy -->|clavenar.…| P_website
   HostCaddy -->|console-demo.…| P_console
   HostCaddy -->|console-demo.… /verify + /audit| P_ledger
   HostCaddy -->|console-demo.… /mint| P_demomint
@@ -223,11 +223,11 @@ sequenceDiagram
   participant Visitor
   participant TS as Cloudflare Turnstile
   participant Mint as demo-mint
-  participant Console as warden-console
-  participant Proxy as warden-proxy
-  participant HIL as warden-hil
-  participant Ledger as warden-ledger
-  participant Sim as warden-simulator
+  participant Console as clavenar-console
+  participant Proxy as clavenar-proxy
+  participant HIL as clavenar-hil
+  participant Ledger as clavenar-ledger
+  participant Sim as clavenar-simulator
 
   Visitor->>TS: solve widget
   TS-->>Visitor: cf-turnstile-response token
@@ -237,9 +237,9 @@ sequenceDiagram
   Mint-->>Visitor: 303 console-demo/#token=<HS256 JWT — prefix, sub, exp, iat>
   Note over Visitor,Console: Fragment never sent to server. Console JS reads it client-side.
   Visitor->>Console: POST /api/demo-session/exchange — body has JWT
-  Console-->>Visitor: Set-Cookie warden_demo_session — HttpOnly Secure SameSite=Lax
+  Console-->>Visitor: Set-Cookie clavenar_demo_session — HttpOnly Secure SameSite=Lax
   Visitor->>Console: GET /demo — fire scenario
-  Console->>Proxy: mTLS MCP call_tool — header X-Warden-Demo-Prefix 8 hex
+  Console->>Proxy: mTLS MCP call_tool — header X-Clavenar-Demo-Prefix 8 hex
   Proxy->>Proxy: mint_correlation_id splices prefix into UUIDv4
   Note over Proxy: correlation_id = prefix-xxxx-4xxx-yxxx-xxxxxxxxxxxx
   Proxy->>HIL: POST /pending — Yellow tier, prefixed correlation_id
@@ -254,16 +254,16 @@ sequenceDiagram
 
 ## 5. Trust Chain
 
-Every credential Warden issues, top to bottom. The root is the mTLS
-CA (`warden-proxy/certs/ca.crt`). The Vault transit key
-`warden-identity` (ed25519) is the only signing key the rest of the
-stack trusts; the `/jwks.json` endpoint on `warden-identity` is the
+Every credential Clavenar issues, top to bottom. The root is the mTLS
+CA (`clavenar-proxy/certs/ca.crt`). The Vault transit key
+`clavenar-identity` (ed25519) is the only signing key the rest of the
+stack trusts; the `/jwks.json` endpoint on `clavenar-identity` is the
 sole verifier.
 
 ```mermaid
 flowchart TD
-  CA[mTLS CA root — warden-proxy/certs/ca.crt]
-  Vault[Vault transit key — warden-identity ed25519]
+  CA[mTLS CA root — clavenar-proxy/certs/ca.crt]
+  Vault[Vault transit key — clavenar-identity ed25519]
 
   Bootstrap[Bootstrap certs — service-name.crt per service]
   AgentAttest[Agent attestation — hardware or k8s projected]

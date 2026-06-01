@@ -1,6 +1,6 @@
 # Cargo dependency conventions
 
-warden has **no Cargo workspace today** — each repo is its own
+clavenar has **no Cargo workspace today** — each repo is its own
 standalone crate, pulled together by `path = "../..."` deps in local
 dev and by sibling-checkout (`gh repo clone`) in CI.
 
@@ -21,7 +21,7 @@ needs to move, edit this doc first, then mirror into every consumer
 in the same change set.
 
 This is the same convention `deny.toml` already uses (see
-`warden-specs/deny.toml` — synced verbatim across 19 Rust repos).
+`clavenar-specs/deny.toml` — synced verbatim across 19 Rust repos).
 
 ### Canonical pins
 
@@ -58,19 +58,19 @@ This is the same convention `deny.toml` already uses (see
 `async-trait` (`0.1`), `futures` (`0.3`), `sha2` (`0.10`), `hex`
 (`0.4`), `base64` (`0.22`) follow the same loose-version pattern.
 
-### Shared crate: `warden-shared`
+### Shared crate: `clavenar-shared`
 
 Truly duplicated infrastructure (byte-identical helpers, near-identical
-middleware) lives in `repos/warden-shared/`, opted into via path-dep
+middleware) lives in `repos/clavenar-shared/`, opted into via path-dep
 and optional cargo features:
 
 ```toml
-warden-shared = { path = "../warden-shared", features = ["mtls"] }
+clavenar-shared = { path = "../clavenar-shared", features = ["mtls"] }
 ```
 
 Modules today: `nats_tls` (always-on), `mtls` (gated behind the
 `mtls` feature so non-mTLS consumers don't pull axum + x509-parser).
-New extractions only land in `warden-shared` when **three or more
+New extractions only land in `clavenar-shared` when **three or more
 consumers** carry the same logic — the "three similar lines beat
 the wrong abstraction" rule cuts both ways.
 
@@ -95,7 +95,7 @@ plus a `workspace = true` rewrite in each member's deps section.
 2. Apply the same edit to every consumer's `Cargo.toml`.
 3. Run `cargo update` per repo, commit the `Cargo.lock` churn alongside.
 4. Verify `cargo deny check all` + `cargo clippy --all-targets -- -D warnings`
-   per repo (workspace-wide via `for r in repos/warden-*; do …; done`).
+   per repo (workspace-wide via `for r in repos/clavenar-*; do …; done`).
 5. Land one PR per repo (no PRs in this workspace — direct to main per
    workspace convention). Group commits in the same session so the
    dep graph stays internally consistent during the rollout.
