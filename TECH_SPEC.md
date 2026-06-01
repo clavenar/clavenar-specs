@@ -1,6 +1,6 @@
-# Warden Technical Specification
+# Clavenar Technical Specification
 
-Consolidated technical record for Agent Warden. Each major section below was previously a standalone spec file in this repo; legacy cross-references in prose now resolve to the matching anchor in this document.
+Consolidated technical record for Clavenar. Each major section below was previously a standalone spec file in this repo; legacy cross-references in prose now resolve to the matching anchor in this document.
 
 `SECURITY.md` (RFC 9116-style disclosure policy) remains a separate file at the repo root by convention — it is referenced by `security.txt` and surfaced in the GitHub Security tab.
 
@@ -33,22 +33,22 @@ authoritative wire-contract detail still lives in those sections.
 
 | § | Module | Status | Landed | Services touched |
 |---|---|---|---|---|
-| 1 | [Identity service](#identity-service) | shipped | — | `warden-identity` (new, port 8086 / 8186), `warden-proxy`, `warden-policy-engine`, `warden-ledger`, `warden-hil` |
-| 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | shipped | chain v3 | `warden-identity`, `warden-ctl` (new binary `wardenctl`), `warden-console`, `warden-ledger`, `warden-e2e`, `warden-chaos-monkey` |
+| 1 | [Identity service](#identity-service) | shipped | — | `clavenar-identity` (new, port 8086 / 8186), `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil` |
+| 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | shipped | chain v3 | `clavenar-identity`, `clavenar-ctl` (new binary `clavenarctl`), `clavenar-console`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-chaos-monkey` |
 | 3 | [Tenancy scope](#tenancy-scope) | described | — | (semantics, no new service) |
-| 4 | [Console config page](#console-config-page) | shipped | — | `warden-console`, `warden-sdk` (+3 public getters) |
-| 5 | [Operator authentication](#operator-authentication) | shipped | — | `warden-hil` (passkey + session), `warden-console` (auth-mode + viewer/approver gates) |
-| 6 | [Regulatory export](#regulatory-export) | shipped (slices 1+2+3) | — | `warden-ledger`, `warden-identity` (new `POST /sign/blob`), `warden-sdk`, `warden-ctl` |
-| 7 | [Demo experience](#demo-experience) | shipped | — | `warden-website`, `warden-demo-mint` (new), `warden-console`, `warden-proxy`, `warden-hil`, `warden-ledger`, `warden-chaos-catalog` (new), `warden-simulator` |
-| 8 | [Console policy management](#console-policy-management) | shipped | — | `warden-policy-engine` (SQLite store + write API), `warden-console`, `warden-sdk`, `warden-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
-| 9 | [Policy catalog](#policy-catalog) | shipped | — | `warden-policy-engine` (frontmatter + 4 endpoints), `warden-console` (`/policies/library`), `warden-sdk`, `warden-ctl` (`policy scaffold` + `policy library`) |
-| 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `warden-deep-review` (new repo), `warden-e2e`, `warden-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
-| 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`warden-proxy`, `warden-brain`, `warden-policy-engine`, `warden-ledger`, `warden-hil`, `warden-identity`, `warden-console`, `warden-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
-| 12 | [Workload SVID refresh](#workload-svid-refresh) | designed (implementation v1.x+3) | — | `warden-identity` (issuer), every internal service (consumer) |
+| 4 | [Console config page](#console-config-page) | shipped | — | `clavenar-console`, `clavenar-sdk` (+3 public getters) |
+| 5 | [Operator authentication](#operator-authentication) | shipped | — | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
+| 6 | [Regulatory export](#regulatory-export) | shipped (slices 1+2+3) | — | `clavenar-ledger`, `clavenar-identity` (new `POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl` |
+| 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
+| 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
+| 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
+| 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
+| 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
+| 12 | [Workload SVID refresh](#workload-svid-refresh) | designed (implementation v1.x+3) | — | `clavenar-identity` (issuer), every internal service (consumer) |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
 | 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures, no new service) |
 
-Versions in the **Landed** column reference `warden-specs/VERSION`
+Versions in the **Landed** column reference `clavenar-specs/VERSION`
 (the demo-VPS deploy axis) or chain versions where the wire schema
 moved. Modules without a single landed version were rolled in over
 several patches and the per-section "Module status" line carries the
@@ -59,9 +59,9 @@ detail.
 ## Identity service
 
 
-Companion spec to `README.md` §11.3 ("Agent identity — IAM for bots"). Scoped to what §11.3 commits to and grounded in the primitives Warden already ships (NATS forensic bus, hash-chained ledger, HIL, `regorus` policy engine).
+Companion spec to `README.md` §11.3 ("Agent identity — IAM for bots"). Scoped to what §11.3 commits to and grounded in the primitives Clavenar already ships (NATS forensic bus, hash-chained ledger, HIL, `regorus` policy engine).
 
-**Module status:** **shipped.** Touches `warden-proxy`, `warden-policy-engine`, `warden-ledger`, `warden-hil`; introduced the `warden-identity` service (port 8086). The companion [Agent onboarding](#agent-onboarding-wao) section (also shipped) layers the agent-registry / lifecycle / capability-envelope work on top of these primitives.
+**Module status:** **shipped.** Touches `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`; introduced the `clavenar-identity` service (port 8086). The companion [Agent onboarding](#agent-onboarding-wao) section (also shipped) layers the agent-registry / lifecycle / capability-envelope work on top of these primitives.
 
 ### 1. What §11.3 actually commits to
 
@@ -69,11 +69,11 @@ The spec promises three capabilities. Restated as testable claims:
 
 | Spec bullet | Operational claim |
 |---|---|
-| OIDC / SPIFFE federation | Every agent has a verifiable workload identity bound to a human/team/tenant principal. Agent-to-agent calls require a Warden-mediated handshake, not just transport mTLS. |
-| Digital signatures for actions | Every Authorized or HIL-Approved tool call produces a Warden-issued, ledger-anchored signature over `(agent_id, correlation_id, method, request_payload, verdict, prev_hash)`. The signature is the legal proof. |
+| OIDC / SPIFFE federation | Every agent has a verifiable workload identity bound to a human/team/tenant principal. Agent-to-agent calls require a Clavenar-mediated handshake, not just transport mTLS. |
+| Digital signatures for actions | Every Authorized or HIL-Approved tool call produces a Clavenar-issued, ledger-anchored signature over `(agent_id, correlation_id, method, request_payload, verdict, prev_hash)`. The signature is the legal proof. |
 | Capability attestation | Sensitive tools (Yellow tier and a configurable allowlist) require fresh evidence the agent's runtime is unmodified — TPM/SGX quote, or remote-attestation token from a managed runtime. |
 
-Identity, in Warden's threat model, is **necessary but insufficient** (§13.1). WI's job is not to replace Brain/Policy/HIL — it is to make the `agent_id` field they all key off of cryptographically meaningful end-to-end.
+Identity, in Clavenar's threat model, is **necessary but insufficient** (§13.1). WI's job is not to replace Brain/Policy/HIL — it is to make the `agent_id` field they all key off of cryptographically meaningful end-to-end.
 
 ### 2. Threat model (in scope)
 
@@ -120,7 +120,7 @@ The delegation grant is the missing piece in today's architecture. It carries:
 
 ```json
 {
-  "iss":  "warden-identity",
+  "iss":  "clavenar-identity",
   "sub":  "spiffe://wd.local/tenant/acme/agent/support-bot-3",
   "act":  { "sub": "user:alice@acme.com", "idp": "okta", "amr": ["webauthn"] },
   "scope": ["mcp:read:tickets", "mcp:write:tickets"],
@@ -134,10 +134,10 @@ The delegation grant is the missing piece in today's architecture. It carries:
 
 #### 3.3 Federation
 
-- **Inbound (humans → Warden):** OIDC. Warden trusts an enterprise IdP for human auth; the IdP's `id_token` is exchanged at `warden-identity` for a delegation grant via OAuth 2.0 Token Exchange (RFC 8693).
-- **Outbound (agents → other Warden tenants):** SPIFFE federation bundle. Tenant A's trust bundle is published at `https://identity.<tenant-a>/.well-known/spiffe-bundle`; Tenant B's identity service polls it. Cross-tenant A2A becomes possible without sharing a CA.
+- **Inbound (humans → Clavenar):** OIDC. Clavenar trusts an enterprise IdP for human auth; the IdP's `id_token` is exchanged at `clavenar-identity` for a delegation grant via OAuth 2.0 Token Exchange (RFC 8693).
+- **Outbound (agents → other Clavenar tenants):** SPIFFE federation bundle. Tenant A's trust bundle is published at `https://identity.<tenant-a>/.well-known/spiffe-bundle`; Tenant B's identity service polls it. Cross-tenant A2A becomes possible without sharing a CA.
 
-### 4. The new service: `warden-identity`
+### 4. The new service: `clavenar-identity`
 
 Standalone Rust service, port 8086. It is the only component allowed to mint SVIDs and delegation grants. It is a NATS forensic publisher for issuance/revocation events, so the ledger has a row for every cert minted.
 
@@ -148,7 +148,7 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 | `POST` | `/svid` | Issue an instance SVID against an attestation document | Attestation evidence (§6) |
 | `POST` | `/grant` | Exchange OIDC `id_token` + agent SVID → delegation grant | OIDC `id_token` + SVID mTLS |
 | `POST` | `/actor-token` | Mint an audience-bound A→B token | Caller SVID + grant |
-| `POST` | `/sign` | Warden-side signing of a finalized verdict (§5) | Proxy SVID only |
+| `POST` | `/sign` | Clavenar-side signing of a finalized verdict (§5) | Proxy SVID only |
 | `POST` | `/revoke` | Revoke an instance SVID or a delegation grant (`{"kind":"svid","svid_id":...}` / `{"kind":"grant","jti":...}`, optional `reason`). Sets `revoked_at` + emits `svid.revoked` / `grant.revoked` chain v3 event. | Admin capability (`agents:admin`) — spec previously named "Operator WebAuthn" but identity terminates on OIDC + caps; admin is the cap-equivalent kill switch (matches `decommission`). |
 | `GET`  | `/jwks.json` | Public keys for grant/actor-token verification | Public |
 | `GET`  | `/.well-known/spiffe-bundle` | SPIFFE federation bundle | Public |
@@ -165,9 +165,9 @@ No JSON in queryable columns where it can be a column — we want SQL-grep-able 
 
 #### 4.3 Keys
 
-Issuer keys live in **Vault Transit** by default (Warden already runs Vault for credential injection). The identity service never holds private key material in-process — it calls `transit/sign/<key>` over the existing Vault client. Rotation is Vault-driven.
+Issuer keys live in **Vault Transit** by default (Clavenar already runs Vault for credential injection). The identity service never holds private key material in-process — it calls `transit/sign/<key>` over the existing Vault client. Rotation is Vault-driven.
 
-**Alt-backend for OSS / `warden-lite`** (added v0.6.6, multi-key in v0.6.8): a file-loaded Ed25519 signer is available behind the same `Sign` trait for deployments that don't run Vault. Opt-in via `WARDEN_IDENTITY_SIGNING_KEY_PATH=/path/to/key.pem` (PKCS#8 PEM); the key sits in process memory for the life of the binary. Vault takes precedence when both are configured; the file path is selected only when Vault env vars are unset. Operator setup: `openssl genpkey -algorithm ed25519 -out warden-identity.key && chmod 600 warden-identity.key`. The trade-off vs. Vault is "operational simplicity (no Vault dep) vs. compromise blast radius (key bytes in process)". The wire envelope (`vault:v1:<base64>`) is preserved by both backends so the ledger verifier's strip path stays unchanged; the JWKS `kid` (`warden-identity-file:v1` by default, override via `WARDEN_IDENTITY_SIGNING_KEY_ID`) distinguishes the backend for audit-row triage. Multi-key rotation: comma-separated paths + matching-length comma-separated kids — first becomes the active signer, the rest stay in JWKS so verifiers can still validate pre-rotation chain rows. See [Runbooks](#runbooks) §7 for the rotation procedure.
+**Alt-backend for OSS / `clavenar-lite`** (added v0.6.6, multi-key in v0.6.8): a file-loaded Ed25519 signer is available behind the same `Sign` trait for deployments that don't run Vault. Opt-in via `CLAVENAR_IDENTITY_SIGNING_KEY_PATH=/path/to/key.pem` (PKCS#8 PEM); the key sits in process memory for the life of the binary. Vault takes precedence when both are configured; the file path is selected only when Vault env vars are unset. Operator setup: `openssl genpkey -algorithm ed25519 -out clavenar-identity.key && chmod 600 clavenar-identity.key`. The trade-off vs. Vault is "operational simplicity (no Vault dep) vs. compromise blast radius (key bytes in process)". The wire envelope (`vault:v1:<base64>`) is preserved by both backends so the ledger verifier's strip path stays unchanged; the JWKS `kid` (`clavenar-identity-file:v1` by default, override via `CLAVENAR_IDENTITY_SIGNING_KEY_ID`) distinguishes the backend for audit-row triage. Multi-key rotation: comma-separated paths + matching-length comma-separated kids — first becomes the active signer, the rest stay in JWKS so verifiers can still validate pre-rotation chain rows. See [Runbooks](#runbooks) §7 for the rotation procedure.
 
 ### 5. Action signing & ledger anchoring
 
@@ -181,7 +181,7 @@ flowchart LR
   Entry[entry_hash N]
   Next[Row N+1 — prev_hash = entry_hash N]
 
-  Vault[(Vault transit — warden-identity ed25519)]
+  Vault[(Vault transit — clavenar-identity ed25519)]
   Sign[/sign — proxy calls after verdict resolves/]
   Sig[signature + key_id stamped onto row]
 
@@ -198,7 +198,7 @@ Per-row signature commits to `prev_hash`, so tampering with any earlier row brea
 
 #### 5.1 What gets signed
 
-After the security verdict resolves and `forward_upstream` runs (or is denied), the proxy calls `warden-identity` `/sign` with:
+After the security verdict resolves and `forward_upstream` runs (or is denied), the proxy calls `clavenar-identity` `/sign` with:
 
 ```rust
 struct SignRequest {
@@ -227,9 +227,9 @@ The signing service returns `{ signature, key_id, signed_at }`. The proxy's NATS
 
 - The signature transitively commits to *all prior ledger state* via `prev_hash`.
 - Tampering with any historical row breaks the signature on every later row, not just the chain hash. Two-layer integrity.
-- A regulator reproducing the chain only needs Warden's JWKS + the ledger export — no live service.
+- A regulator reproducing the chain only needs Clavenar's JWKS + the ledger export — no live service.
 
-**Implementation note: proxy uses `GENESIS_PREV_HASH` (64 zeros) in the signed envelope, not the live ledger tail.** A naive implementation would have the proxy `GET /chain-tail` from `warden-ledger` before every `/sign` call — a second mandatory RTT on the hot path. Instead, the proxy signs against the all-zeros constant; the ledger then stamps the real `prev_hash` into the chain row on append. The two-layer integrity claim still holds because the chain-row hash (which uses the real `prev_hash`) is what auditors verify, not the per-action signature in isolation. Rationale lives in `warden-proxy/src/sign.rs` module-doc. This is the only signing-side wire deviation from the spec contract; integrators verifying signatures must use `GENESIS_PREV_HASH` for the signed-payload re-computation, then check chain continuity separately.
+**Implementation note: proxy uses `GENESIS_PREV_HASH` (64 zeros) in the signed envelope, not the live ledger tail.** A naive implementation would have the proxy `GET /chain-tail` from `clavenar-ledger` before every `/sign` call — a second mandatory RTT on the hot path. Instead, the proxy signs against the all-zeros constant; the ledger then stamps the real `prev_hash` into the chain row on append. The two-layer integrity claim still holds because the chain-row hash (which uses the real `prev_hash`) is what auditors verify, not the per-action signature in isolation. Rationale lives in `clavenar-proxy/src/sign.rs` module-doc. This is the only signing-side wire deviation from the spec contract; integrators verifying signatures must use `GENESIS_PREV_HASH` for the signed-payload re-computation, then check chain continuity separately.
 
 #### 5.3 What is *not* signed
 
@@ -250,7 +250,7 @@ struct AttestationClaims {
     measurement: String,           // hex-encoded PCR/MRENCLAVE/etc.
     issued_at: DateTime<Utc>,      // freshness
     expires_at: DateTime<Utc>,     // ≤ 15min
-    nonce_echo: String,            // proves liveness against a Warden-issued nonce
+    nonce_echo: String,            // proves liveness against a Clavenar-issued nonce
 }
 ```
 
@@ -280,18 +280,18 @@ Shared types are duplicated on each side of the wire. The fields below need to l
 
 | Edge | Field added | Repos to grep |
 |---|---|---|
-| Proxy → Brain | `agent_spiffe: String` | `warden-proxy/src/fork.rs`, `warden-brain/src/lib.rs` |
-| Proxy → Policy | `agent_spiffe: String`, `attestation: Option<AttestationClaims>` | `warden-proxy/src/fork.rs`, `warden-policy-engine/src/lib.rs` |
-| Proxy → HIL | `agent_spiffe: String`, `delegation_jti: String` | `warden-proxy/src/sandbox_handoff.rs` (CreatePending site), `warden-hil/src/api.rs` |
-| Proxy → Ledger (NATS) | `agent_spiffe`, `signature`, `key_id` (chain v2) | `warden-proxy`, `warden-ledger/src/chain.rs` |
+| Proxy → Brain | `agent_spiffe: String` | `clavenar-proxy/src/fork.rs`, `clavenar-brain/src/lib.rs` |
+| Proxy → Policy | `agent_spiffe: String`, `attestation: Option<AttestationClaims>` | `clavenar-proxy/src/fork.rs`, `clavenar-policy-engine/src/lib.rs` |
+| Proxy → HIL | `agent_spiffe: String`, `delegation_jti: String` | `clavenar-proxy/src/sandbox_handoff.rs` (CreatePending site), `clavenar-hil/src/api.rs` |
+| Proxy → Ledger (NATS) | `agent_spiffe`, `signature`, `key_id` (chain v2) | `clavenar-proxy`, `clavenar-ledger/src/chain.rs` |
 
-Console (`warden-console`) needs a "Delegation: alice@acme via support-bot-3" badge on every audit row — wire it through the existing correlation-id join.
+Console (`clavenar-console`) needs a "Delegation: alice@acme via support-bot-3" badge on every audit row — wire it through the existing correlation-id join.
 
 ### 8. Failure & fallback semantics
 
 | Failure | Behaviour | Reasoning |
 |---|---|---|
-| `warden-identity` unreachable on `/sign` | Proxy fails *closed* on Yellow-tier and any tool with `attestation_required`; fails *open* (no signature, ledger v1 row) on Authorized non-attested calls, with a `signing_unavailable` signal in Brain's signal aggregator | Don't take the whole stack down because a non-critical service blips; do refuse to sign forged-checks-from-the-future |
+| `clavenar-identity` unreachable on `/sign` | Proxy fails *closed* on Yellow-tier and any tool with `attestation_required`; fails *open* (no signature, ledger v1 row) on Authorized non-attested calls, with a `signing_unavailable` signal in Brain's signal aggregator | Don't take the whole stack down because a non-critical service blips; do refuse to sign forged-checks-from-the-future |
 | Attestation expired mid-burst | Proxy returns 401 with `attestation_stale`; agent re-attests | Same model as expired SVID |
 | Vault Transit unavailable | Identity service degrades to `signing_unavailable` (above) | Single failure domain — Vault is already a hard dep |
 | Federation bundle stale (cross-tenant) | Reject A2A; allow same-tenant | Matches the §13.1 "identity is necessary but insufficient" framing — better to fail safe |
@@ -300,19 +300,19 @@ Console (`warden-console`) needs a "Delegation: alice@acme via support-bot-3" ba
 
 Five phases, each independently shippable. **All five shipped.**
 
-1. **SVID issuance, no enforcement.** *(shipped)* `warden-identity` mints SVIDs alongside the existing CA. Proxy parses the SPIFFE SAN from the cert and falls back to CN for legacy clients.
-2. **Delegation grants.** *(shipped)* `/grant` exchange wired; HIL records the delegation principal on pending rows; proxy threads `X-Warden-Grant` through and rejects expired grants with `grant_expired`.
+1. **SVID issuance, no enforcement.** *(shipped)* `clavenar-identity` mints SVIDs alongside the existing CA. Proxy parses the SPIFFE SAN from the cert and falls back to CN for legacy clients.
+2. **Delegation grants.** *(shipped)* `/grant` exchange wired; HIL records the delegation principal on pending rows; proxy threads `X-Clavenar-Grant` through and rejects expired grants with `grant_expired`.
 3. **Action signing (chain v2).** *(shipped)* Ledger gained v2 dispatch (`HashableEntryV2` with `agent_spiffe`, `signature`, `key_id`); proxy calls `/sign` after the verdict resolves; verifier exposes JWKS-based per-row signature check; mixed-v1/v2 export verifies.
-4. **Attestation enforcement.** *(shipped)* `policies/attestation.rego` ships with `attestation_required` rules keyed on `wire_transfer` and `delete_*`; `attestation_allowlist.json` carries the per-tool measurement list; proxy attaches `AttestationClaims` (with a per-spiffe-id cache and `X-Warden-Attestation` per-request header override) on every `/evaluate`; chaos-monkey `unattested_binary` asserts deny.
-5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`); federation poller; two-tenant `run-federation.sh` e2e in `warden-e2e`.
+4. **Attestation enforcement.** *(shipped)* `policies/attestation.rego` ships with `attestation_required` rules keyed on `wire_transfer` and `delete_*`; `attestation_allowlist.json` carries the per-tool measurement list; proxy attaches `AttestationClaims` (with a per-spiffe-id cache and `X-Clavenar-Attestation` per-request header override) on every `/evaluate`; chaos-monkey `unattested_binary` asserts deny.
+5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`); federation poller; two-tenant `run-federation.sh` e2e in `clavenar-e2e`.
 
 The §11.3 valuation claim (⭐⭐⭐⭐⭐, "zero-trust score" metric) and the §15 trust-dividend story are both unblocked.
 
 ### 10. Test surface
 
-- **`warden-e2e`** gains: SVID issuance happy path; revocation kills next request within 1s; signed-row chain verification against a regulator-style export.
-- **`warden-chaos-monkey`** gains: `stolen_svid_replay`, `unattested_binary`, `expired_grant`, `cross_tenant_unfederated`. All four must produce specific, predicted verdicts.
-- **`warden-simulator`** has a `--delegation-mix` flag (env `SIM_DELEGATION_MIX`) — comma-separated pool of human `act.sub` values; each fire picks one at random and stamps an unsigned `X-Warden-Grant` header. The proxy's v1 grant parser is signature-advisory (`warden-proxy/src/grant.rs`), so the unsigned grant is accepted and the console audit page renders the "Delegation: <human> via <agent>" badge with realistic variety. *Shipped 2026-05-13 (v0.6.5).*
+- **`clavenar-e2e`** gains: SVID issuance happy path; revocation kills next request within 1s; signed-row chain verification against a regulator-style export.
+- **`clavenar-chaos-monkey`** gains: `stolen_svid_replay`, `unattested_binary`, `expired_grant`, `cross_tenant_unfederated`. All four must produce specific, predicted verdicts.
+- **`clavenar-simulator`** has a `--delegation-mix` flag (env `SIM_DELEGATION_MIX`) — comma-separated pool of human `act.sub` values; each fire picks one at random and stamps an unsigned `X-Clavenar-Grant` header. The proxy's v1 grant parser is signature-advisory (`clavenar-proxy/src/grant.rs`), so the unsigned grant is accepted and the console audit page renders the "Delegation: <human> via <agent>" badge with realistic variety. *Shipped 2026-05-13 (v0.6.5).*
 
 ### 11. What this spec deliberately does not include
 
@@ -328,7 +328,7 @@ The §11.3 valuation claim (⭐⭐⭐⭐⭐, "zero-trust score" metric) and the 
 
 Companion to the [Identity service](#identity-service) section. Where that section covers how a *running* agent gets a cryptographic identity (SVID, grant, action signature, attestation), this spec covers the missing pre-step: how an agent gets *registered with the platform* in the first place — who declared it should exist, with what capabilities, owned by which team — and how that record gates every downstream identity operation.
 
-**Module status:** shipped. Extends `warden-identity` (no new service); introduces a new top-level CLI binary `wardenctl`; extends `warden-console` and `warden-ledger` (chain v3); touches `warden-e2e` and `warden-chaos-monkey`. Depends on the issuance, signing, and chain-version-negotiation primitives in the [Identity service](#identity-service) section.
+**Module status:** shipped. Extends `clavenar-identity` (no new service); introduces a new top-level CLI binary `clavenarctl`; extends `clavenar-console` and `clavenar-ledger` (chain v3); touches `clavenar-e2e` and `clavenar-chaos-monkey`. Depends on the issuance, signing, and chain-version-negotiation primitives in the [Identity service](#identity-service) section.
 
 ### 1. What this closes
 
@@ -352,7 +352,7 @@ The capability envelope is the load-bearing primitive. Without it, registration 
 |---|---|---|---|
 | T1 | Compromised attestor claims a high-privilege `agent_name` it never had | First-call wins; SVID issued; agent inherits whatever runtime privileges its name implies | `agent_name` must be pre-registered by a human with `agents:create`; unregistered names rejected (`enforce`) or flagged (`warn`) |
 | T2 | Agent silently escalates its own capabilities via `/grant` request | `/grant` accepts arbitrary scopes; only Brain/Policy at runtime gate them | `/grant` intersects requested scopes with the registered envelope before issuance; out-of-envelope = `403 scope_outside_envelope` |
-| T3 | Operator fakes a registration retroactively to cover an incident | Sidecar registry tables are operator-trusted | Lifecycle events anchored in chain v3, signed by `warden-identity` issuer key; tampering breaks every later signature |
+| T3 | Operator fakes a registration retroactively to cover an incident | Sidecar registry tables are operator-trusted | Lifecycle events anchored in chain v3, signed by `clavenar-identity` issuer key; tampering breaks every later signature |
 | T4 | Compromised team member quietly hands their high-privilege agent to an attacker-controlled team | No ownership transfer concept | Transfer requires `agents:admin` (different capability than owner-team membership), emits `agent.owner_team_transferred` chain row |
 | T5 | Decommissioned agent name re-registered with looser scope | No retention; name is reusable | `UNIQUE (tenant, agent_name)` includes Decommissioned; re-register attempt returns `409 agent_name_retired` |
 
@@ -362,7 +362,7 @@ The capability envelope is the load-bearing primitive. Without it, registration 
 
 #### 3.1 Schema
 
-Lives in `warden-identity`'s SQLite alongside `svids`, `grants`, `attestations`. One table:
+Lives in `clavenar-identity`'s SQLite alongside `svids`, `grants`, `attestations`. One table:
 
 ```sql
 CREATE TABLE agents (
@@ -461,7 +461,7 @@ Empty envelope (`[]`) is legal and means "this agent can hold an SVID but cannot
 
 #### 5.1 Registration & lifecycle
 
-All endpoints below take `Authorization: Bearer <oidc_id_token>`. `warden-identity` validates against the per-tenant JWKS configured in `identity.toml`, extracts `sub`, `idp` (from issuer mapping), `groups` (for `owner_team` checks), and resolves capabilities by mapping `groups → [agents:create, agents:admin, ...]` per `[capabilities.tenants.<tid>]` config.
+All endpoints below take `Authorization: Bearer <oidc_id_token>`. `clavenar-identity` validates against the per-tenant JWKS configured in `identity.toml`, extracts `sub`, `idp` (from issuer mapping), `groups` (for `owner_team` checks), and resolves capabilities by mapping `groups → [agents:create, agents:admin, ...]` per `[capabilities.tenants.<tid>]` config.
 
 | Method | Path | Capability | Chain v3 event |
 |---|---|---|---|
@@ -546,7 +546,7 @@ The agent record is consulted in the same SQLite transaction as the issuance INS
 
 #### 6.3 Mode behaviour
 
-`WARDEN_IDENTITY_REGISTRATION_MODE = off | warn | enforce`. Default `enforce` (post-rollout posture; `RegistrationMode::default()` in `warden-identity/src/lib.rs`). Operators staging a brownfield rollout set `WARDEN_IDENTITY_REGISTRATION_MODE=warn` to onboard agents without 403'ing unregistered names first.
+`CLAVENAR_IDENTITY_REGISTRATION_MODE = off | warn | enforce`. Default `enforce` (post-rollout posture; `RegistrationMode::default()` in `clavenar-identity/src/lib.rs`). Operators staging a brownfield rollout set `CLAVENAR_IDENTITY_REGISTRATION_MODE=warn` to onboard agents without 403'ing unregistered names first.
 
 | Mode | Unregistered name on `/svid` | Unregistered name on `/grant` | Registered agent + out-of-envelope grant |
 |---|---|---|---|
@@ -578,7 +578,7 @@ The outer hashable is fixed at v3 launch and never altered without a v4 bump. Pe
   "actor_idp":        "okta",
   "payload_sha256":   "<hex>",
   "signature":        "<base64>",
-  "key_id":           "<warden-identity issuer key id>",
+  "key_id":           "<clavenar-identity issuer key id>",
   "seq":              42,
   "prev_hash":        "<hex>"
 }
@@ -588,7 +588,7 @@ Hash formula (same shape as v1/v2):
 
 ```
 entry_hash[n] = sha256( prev_hash[n] || "|" || canonical_json(hashable_v3_minus_signature) )
-signature      = sign(warden-identity issuer key, entry_hash[n])
+signature      = sign(clavenar-identity issuer key, entry_hash[n])
 payload_sha256 = sha256( canonical_json(payload) )
 ```
 
@@ -603,7 +603,7 @@ payload_sha256 = sha256( canonical_json(payload) )
 | `agent.owner_team_transferred` | `{ owner_team_before, owner_team_after }` |
 | `agent.description_changed` | (no payload — chain row's `actor_sub` + `timestamp` is the proof; description content lives in identity's local table) |
 
-`canonical_json` for both the outer hashable and the payload is the existing v1/v2 canonicalizer in `warden-ledger` (sorted keys, no whitespace, UTF-8 NFC). One canonicalizer, no per-version variants.
+`canonical_json` for both the outer hashable and the payload is the existing v1/v2 canonicalizer in `clavenar-ledger` (sorted keys, no whitespace, UTF-8 NFC). One canonicalizer, no per-version variants.
 
 #### 7.3 Ground rules
 
@@ -615,7 +615,7 @@ payload_sha256 = sha256( canonical_json(payload) )
 
 #### 8.1 Transport
 
-All `/agents` endpoints take a raw OIDC `id_token` in `Authorization: Bearer`. Stateless server-side validation against the configured per-tenant JWKS. No Warden-issued session token (would double the revocation surface for no security gain). No reuse of `/grant` for human auth (would conflate the human/agent boundary the rest of the spec maintains).
+All `/agents` endpoints take a raw OIDC `id_token` in `Authorization: Bearer`. Stateless server-side validation against the configured per-tenant JWKS. No Clavenar-issued session token (would double the revocation surface for no security gain). No reuse of `/grant` for human auth (would conflate the human/agent boundary the rest of the spec maintains).
 
 #### 8.2 Capability resolution
 
@@ -623,28 +623,28 @@ Capabilities (`agents:create`, `agents:admin`, ...) are derived from the IdP `gr
 
 ```toml
 [capabilities.tenants.acme]
-"warden-agent-creators" = ["agents:create"]
-"warden-platform-admins" = ["agents:create", "agents:admin"]
+"clavenar-agent-creators" = ["agents:create"]
+"clavenar-platform-admins" = ["agents:create", "agents:admin"]
 ```
 
-This avoids requiring per-tenant IdP claim customisation (the #1 enterprise SaaS onboarding failure mode). The tenant administrator only has to tell their IdP team "add a group called `warden-agent-creators` and put your developers in it."
+This avoids requiring per-tenant IdP claim customisation (the #1 enterprise SaaS onboarding failure mode). The tenant administrator only has to tell their IdP team "add a group called `clavenar-agent-creators` and put your developers in it."
 
 #### 8.3 Per-tenant IdP
 
-Multi-tenant `warden-identity` reads `[oidc.tenants.<tid>] issuer = "..." jwks_url = "..."` per tenant. Per-call routing is by the `tenant` field in the request body. A request whose `tenant` doesn't match the OIDC token's issuer mapping returns `403 tenant_mismatch`.
+Multi-tenant `clavenar-identity` reads `[oidc.tenants.<tid>] issuer = "..." jwks_url = "..."` per tenant. Per-call routing is by the `tenant` field in the request body. A request whose `tenant` doesn't match the OIDC token's issuer mapping returns `403 tenant_mismatch`.
 
-### 9. The `wardenctl` CLI
+### 9. The `clavenarctl` CLI
 
-New top-level binary built on top of `warden-sdk`. Two artifacts, one source of truth: SDK is the typed library (consumed by `warden-console` and integrators); CLI is a `[[bin]]` in a new crate that depends on SDK.
+New top-level binary built on top of `clavenar-sdk`. Two artifacts, one source of truth: SDK is the typed library (consumed by `clavenar-console` and integrators); CLI is a `[[bin]]` in a new crate that depends on SDK.
 
 #### 9.1 Auth
 
 OIDC device authorization flow (RFC 8628), the same pattern as `gcloud auth login`, `aws sso login`, `gh auth login`.
 
 ```
-wardenctl auth login --tenant acme        # device-flow; cache id_token + refresh_token in ~/.warden/credentials.json
-wardenctl auth logout
-wardenctl auth whoami                      # echoes sub, idp, groups, capabilities
+clavenarctl auth login --tenant acme        # device-flow; cache id_token + refresh_token in ~/.clavenar/credentials.json
+clavenarctl auth logout
+clavenarctl auth whoami                      # echoes sub, idp, groups, capabilities
 ```
 
 No long-lived API tokens. No operator SVID requirement (would be a circular bootstrap). The CLI re-uses the cached refresh token transparently; expired refresh sends the operator back through device flow.
@@ -652,7 +652,7 @@ No long-lived API tokens. No operator SVID requirement (would be a circular boot
 #### 9.2 Commands
 
 ```
-wardenctl agents create \
+clavenarctl agents create \
   --tenant acme --name support-bot-3 \
   --owner-team payments \
   --scope mcp:read:tickets --scope mcp:write:tickets \
@@ -661,28 +661,28 @@ wardenctl agents create \
   --description "Triage bot for tier-1 tickets" \
   [--if-absent]                            # idempotent: 200 if record matches; 409 if differs
 
-wardenctl agents list --tenant acme [--state Active|Suspended|Decommissioned] [--owner-team payments] [--json]
-wardenctl agents get <id> [--json]
-wardenctl agents suspend <id> --reason "investigating anomaly"
-wardenctl agents unsuspend <id>
-wardenctl agents decommission <id> --reason "team disbanded"
-wardenctl agents envelope narrow <id> --scope mcp:read:tickets
-wardenctl agents envelope widen  <id> --scope mcp:write:knowledge-base --yellow-scope refund:<=500usd
-wardenctl agents transfer <id> --to-team newteam
-wardenctl agents description <id> --text "..."
+clavenarctl agents list --tenant acme [--state Active|Suspended|Decommissioned] [--owner-team payments] [--json]
+clavenarctl agents get <id> [--json]
+clavenarctl agents suspend <id> --reason "investigating anomaly"
+clavenarctl agents unsuspend <id>
+clavenarctl agents decommission <id> --reason "team disbanded"
+clavenarctl agents envelope narrow <id> --scope mcp:read:tickets
+clavenarctl agents envelope widen  <id> --scope mcp:write:knowledge-base --yellow-scope refund:<=500usd
+clavenarctl agents transfer <id> --to-team newteam
+clavenarctl agents description <id> --text "..."
 
-wardenctl agents migrate \
-  --identity-db /var/lib/warden-identity/identity.sqlite \
+clavenarctl agents migrate \
+  --identity-db /var/lib/clavenar-identity/identity.sqlite \
   [--dry-run] [--default-owner-team unassigned] [--default-envelope '*'] [--default-attestation-kinds '*']
 ```
 
 #### 9.3 Conventions
 
 - `--json` on every read command; tests and shadow-scanner integration depend on machine-readable output.
-- `--if-absent` on `create` for IaC-without-Terraform patterns: a CI job loops a YAML file and runs `wardenctl agents create --if-absent` per entry. Returns 200 if the existing record matches the requested envelope, 409 if it differs.
+- `--if-absent` on `create` for IaC-without-Terraform patterns: a CI job loops a YAML file and runs `clavenarctl agents create --if-absent` per entry. Returns 200 if the existing record matches the requested envelope, 409 if it differs.
 - Exit codes are deterministic and documented: `0` success, `2` validation error, `3` auth/capability error, `4` conflict, `5` server error.
 
-### 10. Console (`warden-console`) extensions
+### 10. Console (`clavenar-console`) extensions
 
 The console gets the same OIDC auth dance as the CLI (auth-code flow + PKCE), holds tokens server-side, never exposes them to user-facing JS. Tenant context is inferred from the OIDC `tenant` claim or per-IdP `console.toml`. No tenant switcher in v1.
 
@@ -709,7 +709,7 @@ The console has no "delete" verb. Decommission is terminal but the row stays. Th
 
 | Failure | Behaviour | Reasoning |
 |---|---|---|
-| `warden-identity` SQLite unavailable | Same as today: `/svid`, `/grant`, `/agents` all 503 | Single failure domain — identity is already a hard dep |
+| `clavenar-identity` SQLite unavailable | Same as today: `/svid`, `/grant`, `/agents` all 503 | Single failure domain — identity is already a hard dep |
 | Per-tenant JWKS endpoint unreachable | Cached JWKS used until expiry; after expiry, 503 with `jwks_unavailable` for that tenant only | Don't take down all tenants because one IdP is down |
 | Caller's `id_token` expired | `401 invalid_token` | CLI re-runs device flow; console re-runs auth-code flow |
 | Agent record missing in `enforce` | `403 unregistered_agent` on `/svid` and `/grant` | The point |
@@ -722,35 +722,35 @@ The console has no "delete" verb. Decommission is terminal but the row stays. Th
 
 Five slices, each independently shippable.
 
-1. **Schema + reads.** `agents` table created; `GET /agents`, `GET /agents/{id}`, `wardenctl agents list/get` work. `POST /agents` and lifecycle endpoints not yet wired. Mode flag defaults `off`. *Exit:* schema migration ships to all environments; SDK `Client::list_agents` callable.
-2. **Writes + lifecycle (no gating).** `POST /agents` and the lifecycle endpoints all work. Console `/agents`, `/agents/new`, `/agents/{id}` ship. `wardenctl agents create/suspend/...` ship. Mode still `off`. *Exit:* operators can enroll and manage records; nothing breaks because no gate consults them yet.
-3. **Chain v3.** Ledger gains v3 dispatch. Every `POST /agents` and lifecycle endpoint emits a chain v3 row. Console `/agents/{id}` timeline ships. Verifier exposes per-row signature check across v1, v2, v3. *Exit:* `verify_chain` passes against a mixed v1/v2/v3 export; `wardenctl ledger verify` succeeds.
-4. **Mode `warn`.** `/svid` and `/grant` consult the registry; unregistered names succeed with a signal stamped on the forensic event. Registered agents get envelope enforcement immediately. Console `/audit` highlights `unregistered_agent` rows with the "Register…" link. *Exit:* `warden-e2e` happy path passes with the simulator agents either pre-registered (via migration CLI) or running unregistered with signals; chaos-monkey scenarios assert correct mode behaviour.
-5. **Mode `enforce`.** Default flips. Migration CLI is the official adoption tool — operators run `wardenctl agents migrate --default-envelope '*'` to bulk-enroll existing agents before flipping. `warden-e2e`, `warden-simulator`, `warden-chaos-monkey` boot scripts run the migration in their setup. *Exit:* `warden-e2e` happy path passes with `enforce` and zero unregistered names; chaos-monkey `unregistered_agent_enforce` scenario denies as expected.
+1. **Schema + reads.** `agents` table created; `GET /agents`, `GET /agents/{id}`, `clavenarctl agents list/get` work. `POST /agents` and lifecycle endpoints not yet wired. Mode flag defaults `off`. *Exit:* schema migration ships to all environments; SDK `Client::list_agents` callable.
+2. **Writes + lifecycle (no gating).** `POST /agents` and the lifecycle endpoints all work. Console `/agents`, `/agents/new`, `/agents/{id}` ship. `clavenarctl agents create/suspend/...` ship. Mode still `off`. *Exit:* operators can enroll and manage records; nothing breaks because no gate consults them yet.
+3. **Chain v3.** Ledger gains v3 dispatch. Every `POST /agents` and lifecycle endpoint emits a chain v3 row. Console `/agents/{id}` timeline ships. Verifier exposes per-row signature check across v1, v2, v3. *Exit:* `verify_chain` passes against a mixed v1/v2/v3 export; `clavenarctl ledger verify` succeeds.
+4. **Mode `warn`.** `/svid` and `/grant` consult the registry; unregistered names succeed with a signal stamped on the forensic event. Registered agents get envelope enforcement immediately. Console `/audit` highlights `unregistered_agent` rows with the "Register…" link. *Exit:* `clavenar-e2e` happy path passes with the simulator agents either pre-registered (via migration CLI) or running unregistered with signals; chaos-monkey scenarios assert correct mode behaviour.
+5. **Mode `enforce`.** Default flips. Migration CLI is the official adoption tool — operators run `clavenarctl agents migrate --default-envelope '*'` to bulk-enroll existing agents before flipping. `clavenar-e2e`, `clavenar-simulator`, `clavenar-chaos-monkey` boot scripts run the migration in their setup. *Exit:* `clavenar-e2e` happy path passes with `enforce` and zero unregistered names; chaos-monkey `unregistered_agent_enforce` scenario denies as expected.
 
 The first set of slices unblocks the §11.3 audit-lineage story (chain row "Alice declared this agent"); the later slices close the namespace-squat and capability-sprawl threats (T1, T2). The early slices are decoupled from capability-attestation enforcement and other downstream work.
 
 ### 13. Test surface
 
-#### 13.1 `warden-e2e`
+#### 13.1 `clavenar-e2e`
 
-A new bash runner `run-onboarding.sh` (or fold into `run.sh` if boot time tolerates). Boots `warden-identity` + a `dexidp/dex` mock IdP container + the migration target stack. Asserts:
+A new bash runner `run-onboarding.sh` (or fold into `run.sh` if boot time tolerates). Boots `clavenar-identity` + a `dexidp/dex` mock IdP container + the migration target stack. Asserts:
 
-1. **Bootstrap.** Mock IdP issues `id_token` for `admin@acme.com` (in group `warden-platform-admins`); `wardenctl auth login` succeeds; `wardenctl agents create` returns 200; agent record present in identity SQLite; `agent.registered` chain v3 row present in ledger with the registering human's `actor_sub` and the full envelope in payload.
+1. **Bootstrap.** Mock IdP issues `id_token` for `admin@acme.com` (in group `clavenar-platform-admins`); `clavenarctl auth login` succeeds; `clavenarctl agents create` returns 200; agent record present in identity SQLite; `agent.registered` chain v3 row present in ledger with the registering human's `actor_sub` and the full envelope in payload.
 2. **First SVID against registered agent.** Existing SVID issuance flow runs; assert no `unregistered_agent` signal in forensic event; resulting cert SAN matches the registered `(tenant, agent_name)`.
 3. **Grant intersection.** `/grant` with scopes inside envelope succeeds; `/grant` with one in-envelope and one out-of-envelope scope returns `403 scope_outside_envelope` with the offender named.
 4. **End-to-end Yellow-tier with envelope-context.** Pre-registered simulator agent drives a wire_transfer that hits HIL; HIL pending row carries the agent's envelope and registering human; chain has both `agent.registered` and the verdict row signed by the same key.
 5. **Suspend revokes in flight.** Issue SVID, suspend the agent, verify next `/grant` returns `agent_suspended` and next `/sign` returns `agent_suspended` (revocation broadcast worked).
-6. **Lifecycle chain replay.** Run register → suspend → unsuspend → narrow envelope → decommission; `wardenctl ledger verify` against the export; chain valid; six v3 rows in the right order; signatures valid against JWKS.
-7. **Migration CLI.** Boot stack with `WARDEN_IDENTITY_REGISTRATION_MODE=warn`, drive simulator to populate svids table, run `wardenctl agents migrate --default-envelope '*'`, assert all simulator agents now have records with wildcard envelope and `actor_sub` includes the operator's OIDC subject.
+6. **Lifecycle chain replay.** Run register → suspend → unsuspend → narrow envelope → decommission; `clavenarctl ledger verify` against the export; chain valid; six v3 rows in the right order; signatures valid against JWKS.
+7. **Migration CLI.** Boot stack with `CLAVENAR_IDENTITY_REGISTRATION_MODE=warn`, drive simulator to populate svids table, run `clavenarctl agents migrate --default-envelope '*'`, assert all simulator agents now have records with wildcard envelope and `actor_sub` includes the operator's OIDC subject.
 8. **Mode flip.** Flip `enforce`, drive an unregistered agent, assert `403 unregistered_agent`.
 
 The dex mock is configured with two static users:
 
-- `admin@acme.com` with `groups: [warden-platform-admins]` (mapped to `agents:create + agents:admin`)
-- `dev@acme.com` with `groups: [payments]` (no Warden capabilities — tests `403 missing_capability:agents:create`)
+- `admin@acme.com` with `groups: [clavenar-platform-admins]` (mapped to `agents:create + agents:admin`)
+- `dev@acme.com` with `groups: [payments]` (no Clavenar capabilities — tests `403 missing_capability:agents:create`)
 
-#### 13.2 `warden-chaos-monkey`
+#### 13.2 `clavenar-chaos-monkey`
 
 New scenarios. Each must produce a specific predicted verdict (the existing pattern):
 
@@ -777,11 +777,11 @@ Onboarding scenarios are pure-identity, no policy-tracker hits, so they run earl
 
 | Edge | Field added | Repos to grep |
 |---|---|---|
-| Console → Identity (read) | `GET /agents` response shape | `warden-console`, `warden-identity/src/agents.rs`, `warden-sdk` |
-| Console → Identity (write) | `POST /agents` and lifecycle bodies | `warden-console`, `warden-identity/src/agents.rs`, `warden-sdk` |
-| `wardenctl` → Identity | All `/agents` shapes | `warden-sdk`, `warden-ctl/src/cmd/agents.rs`, `warden-identity/src/agents.rs` |
-| Identity → Ledger (NATS) | Chain v3 outer hashable + per-kind payloads | `warden-identity/src/agents_ledger.rs`, `warden-ledger/src/chain.rs` (v3 dispatch), `warden-ledger/src/verify.rs` |
-| Identity → Proxy/HIL (existing rejection signals) | New error codes (`unregistered_agent`, `scope_outside_envelope`, `agent_suspended`, `agent_decommissioned`, `attestation_kind_not_accepted`) | `warden-proxy/src/grant.rs`, `warden-proxy/src/sign.rs` (signal aggregator), `warden-brain` (signal display), `warden-console/src/audit.rs` (filter chips) |
+| Console → Identity (read) | `GET /agents` response shape | `clavenar-console`, `clavenar-identity/src/agents.rs`, `clavenar-sdk` |
+| Console → Identity (write) | `POST /agents` and lifecycle bodies | `clavenar-console`, `clavenar-identity/src/agents.rs`, `clavenar-sdk` |
+| `clavenarctl` → Identity | All `/agents` shapes | `clavenar-sdk`, `clavenar-ctl/src/cmd/agents.rs`, `clavenar-identity/src/agents.rs` |
+| Identity → Ledger (NATS) | Chain v3 outer hashable + per-kind payloads | `clavenar-identity/src/agents_ledger.rs`, `clavenar-ledger/src/chain.rs` (v3 dispatch), `clavenar-ledger/src/verify.rs` |
+| Identity → Proxy/HIL (existing rejection signals) | New error codes (`unregistered_agent`, `scope_outside_envelope`, `agent_suspended`, `agent_decommissioned`, `attestation_kind_not_accepted`) | `clavenar-proxy/src/grant.rs`, `clavenar-proxy/src/sign.rs` (signal aggregator), `clavenar-brain` (signal display), `clavenar-console/src/audit.rs` (filter chips) |
 
 The shared types are duplicated on each side of the wire (no shared crate, per repo convention); land changes simultaneously.
 
@@ -801,26 +801,26 @@ The shared types are duplicated on each side of the wire (no shared crate, per r
 ## Tenancy scope
 
 
-Cross-cutting clarification — applies to every module. Warden v1 ships a **single-tenant-per-deployment posture with a tenant-scoped trust root**. Operators should not conflate "the SVID carries a tenant segment" with "the system enforces tenant isolation end-to-end."
+Cross-cutting clarification — applies to every module. Clavenar v1 ships a **single-tenant-per-deployment posture with a tenant-scoped trust root**. Operators should not conflate "the SVID carries a tenant segment" with "the system enforces tenant isolation end-to-end."
 
 ### 1. What is tenant-scoped today
 
-- **Agent enrollment** (`warden-identity`). `POST /agents` validates the request body's `tenant` against the OIDC token's tenant claim and returns `403 tenant_mismatch` on mismatch ([Agent onboarding §8.3 per-tenant IdP](#agent-onboarding-wao)). Schema enforces `UNIQUE (tenant, agent_name)` including `Decommissioned` rows; reads filter `WHERE tenant=?`. Index `agents_by_tenant_state` exists.
+- **Agent enrollment** (`clavenar-identity`). `POST /agents` validates the request body's `tenant` against the OIDC token's tenant claim and returns `403 tenant_mismatch` on mismatch ([Agent onboarding §8.3 per-tenant IdP](#agent-onboarding-wao)). Schema enforces `UNIQUE (tenant, agent_name)` including `Decommissioned` rows; reads filter `WHERE tenant=?`. Index `agents_by_tenant_state` exists.
 - **SVID URIs.** Every instance certificate carries `spiffe://<td>/tenant/<tid>/agent/<name>/instance/<uuid>` ([Identity service §3](#identity-service)). The tenant segment is signed into the cert by Vault Transit and is durable for the cert's lifetime — the SVID URI is the immutable artifact this whole section is shaped around.
-- **v3 lifecycle chain rows** (`warden-ledger`). Agent register / rotate / revoke / suspend / decommission events live in chain v3 with a `tenant` column; `read_lifecycle_for_agent` gates `WHERE tenant=? AND agent_id=?` (index `idx_entries_tenant_agent`). This is the one ledger surface that is tenant-isolated end-to-end.
+- **v3 lifecycle chain rows** (`clavenar-ledger`). Agent register / rotate / revoke / suspend / decommission events live in chain v3 with a `tenant` column; `read_lifecycle_for_agent` gates `WHERE tenant=? AND agent_id=?` (index `idx_entries_tenant_agent`). This is the one ledger surface that is tenant-isolated end-to-end.
 
 ### 2. What carries `tenant` as a field but does not filter on it
 
-- **v1/v2 verdict rows** (`warden-ledger`). `entries.tenant` exists as a column on all rows but no read function references it. The `/audit/{agent_id}` JSON receipt, `/audit/paged`, the console's `/audit` page fan-out, `/audit/replay/corpus`, and the distinct-agents list are global across tenants.
+- **v1/v2 verdict rows** (`clavenar-ledger`). `entries.tenant` exists as a column on all rows but no read function references it. The `/audit/{agent_id}` JSON receipt, `/audit/paged`, the console's `/audit` page fan-out, `/audit/replay/corpus`, and the distinct-agents list are global across tenants.
 - **Self-Learn mining corpus** ([Console policy management](#console-policy-management)). `read_replay_corpus` has no tenant predicate; the miner sees every tenant's traffic in a shared pool.
 - **Policy Lab replay-batch.** Same SQL, same gap.
 
 ### 3. What has no tenant axis at all
 
-- **Policy ruleset** (`warden-policy-engine`). The `policies` and `policy_versions` tables have no `tenant` column. One engine; one active ruleset; applied to every agent regardless of tenant claim. Activating, deactivating, or editing a policy is deployment-wide.
-- **HIL pending queue** (`warden-hil`). `pending_requests` has no `tenant` column; one global approval queue. A human approver cannot tell which tenant a pending belongs to except by inspecting the `agent_id` prefix convention.
-- **Brain `/inspect`** (`warden-brain`). Tenant is not in the request shape; classifiers, persona drift models, and indirect-injection detectors are identical for every caller.
-- **Console UI.** `WARDEN_CONSOLE_AGENTS_TENANT` is process-wide (default `acme`). No tenant switcher; every page reads the global state above.
+- **Policy ruleset** (`clavenar-policy-engine`). The `policies` and `policy_versions` tables have no `tenant` column. One engine; one active ruleset; applied to every agent regardless of tenant claim. Activating, deactivating, or editing a policy is deployment-wide.
+- **HIL pending queue** (`clavenar-hil`). `pending_requests` has no `tenant` column; one global approval queue. A human approver cannot tell which tenant a pending belongs to except by inspecting the `agent_id` prefix convention.
+- **Brain `/inspect`** (`clavenar-brain`). Tenant is not in the request shape; classifiers, persona drift models, and indirect-injection detectors are identical for every caller.
+- **Console UI.** `CLAVENAR_CONSOLE_AGENTS_TENANT` is process-wide (default `acme`). No tenant switcher; every page reads the global state above.
 
 ### 4. Why this shape
 
@@ -830,28 +830,28 @@ Downstream tenant-scoping (v1/v2 verdict reads, policy ruleset, HIL queue, minin
 
 ### 5. Implication for v1 deployments
 
-One Warden deployment serves one operational tenant. Cross-tenant federation happens at the SPIFFE bundle layer (`/.well-known/spiffe-bundle`, see [Identity service](#identity-service) "Cross-tenant federation"), not by sharing a console process between two tenant orgs. Operators who need data-plane isolation today should deploy two stacks — separate compose, separate ledger volume, separate identity CA — and federate via the bundle endpoint. Year-2 SaaS-style multi-tenant support, where one deployment serves N tenant orgs with isolated audit / policy / HIL state, is deferred.
+One Clavenar deployment serves one operational tenant. Cross-tenant federation happens at the SPIFFE bundle layer (`/.well-known/spiffe-bundle`, see [Identity service](#identity-service) "Cross-tenant federation"), not by sharing a console process between two tenant orgs. Operators who need data-plane isolation today should deploy two stacks — separate compose, separate ledger volume, separate identity CA — and federate via the bundle endpoint. Year-2 SaaS-style multi-tenant support, where one deployment serves N tenant orgs with isolated audit / policy / HIL state, is deferred.
 
 ### 6. What this section is not
 
 - It does not commit to a roadmap date for closing the gaps in §2 / §3. Year-2 means "after v1 settles," not a quarter.
 - It does not propose API shapes for tenant-aware reads. When the year-2 workstream picks up, the migration design lands as a fresh section, not as edits here.
-- It is not authoritative for `warden-charts`. The Helm chart's multi-replica posture has separate caveats called out per-service in `values.yaml`; this section covers wire / data isolation only.
+- It is not authoritative for `clavenar-charts`. The Helm chart's multi-replica posture has separate caveats called out per-service in `values.yaml`; this section covers wire / data isolation only.
 
 ---
 
 ## Console config page
 
 
-Companion to the [Agent onboarding](#agent-onboarding-wao) section only in form. Where that section is a multi-service initiative with a chain version bump, a new CLI binary, and five rollout slices, this section is the opposite end of the scale: one read-only HTML page at `/config` in `warden-console` that answers "what is this binary, what is it talking to, and is everything reachable?" — the implicit question every operator currently answers with `ps`, `printenv`, and `curl` against four URLs.
+Companion to the [Agent onboarding](#agent-onboarding-wao) section only in form. Where that section is a multi-service initiative with a chain version bump, a new CLI binary, and five rollout slices, this section is the opposite end of the scale: one read-only HTML page at `/config` in `clavenar-console` that answers "what is this binary, what is it talking to, and is everything reachable?" — the implicit question every operator currently answers with `ps`, `printenv`, and `curl` against four URLs.
 
-**Module status:** shipped. Local to `warden-console`; one additive change to `warden-sdk` (three new public getters). No new service. No chain version change. No new endpoints on any backend. The only cross-repo dependency is bumping the `warden-sdk` version `warden-console` consumes.
+**Module status:** shipped. Local to `clavenar-console`; one additive change to `clavenar-sdk` (three new public getters). No new service. No chain version change. No new endpoints on any backend. The only cross-repo dependency is bumping the `clavenar-sdk` version `clavenar-console` consumes.
 
 ### 1. What this closes
 
 Today, an operator who SSH-tunnels into the console host and asks "is this thing wired up correctly?" has to:
 
-1. `ps -ef | grep warden-console` — find the process.
+1. `ps -ef | grep clavenar-console` — find the process.
 2. `cat /proc/$PID/environ | tr '\0' '\n'` — see what URLs and flags it booted with.
 3. `curl http://localhost:8083/health` — check the ledger.
 4. Repeat (3) for HIL, identity, simulator.
@@ -863,9 +863,9 @@ The operational consequences:
 |---|---|---|
 | URL drift | "Is the console pointing at staging-ledger or prod-ledger?" needs shell access on the console host | One page renders the URL the SDK is actually pinging |
 | Wiring health | Need to remember each backend's port and curl them by hand | Four parallel probes, color-coded latency badges, truncated error reason on failure |
-| Optional service status | "Is the simulator wired up here?" requires the operator to know the env var name | Card explicitly shows "configured" / "not configured (set `WARDEN_CONSOLE_SIMULATOR_URL`)" |
+| Optional service status | "Is the simulator wired up here?" requires the operator to know the env var name | Card explicitly shows "configured" / "not configured (set `CLAVENAR_CONSOLE_SIMULATOR_URL`)" |
 | Token rotation verification | "Did this binary pick up the new operator token after the env was updated?" cannot be answered without shell | sha256[..8] fingerprint of the bearer; matching fingerprints across operators prove same token, mismatched fingerprints prove the rotation hasn't reached every box |
-| Build provenance | `cargo install warden-console` produces a binary with no version readout in the UI | Page renders `v0.x.y (abc12345)` from `CARGO_PKG_VERSION` and a short git SHA captured at build time |
+| Build provenance | `cargo install clavenar-console` produces a binary with no version readout in the UI | Page renders `v0.x.y (abc12345)` from `CARGO_PKG_VERSION` and a short git SHA captured at build time |
 | Auth posture readability | `cookie_secure` and `session_ttl_secs` live in env vars; verifying them against the deploy doc requires shell | One card |
 
 The page is a diagnostic, not a control plane. Mutation is explicitly out of scope (§11).
@@ -911,7 +911,7 @@ Cards (`rounded-xl bg-white ring-1 ring-slate-200 shadow-card p-5`), single-colu
 | Bind | `ProcessConfig.bind` (set in `main.rs` from `--bind`) |
 | Port | `ProcessConfig.port` (set in `main.rs` from `--port`) |
 | Version | `ProcessConfig.version = env!("CARGO_PKG_VERSION")` |
-| Git SHA | `ProcessConfig.git_sha = option_env!("WARDEN_CONSOLE_GIT_SHA")` |
+| Git SHA | `ProcessConfig.git_sha = option_env!("CLAVENAR_CONSOLE_GIT_SHA")` |
 | `decided_by` fallback | `AppState.decided_by` |
 
 Rendered as `v0.x.y` or `v0.x.y (abc12345)` depending on whether the build script captured a SHA (§5.3).
@@ -920,11 +920,11 @@ Rendered as `v0.x.y` or `v0.x.y (abc12345)` depending on whether the build scrip
 
 Two rows, ledger and HIL. Each row: URL + health badge.
 
-URL via `LedgerClient::base_url()` (already exists in `warden-sdk`) and `HilClient::base_url()` (added by this spec to `warden-console`). Health badge from §4.
+URL via `LedgerClient::base_url()` (already exists in `clavenar-sdk`) and `HilClient::base_url()` (added by this spec to `clavenar-console`). Health badge from §4.
 
 #### 3.3 Backends (optional)
 
-Two rows, identity and simulator. Each row probes if the client is `Some`; renders a `not configured (set WARDEN_CONSOLE_IDENTITY_URL / WARDEN_SIMULATOR_URL)` placeholder if `None`.
+Two rows, identity and simulator. Each row probes if the client is `Some`; renders a `not configured (set CLAVENAR_CONSOLE_IDENTITY_URL / CLAVENAR_SIMULATOR_URL)` placeholder if `None`.
 
 The identity row also surfaces:
 
@@ -972,7 +972,7 @@ Classification:
 
 Red without a reason is useless during an incident. Always surface the truncated transport-error string.
 
-Module location: new `warden-console/src/probe.rs`. Single function:
+Module location: new `clavenar-console/src/probe.rs`. Single function:
 
 ```rust
 // Probe a /health-shaped endpoint and classify the result.
@@ -999,25 +999,25 @@ No `POST`. No JSON-API counterpart. The page is server-rendered askama HTML, sam
 
 | Crate | Method | Returns | Rationale |
 |---|---|---|---|
-| `warden-sdk::SimClient` | `pub fn base_url(&self) -> &Url` | The configured simulator URL | Page renders the URL the client is actually using |
-| `warden-sdk::AgentsClient` | `pub fn has_bearer(&self) -> bool` | Whether `with_bearer` was called | Convenience; `bearer_fingerprint().is_some()` is equivalent |
-| `warden-sdk::AgentsClient` | `pub fn bearer_fingerprint(&self) -> Option<String>` | sha256 hex prefix (first 8 chars) of the configured token | Diagnostic readout without exposing the token |
+| `clavenar-sdk::SimClient` | `pub fn base_url(&self) -> &Url` | The configured simulator URL | Page renders the URL the client is actually using |
+| `clavenar-sdk::AgentsClient` | `pub fn has_bearer(&self) -> bool` | Whether `with_bearer` was called | Convenience; `bearer_fingerprint().is_some()` is equivalent |
+| `clavenar-sdk::AgentsClient` | `pub fn bearer_fingerprint(&self) -> Option<String>` | sha256 hex prefix (first 8 chars) of the configured token | Diagnostic readout without exposing the token |
 
-`LedgerClient::base_url()` already exists in `warden-sdk`; no change needed.
+`LedgerClient::base_url()` already exists in `clavenar-sdk`; no change needed.
 
 #### 5.3 New console-local additions
 
 | File | Change |
 |---|---|
-| `warden-console/src/hil_client.rs` | Add `pub fn base_url(&self) -> &Url` (parity with the SDK clients) |
-| `warden-console/build.rs` | New file. Shells out `git rev-parse --short=8 HEAD`; emits `cargo:rustc-env=WARDEN_CONSOLE_GIT_SHA=<sha>` on success, silent on failure. `cargo:rerun-if-changed=.git/HEAD` and `cargo:rerun-if-changed=.git/refs/heads`. |
-| `warden-console/src/state.rs` | New struct `ProcessConfig { bind: String, port: u16, version: &'static str, git_sha: Option<&'static str> }`. New field `pub process: ProcessConfig` on `AppState`. |
-| `warden-console/src/main.rs` | Build `ProcessConfig` from `Cli` before `AppState` construction. |
-| `warden-console/src/probe.rs` | New module. See §4. |
-| `warden-console/src/handlers.rs` | New `pub async fn config(...)` handler. Reads `AppState`, runs the four probes under `tokio::join!`, renders the template. |
-| `warden-console/src/lib.rs` | Wire the route: `.route("/config", get(handlers::config))`. |
-| `warden-console/templates/config.html` | New askama template. Four cards as in §3. |
-| `warden-console/templates/base.html` | Add the nav link. |
+| `clavenar-console/src/hil_client.rs` | Add `pub fn base_url(&self) -> &Url` (parity with the SDK clients) |
+| `clavenar-console/build.rs` | New file. Shells out `git rev-parse --short=8 HEAD`; emits `cargo:rustc-env=CLAVENAR_CONSOLE_GIT_SHA=<sha>` on success, silent on failure. `cargo:rerun-if-changed=.git/HEAD` and `cargo:rerun-if-changed=.git/refs/heads`. |
+| `clavenar-console/src/state.rs` | New struct `ProcessConfig { bind: String, port: u16, version: &'static str, git_sha: Option<&'static str> }`. New field `pub process: ProcessConfig` on `AppState`. |
+| `clavenar-console/src/main.rs` | Build `ProcessConfig` from `Cli` before `AppState` construction. |
+| `clavenar-console/src/probe.rs` | New module. See §4. |
+| `clavenar-console/src/handlers.rs` | New `pub async fn config(...)` handler. Reads `AppState`, runs the four probes under `tokio::join!`, renders the template. |
+| `clavenar-console/src/lib.rs` | Wire the route: `.route("/config", get(handlers::config))`. |
+| `clavenar-console/templates/config.html` | New askama template. Four cards as in §3. |
+| `clavenar-console/templates/base.html` | Add the nav link. |
 
 The build script is allowed to fail silently. A release tarball without a `.git/` directory, or a build environment without `git` on PATH, must produce a working binary; `option_env!` returns `None` and the template renders the version without a SHA. **Build must not depend on git availability.**
 
@@ -1028,7 +1028,7 @@ The build script is allowed to fail silently. A release tarball without a `.git/
 | Backend unreachable (connect refused) | Red badge with `"connect refused: ..."` reason; rest of the page renders |
 | Backend slow (>1500ms) | Red badge with `"timeout after 1500ms"`; rest of the page renders |
 | Backend returns 500 | Red badge with `"500 Internal Server Error"`; rest of the page renders |
-| `WARDEN_CONSOLE_IDENTITY_URL` / `_SIMULATOR_URL` unset | Optional client is `None`; row renders "not configured" placeholder; no probe traffic to that URL |
+| `CLAVENAR_CONSOLE_IDENTITY_URL` / `_SIMULATOR_URL` unset | Optional client is `None`; row renders "not configured" placeholder; no probe traffic to that URL |
 | Operator token unset | Identity row renders `unset` for the token field; identity probe still runs |
 | Build script unable to capture SHA | `option_env!` returns `None`; template renders `v0.x.y` without SHA |
 | Operator hits `/config` while not logged in | Page renders; Auth card shows `(not logged in — open posture)` |
@@ -1041,26 +1041,26 @@ The handler does **not** 5xx on backend failure. A failed probe is a rendered re
 
 #### 7.1 Unit tests
 
-In `warden-console/src/probe.rs`:
+In `clavenar-console/src/probe.rs`:
 
 - Probe classification — given `(status_code, latency)`, expect Green/Amber/Red. Doesn't open a socket; classification is a pure function.
 
-In `warden-sdk/src/agents.rs`:
+In `clavenar-sdk/src/agents.rs`:
 
 - `bearer_fingerprint` — same input always yields the same 8 hex chars; different inputs yield different 8 hex chars; absent bearer returns `None`.
 
 #### 7.2 Integration tests
 
-In `warden-console/tests/integration.rs`, reusing the existing `spawn_ledger`, `spawn_hil`, `spawn_sim` helpers:
+In `clavenar-console/tests/integration.rs`, reusing the existing `spawn_ledger`, `spawn_hil`, `spawn_sim` helpers:
 
 | Test | Asserts |
 |---|---|
 | `config_renders_all_cards_when_all_backends_healthy` | All four cards render; all four URLs visible in body; all four probes green |
 | `config_renders_optional_placeholders_when_clients_absent` | Identity URL and simulator URL absent → "not configured" placeholders; no probe traffic to those URLs |
 | `config_renders_red_badge_when_backend_unreachable` | HIL stub closed (or 500s) → HIL row red with truncated error reason; ledger row still green; page still renders |
-| `config_renders_logged_in_operator_when_session_present` | Pre-seed `AuthState.store`, set `warden_console_session` cookie on request → body contains operator name |
+| `config_renders_logged_in_operator_when_session_present` | Pre-seed `AuthState.store`, set `clavenar_console_session` cookie on request → body contains operator name |
 | `config_renders_not_logged_in_when_no_session` | No cookie → body contains "(not logged in — open posture)" |
-| `config_redacts_operator_token` | **Load-bearing.** With `WARDEN_CONSOLE_OPERATOR_TOKEN=secret-jwt-blob.foo.bar` and a logged-in operator, body does NOT contain the raw token, does NOT contain the HIL session cookie value, DOES contain the 8-char fingerprint |
+| `config_redacts_operator_token` | **Load-bearing.** With `CLAVENAR_CONSOLE_OPERATOR_TOKEN=secret-jwt-blob.foo.bar` and a logged-in operator, body does NOT contain the raw token, does NOT contain the HIL session cookie value, DOES contain the 8-char fingerprint |
 | `config_renders_mixed_health_classifications` | Green + amber + red coexist on one render |
 
 The redaction test cannot be skipped. It's the only mechanical guard against a future contributor adding `{{ operator_token }}` to a template.
@@ -1071,22 +1071,22 @@ The redaction test cannot be skipped. It's the only mechanical guard against a f
 - Exact latency-ms numbers (timing-flaky on CI).
 - Concurrency tests on `tokio::join!` (stdlib semantics, no novel logic).
 - `tests/common/mod.rs` extraction (refactor without payoff yet; defer until a third test file needs the helpers).
-- `warden-e2e` coverage. The config page does not touch the security pipeline; integration tests in `warden-console` are authoritative.
+- `clavenar-e2e` coverage. The config page does not touch the security pipeline; integration tests in `clavenar-console` are authoritative.
 
 ### 8. Migration & rollout
 
 Two PRs, sequential. No flag, no phased rollout — the page is purely additive and ships in one minor version.
 
-1. **PR #1 — `warden-sdk`.** Add `SimClient::base_url`, `AgentsClient::has_bearer`, `AgentsClient::bearer_fingerprint`. Pure additions, no behavior change. Lands first so PR #2 can bump the SDK dep version.
-2. **PR #2 — `warden-console`.** Bump SDK dep, add `HilClient::base_url`, `build.rs`, `ProcessConfig`, `probe.rs`, `/config` route + handler, `templates/config.html`, nav link, tests. One commit, or split plumbing/page/tests within the PR if review prefers smaller diffs; no separate intermediate-broken commit.
+1. **PR #1 — `clavenar-sdk`.** Add `SimClient::base_url`, `AgentsClient::has_bearer`, `AgentsClient::bearer_fingerprint`. Pure additions, no behavior change. Lands first so PR #2 can bump the SDK dep version.
+2. **PR #2 — `clavenar-console`.** Bump SDK dep, add `HilClient::base_url`, `build.rs`, `ProcessConfig`, `probe.rs`, `/config` route + handler, `templates/config.html`, nav link, tests. One commit, or split plumbing/page/tests within the PR if review prefers smaller diffs; no separate intermediate-broken commit.
 
-There is no `wardenctl` change. There is no chain version bump. There is no policy-engine change. There is no new endpoint on any backend.
+There is no `clavenarctl` change. There is no chain version bump. There is no policy-engine change. There is no new endpoint on any backend.
 
 ### 9. Wire-contract changes (cross-repo grep before renaming)
 
 | Edge | Field added | Repos to grep |
 |---|---|---|
-| SDK consumers | `SimClient::base_url`, `AgentsClient::has_bearer`, `AgentsClient::bearer_fingerprint` | `warden-sdk`, `warden-console`, `warden-ctl` (future), any external integrators |
+| SDK consumers | `SimClient::base_url`, `AgentsClient::has_bearer`, `AgentsClient::bearer_fingerprint` | `clavenar-sdk`, `clavenar-console`, `clavenar-ctl` (future), any external integrators |
 
 No other edges. The page consumes existing `/health` and `/healthz` endpoints unchanged; no backend wire shape shifts.
 
@@ -1129,7 +1129,7 @@ The v1 page does not include a "(future) Operator preferences" placeholder card.
 
 Console + HIL human-auth surface — what an operator presents to the console, how the console proves an approver to HIL, and how Slack / Teams approvers anchor cross-channel clicks to a stable operator identity. Companion to "Console config page" (the read-only `/config` diagnostic) and the HIL section of `README.md`.
 
-**Module status:** **shipped.** WebAuthn approver auth, OIDC, basic-admin, RBAC, Slack / Teams self-link, and viewer-route gating are all in. Touches `warden-hil` (passkey credentials, session cookie, `Authn::*` server-side stamping) and `warden-console` (auth-mode selector, ceremony proxy, `/me/identities`, viewer / approver gates).
+**Module status:** **shipped.** WebAuthn approver auth, OIDC, basic-admin, RBAC, Slack / Teams self-link, and viewer-route gating are all in. Touches `clavenar-hil` (passkey credentials, session cookie, `Authn::*` server-side stamping) and `clavenar-console` (auth-mode selector, ceremony proxy, `/me/identities`, viewer / approver gates).
 
 ### 1. What this closes
 
@@ -1137,12 +1137,12 @@ Originally, WebAuthn was the only auth path. That was a dealbreaker for buyers w
 
 ### 2. Auth modes
 
-Four modes selected via `WARDEN_CONSOLE_AUTH={disabled|basic-admin|webauthn|oidc}`:
+Four modes selected via `CLAVENAR_CONSOLE_AUTH={disabled|basic-admin|webauthn|oidc}`:
 
 | Mode | Use case | Bind constraint |
 |---|---|---|
-| `disabled` | dev / CI; mirrors `WARDEN_HIL_AUTH_DISABLED=true` under a console-side switch | loopback only (`--bind 127.0.0.1`) |
-| `basic-admin` | solo evaluation; single hardcoded user from `WARDEN_CONSOLE_ADMIN_USER` + `WARDEN_CONSOLE_ADMIN_PASS_BCRYPT` | refuses non-loopback bind unless `WARDEN_CONSOLE_ALLOW_BASIC_ADMIN_NETWORK=true` |
+| `disabled` | dev / CI; mirrors `CLAVENAR_HIL_AUTH_DISABLED=true` under a console-side switch | loopback only (`--bind 127.0.0.1`) |
+| `basic-admin` | solo evaluation; single hardcoded user from `CLAVENAR_CONSOLE_ADMIN_USER` + `CLAVENAR_CONSOLE_ADMIN_PASS_BCRYPT` | refuses non-loopback bind unless `CLAVENAR_CONSOLE_ALLOW_BASIC_ADMIN_NETWORK=true` |
 | `webauthn` | self-hosted small-team default; HIL holds passkey credentials, console proxies the ceremony | none |
 | `oidc` | production with existing SSO; generic OIDC code flow against any compliant IdP | none |
 
@@ -1164,7 +1164,7 @@ auth:
     viewer_groups: ["engineering", "compliance"]
 ```
 
-No user table. No runtime role exceptions. The IdP is the source of truth. (An `admin` tier is layered on top by [Console policy management](#console-policy-management) §8 for the `/policies` CRUD surface — `admin_groups` mirrors `approver_groups` / `viewer_groups`; resolution priority is `admin > approver > viewer`. The agent-registry write surface continues to require capabilities granted by `warden-identity`'s `[capabilities.tenants.<tid>]` map — not console role — so direct identity-API + `wardenctl` remain the canonical agent-admin path.)
+No user table. No runtime role exceptions. The IdP is the source of truth. (An `admin` tier is layered on top by [Console policy management](#console-policy-management) §8 for the `/policies` CRUD surface — `admin_groups` mirrors `approver_groups` / `viewer_groups`; resolution priority is `admin > approver > viewer`. The agent-registry write surface continues to require capabilities granted by `clavenar-identity`'s `[capabilities.tenants.<tid>]` map — not console role — so direct identity-API + `clavenarctl` remain the canonical agent-admin path.)
 
 The viewer-route gates (`require_viewer` / `require_viewer_api`) sit in front of every console read route; no-session HTML page requests get a `303 → /login`, no-session SSE / JSON requests get `401`. `disabled` mode short-circuits both gates with a synthetic Approver session for dev / CI. The HIL-queue template carries a `can_approve` flag so OIDC viewers see the queue contents but no Approve / Deny / Modify buttons.
 
@@ -1186,7 +1186,7 @@ A Slack / Teams approve click looks up `user_id → oidc_sub` via this table. **
 
 **Schema caveat:** the table sketches a key on `oidc_sub`, but `webauthn` and `basic-admin` modes don't produce OIDC subs. Implementation chose nullable per-mode columns (`oidc_sub` / `webauthn_name` / `basic_username`) with a CHECK constraint that exactly one is set. Reversible — the PK choice doesn't bind the wire format.
 
-Buyers create their own Slack / Teams app from a manifest published in `warden-console/docs/` (`slack-app-manifest.json` / `teams-app-manifest.md`) — no marketplace presence.
+Buyers create their own Slack / Teams app from a manifest published in `clavenar-console/docs/` (`slack-app-manifest.json` / `teams-app-manifest.md`) — no marketplace presence.
 
 **Wire surface** (HIL endpoints, called by the console):
 
@@ -1197,11 +1197,11 @@ Buyers create their own Slack / Teams app from a manifest published in `warden-c
 | `DELETE` | `/identities/{oidc_sub}/slack` | Unlink Slack only; row remains for Teams + other future channels |
 | `DELETE` | `/identities/{oidc_sub}/teams` | Unlink Teams only |
 
-The console's `/me/identities` page is the only authorized caller in v1; HIL gates these on the shared `WARDEN_HIL_DECIDE_TOKEN` bearer.
+The console's `/me/identities` page is the only authorized caller in v1; HIL gates these on the shared `CLAVENAR_HIL_DECIDE_TOKEN` bearer.
 
 ### 5. Chain `decided_by` schema
 
-The literal `"warden-console"` value has been replaced — HIL now stamps `decided_by` server-side from the verified principal:
+The literal `"clavenar-console"` value has been replaced — HIL now stamps `decided_by` server-side from the verified principal:
 
 - `webauthn:{name}` — WebAuthn mode.
 - `oidc:<sub>` — OIDC mode; also stamped on Slack / Teams clicks after self-link (the OAuth-linked `oidc_sub` flows through, not the underlying channel id).
@@ -1220,9 +1220,9 @@ Existing WebAuthn rows in the chain don't get the field retroactively; only rows
 The trust path is **mode-dependent** because WebAuthn already has a stronger primitive and we don't tear it out:
 
 - **WebAuthn mode (today, unchanged):** HIL is the credential authority. The console proxies WebAuthn ceremonies and shuttles HIL's session cookie back to the browser; subsequent `/decide` calls attach the HIL cookie and HIL stamps `decided_by` from the verified principal.
-- **OIDC / basic-admin / disabled:** HIL has no credential to verify, so console and HIL share a bearer secret (`WARDEN_HIL_DECIDE_TOKEN`). Console verifies OIDC (or basic-admin), stamps `decided_by`, and presents the bearer on `/decide`. HIL trusts the request-body `decided_by` *only when* a valid bearer is present; without the bearer, the existing `Authn::Disabled` fallback applies. Console refuses to boot if the configured mode requires the token and it is missing; HIL defaults to per-request validation (401 on a token-less decide) but operators can opt into the same boot-time guard by setting `WARDEN_HIL_REQUIRE_DECIDE_TOKEN=true` — HIL then refuses to start unless `WARDEN_HIL_DECIDE_TOKEN` is also set. The opt-in keeps backward compatibility while letting bearer-only deployments fail loudly on first start.
+- **OIDC / basic-admin / disabled:** HIL has no credential to verify, so console and HIL share a bearer secret (`CLAVENAR_HIL_DECIDE_TOKEN`). Console verifies OIDC (or basic-admin), stamps `decided_by`, and presents the bearer on `/decide`. HIL trusts the request-body `decided_by` *only when* a valid bearer is present; without the bearer, the existing `Authn::Disabled` fallback applies. Console refuses to boot if the configured mode requires the token and it is missing; HIL defaults to per-request validation (401 on a token-less decide) but operators can opt into the same boot-time guard by setting `CLAVENAR_HIL_REQUIRE_DECIDE_TOKEN=true` — HIL then refuses to start unless `CLAVENAR_HIL_DECIDE_TOKEN` is also set. The opt-in keeps backward compatibility while letting bearer-only deployments fail loudly on first start.
 
-The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via warden-identity SVIDs (substrate decision recorded in [Internal service mTLS](#internal-service-mtls); implementation deferred to v1.x+2) will replace it uniformly across all modes including WebAuthn.
+The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via clavenar-identity SVIDs (substrate decision recorded in [Internal service mTLS](#internal-service-mtls); implementation deferred to v1.x+2) will replace it uniformly across all modes including WebAuthn.
 
 ### 7. Mechanical defaults
 
@@ -1238,7 +1238,7 @@ Triggers, not commitments — listed so a future contributor knows the hooks are
 
 - **Per-decision WebAuthn step-up over OIDC sessions** — first design-partner from FinTech (PSD2 SCA), defense (FIPS / DoD impact level), or healthcare (HIPAA technical safeguards). The WebAuthn primitives already exist; v2 wires them as a step-up gating individual `/decide` calls on top of OIDC sessions, rather than a parallel auth mode.
 - **Runtime role-management UI** — first buyer who demands non-GitOps role exceptions. Until then, config-as-code is sufficient.
-- **Admin role + agent-registry UI in console** — first user who explicitly wants agent CRUD outside `wardenctl`. Until then, `wardenctl` + direct identity API are sufficient.
+- **Admin role + agent-registry UI in console** — first user who explicitly wants agent CRUD outside `clavenarctl`. Until then, `clavenarctl` + direct identity API are sufficient.
 - **Four-eyes / separation-of-duties** — first buyer demanding per-human approval limits or "two distinct approvers required." This also triggers an upgrade from self-link to a more rigorous identity unification scheme.
 
 ### 9. Approval Center (operational)
@@ -1247,8 +1247,8 @@ The `/hil` queue is an operator workbench, not just a list. Shipped additive on 
 
 - **Queue filter / search / sort** — `GET /hil?q=&risk_tier=&sort=`. `q` is a case-insensitive substring over agent_id / method / risk_summary; `risk_tier` ∈ {safe, risky, destructive, unscored} keys on the sandbox severity; `sort` ∈ {newest, oldest}. Filtering is in-process in the console (the live queue is small).
 - **Bulk approve / deny** — `POST /hil/bulk/{approve,deny}` (console; approver-gated, demo-session rejected). Loops `/decide` per id; per-row conflicts (already decided / TTL-swept) are skipped, and the response re-renders the filtered `#hil-list` fragment in one swap.
-- **SLA escalation** — HIL's TTL sweeper re-notifies approvers (a Slack / Teams escalation card) once a still-`Pending` row crosses `created_at + ttl_seconds × WARDEN_HIL_SLA_ESCALATE_FRACTION` (default 0.5; 0 disables), *before* the auto-deny. Idempotent: one nullable `escalated_at` column plus a conditional UPDATE fire the card exactly once. Emits a `warden.forensic` event with `kind = "escalated"` (the row stays `Pending`) and increments `warden_hil_escalations_total`.
-- **Approver analytics** — `GET /approvals/stats?window=1h|6h|24h|7d` (warden-hil, read-only, ungated like `/pending`; SPIFFE-gated in mTLS mode) computes decided totals, deny rate, median / p95 time-to-decide (human decisions only — `system:ttl-sweep` excluded), oldest-pending age, and a per-approver breakdown from the local `pending_requests` rows. Surfaced at `/hil/analytics` in the console.
+- **SLA escalation** — HIL's TTL sweeper re-notifies approvers (a Slack / Teams escalation card) once a still-`Pending` row crosses `created_at + ttl_seconds × CLAVENAR_HIL_SLA_ESCALATE_FRACTION` (default 0.5; 0 disables), *before* the auto-deny. Idempotent: one nullable `escalated_at` column plus a conditional UPDATE fire the card exactly once. Emits a `clavenar.forensic` event with `kind = "escalated"` (the row stays `Pending`) and increments `clavenar_hil_escalations_total`.
+- **Approver analytics** — `GET /approvals/stats?window=1h|6h|24h|7d` (clavenar-hil, read-only, ungated like `/pending`; SPIFFE-gated in mTLS mode) computes decided totals, deny rate, median / p95 time-to-decide (human decisions only — `system:ttl-sweep` excluded), oldest-pending age, and a per-approver breakdown from the local `pending_requests` rows. Surfaced at `/hil/analytics` in the console.
 
 Hard approver-group routing and four-eyes (§8) remain deferred — these additions are queue ergonomics, not a change to *who* may decide.
 
@@ -1256,8 +1256,8 @@ Hard approver-group routing and four-eyes (§8) remain deferred — these additi
 
 Read-only console surfaces; **no new ledger endpoint and no wire-contract change** — both source the existing audit-read API:
 
-- **Incident timeline** — `GET /timeline` (console, `require_viewer`). Fans out the ledger's full agent list (`list_agents`) over a `?window=1h|24h|7d` span and classifies each row into five aligned sparkline series — request volume, denies, yellow (review), policy changes (`event_kind` `policy.*`), and human approvals (`intent_category` `HIL`) — on one shared bucket axis so correlated spikes line up. A notable-events feed lists policy mutations, denials, and HIL decisions newest-first, each linking to the existing `/audit/correlation/{id}` drill. Roster is the full chain list (not the simulator-only roster the `/stats` pages use) so policy mutations, stamped under `agent_id = "warden-policy-engine"`, are included. Honors the `hide_sim` toggle.
-- **Saved audit views** — client-side only. The `/audit` page persists named filter sets to `localStorage` (`warden_audit_views`); a re-applied view is just a navigation to `/audit?<saved query>`. Progressive enhancement — the filter form works with JS disabled.
+- **Incident timeline** — `GET /timeline` (console, `require_viewer`). Fans out the ledger's full agent list (`list_agents`) over a `?window=1h|24h|7d` span and classifies each row into five aligned sparkline series — request volume, denies, yellow (review), policy changes (`event_kind` `policy.*`), and human approvals (`intent_category` `HIL`) — on one shared bucket axis so correlated spikes line up. A notable-events feed lists policy mutations, denials, and HIL decisions newest-first, each linking to the existing `/audit/correlation/{id}` drill. Roster is the full chain list (not the simulator-only roster the `/stats` pages use) so policy mutations, stamped under `agent_id = "clavenar-policy-engine"`, are included. Honors the `hide_sim` toggle.
+- **Saved audit views** — client-side only. The `/audit` page persists named filter sets to `localStorage` (`clavenar_audit_views`); a re-applied view is just a navigation to `/audit?<saved query>`. Progressive enhancement — the filter form works with JS disabled.
 
 ---
 
@@ -1266,11 +1266,11 @@ Read-only console surfaces; **no new ledger endpoint and no wire-contract change
 
 EU AI Act Article 11 / 12 audit-bundle export from the existing hash chain. Operator-fetched, operator-stored, signed, time-window scoped. Companion to the cold-tier `/export` (Iceberg + Parquet analytics snapshots) but with a different audience: external regulators, not internal analysts.
 
-**Module status:** **shipped (slices 1 + 2 + 3).** Lives in `warden-ledger` + `warden-identity` (new `POST /sign/blob`) + `warden-sdk` + `wardenctl`. No chain-version change.
+**Module status:** **shipped (slices 1 + 2 + 3).** Lives in `clavenar-ledger` + `clavenar-identity` (new `POST /sign/blob`) + `clavenar-sdk` + `clavenarctl`. No chain-version change.
 
 ### 1. What this closes
 
-The existing `/export` produces Parquet for analytics; no auditor expects to reach for Parquet tooling. The Regulatory export gives auditors NDJSON + a verifiable manifest + a detached ed25519 signature in a tarball they can untar with `tar` and verify with `openssl` and `sha256sum`. The bundle is independently verifiable without a Warden binary in scope.
+The existing `/export` produces Parquet for analytics; no auditor expects to reach for Parquet tooling. The Regulatory export gives auditors NDJSON + a verifiable manifest + a detached ed25519 signature in a tarball they can untar with `tar` and verify with `openssl` and `sha256sum`. The bundle is independently verifiable without a Clavenar binary in scope.
 
 ### 2. Articles in scope
 
@@ -1290,16 +1290,16 @@ technical_documentation.md    — operator-supplied prose (optional)
 README.txt                    — auditor verification checklist (7 steps)
 ```
 
-NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more readily than Parquet tooling. Detached signature rather than embedded — keeps the `manifest.json` byte-stable across signing implementations. Half-open window `[from, to)`. Empty windows return a valid bundle with `row_count: 0` (auditors expect a verifiable artifact even for "we logged nothing"). Operator stores; Warden does not retain bundles server-side.
+NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more readily than Parquet tooling. Detached signature rather than embedded — keeps the `manifest.json` byte-stable across signing implementations. Half-open window `[from, to)`. Empty windows return a valid bundle with `row_count: 0` (auditors expect a verifiable artifact even for "we logged nothing"). Operator stores; Clavenar does not retain bundles server-side.
 
 ### 4. Wire surface
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| POST | `/export/regulatory?from=…&to=…[&include_exports=true]` (warden-ledger) | optional `text/markdown` (≤ 1 MiB) | `application/gzip` (`.tar.gz`) |
-| POST | `/sign/blob` (warden-identity) | `{ digest_hex, audience }` | `{ signature, key_id, algorithm: "ed25519", digest_alg: "sha256", signed_at }` |
+| POST | `/export/regulatory?from=…&to=…[&include_exports=true]` (clavenar-ledger) | optional `text/markdown` (≤ 1 MiB) | `application/gzip` (`.tar.gz`) |
+| POST | `/sign/blob` (clavenar-identity) | `{ digest_hex, audience }` | `{ signature, key_id, algorithm: "ed25519", digest_alg: "sha256", signed_at }` |
 
-`POST /export/regulatory` is the auditor-facing export. `POST /sign/blob` is the new signing primitive on warden-identity (sibling to `/sign`, same caller-allowlist gate, audience-tagged forensic event), wired via `WARDEN_IDENTITY_URL` + `WARDEN_LEDGER_SPIFFE` and routed through `warden-ledger::identity_client::ManifestSigner` / `HttpManifestSigner`.
+`POST /export/regulatory` is the auditor-facing export. `POST /sign/blob` is the new signing primitive on clavenar-identity (sibling to `/sign`, same caller-allowlist gate, audience-tagged forensic event), wired via `CLAVENAR_IDENTITY_URL` + `CLAVENAR_LEDGER_SPIFFE` and routed through `clavenar-ledger::identity_client::ManifestSigner` / `HttpManifestSigner`.
 
 ### 5. Manifest schema (v3)
 
@@ -1372,14 +1372,14 @@ Steps 1-3 are the chain-integrity check; steps 5-6 are the signature check; step
 ### 9. CLI
 
 ```
-wardenctl regulatory export \
+clavenarctl regulatory export \
   --from <RFC3339> --to <RFC3339> \
   [--readme <PATH>] [--include-exports] \
   [--ledger-url <URL>] \
   --output bundle.tar.gz
 ```
 
-Lives under a new top-level `regulatory` verb (own surface — distinct from `agents`; no identity gate today since the ledger doesn't gate `/export/regulatory`). The CLI is a thin pass-through to `LedgerClient::regulatory_export(window, RegulatoryExportOptions { readme, include_exports })` on `warden-sdk`.
+Lives under a new top-level `regulatory` verb (own surface — distinct from `agents`; no identity gate today since the ledger doesn't gate `/export/regulatory`). The CLI is a thin pass-through to `LedgerClient::regulatory_export(window, RegulatoryExportOptions { readme, include_exports })` on `clavenar-sdk`.
 
 ### 10. Failure & fallback semantics
 
@@ -1395,13 +1395,13 @@ Lives under a new top-level `regulatory` verb (own surface — distinct from `ag
 
 Companion to none of the existing sections in form. Where [Console config page](#console-config-page) is one read-only page and [Agent onboarding](#agent-onboarding-wao) is a multi-service initiative with a chain version bump, this section sits between: a public demo surface that spans the marketing site, a token-mint service, the existing operator console, and the backend stack, but introduces no new long-running storage and no chain version change.
 
-**Module status:** **shipped.** Extends `warden-website` (guided tour + `/#contact` CTA), introduces `warden-demo-mint` (small Rust HS256-issuing service behind Cloudflare Turnstile, not a CF Worker — the original CF-Worker plan was dropped for parity with the rest of the in-stack Rust services and to keep the mint event auditable through the same NATS plumbing every other component uses), `warden-console` (demo-session cookie + curated `/demo` scenarios + `/demo/fire/{scenario}` endpoint), `warden-proxy` (correlation-ID splicing for the `X-Warden-Demo-Prefix` header), `warden-hil` + `warden-ledger` (token-prefix-scoped read filters and HIL decide enforcement), `warden-chaos-catalog` (pure-data attack catalog consumed by both `warden-chaos-monkey` CLI and console `/demo/fire`), `warden-simulator` (`--hil-skip-agent-id-prefix demo-` so visitors aren't auto-approved out from under themselves). Hosted at `warden.vanteguardlabs.com` (marketing) + `console-demo.vanteguardlabs.com` (operator surface).
+**Module status:** **shipped.** Extends `clavenar-website` (guided tour + `/#contact` CTA), introduces `clavenar-demo-mint` (small Rust HS256-issuing service behind Cloudflare Turnstile, not a CF Worker — the original CF-Worker plan was dropped for parity with the rest of the in-stack Rust services and to keep the mint event auditable through the same NATS plumbing every other component uses), `clavenar-console` (demo-session cookie + curated `/demo` scenarios + `/demo/fire/{scenario}` endpoint), `clavenar-proxy` (correlation-ID splicing for the `X-Clavenar-Demo-Prefix` header), `clavenar-hil` + `clavenar-ledger` (token-prefix-scoped read filters and HIL decide enforcement), `clavenar-chaos-catalog` (pure-data attack catalog consumed by both `clavenar-chaos-monkey` CLI and console `/demo/fire`), `clavenar-simulator` (`--hil-skip-agent-id-prefix demo-` so visitors aren't auto-approved out from under themselves). Hosted at `warden.vanteguardlabs.com` (marketing) + `console-demo.vanteguardlabs.com` (operator surface).
 
 Design decided by a `/grill-me` walkthrough. Thirteen architectural decisions resolved in sequence; four confirmations on operational tradeoffs. This section is the consolidated record + a snapshot of how the build ultimately landed (one substrate substitution: in-stack Rust mint instead of CF Worker).
 
 ### 1. What this closes
 
-The marketing site today (`repos/warden-website/`) is a three-file static page with a client-side mock of an "attack scenario" button. The mock animates fake responses; nothing real happens. A technical evaluator (SRE / platform / security eng) clicking through has no way to see the actual chain, the actual HIL flow, or the actual layered defense — and "Book a demo" is the only path forward, which gates every evaluator behind a sales call.
+The marketing site today (`repos/clavenar-website/`) is a three-file static page with a client-side mock of an "attack scenario" button. The mock animates fake responses; nothing real happens. A technical evaluator (SRE / platform / security eng) clicking through has no way to see the actual chain, the actual HIL flow, or the actual layered defense — and "Book a demo" is the only path forward, which gates every evaluator behind a sales call.
 
 The operational consequences:
 
@@ -1411,9 +1411,9 @@ The operational consequences:
 | Cryptographic-realness proof | Marketing copy claims "hash-chained ledger" — nothing to inspect | Visitor's actions land in the live chain; verifiable with `curl /verify` |
 | HIL story | Yellow-tier flow only described in prose | Visitor approves their own pending wire transfer in real `/hil` |
 | CISO funnel | Same dense marketing page as evaluator | Auto-play mode of the same tour serves CISO at no extra cost |
-| Catalog reuse | Chaos-monkey scenarios live as a CLI binary, can't be invoked from anywhere else | `warden-chaos-catalog` library powers chaos-monkey CI, the demo, and (future) self-hosted "test your policy" feature |
+| Catalog reuse | Chaos-monkey scenarios live as a CLI binary, can't be invoked from anywhere else | `clavenar-chaos-catalog` library powers chaos-monkey CI, the demo, and (future) self-hosted "test your policy" feature |
 
-The demo is *not* a sales-replacement and *not* a free trial. It's a self-serve proof-of-realness for the evaluator audience that already knows roughly what Warden does and wants to convince themselves the implementation is honest.
+The demo is *not* a sales-replacement and *not* a free trial. It's a self-serve proof-of-realness for the evaluator audience that already knows roughly what Clavenar does and wants to convince themselves the implementation is honest.
 
 ### 2. Audience and success metrics
 
@@ -1450,17 +1450,17 @@ Three-scenario tour on `vanteguardlabs.com/demo`:
 
 Total auto-play: ~90s. Click-through mode stretches to ~3 min with explanation panels expanded.
 
-**Auto-play is the default** (CISO-friendly). A "step through with explanations" toggle in the corner gives evaluators a click-through path; same animation frames, denser annotation. The centerpiece scenario (wire transfer) is non-negotiable — it's the single most photogenic Warden moment, the only one that shows *control plane* rather than *filter*.
+**Auto-play is the default** (CISO-friendly). A "step through with explanations" toggle in the corner gives evaluators a click-through path; same animation frames, denser annotation. The centerpiece scenario (wire transfer) is non-negotiable — it's the single most photogenic Clavenar moment, the only one that shows *control plane* rather than *filter*.
 
 The tour is **fully client-side** (animations + pre-canned responses). No backend hit until the handoff CTA. This is the lazy-session decision: most marketing-site traffic should never touch the VPS.
 
 #### 3.2 Console handoff
 
-CTA at end of tour: visitor passes Cloudflare Turnstile on `warden.vanteguardlabs.com/#contact` → POSTs to `warden-demo-mint` at `console-demo.vanteguardlabs.com/mint` → mint issues a 30-min HS256 JWT carrying `sub`, `correlation_prefix` (8 hex chars, `demo-` prefix), and `agent_id` (`demo-<hex>-bot`) → 303-redirects to `console-demo.vanteguardlabs.com/#token=<jwt>`.
+CTA at end of tour: visitor passes Cloudflare Turnstile on `warden.vanteguardlabs.com/#contact` → POSTs to `clavenar-demo-mint` at `console-demo.vanteguardlabs.com/mint` → mint issues a 30-min HS256 JWT carrying `sub`, `correlation_prefix` (8 hex chars, `demo-` prefix), and `agent_id` (`demo-<hex>-bot`) → 303-redirects to `console-demo.vanteguardlabs.com/#token=<jwt>`.
 
-Browser JS shim (`warden-console/templates/base.html`) reads the URL fragment, POSTs to `/api/demo-session/exchange` → console sets HttpOnly `Secure SameSite=Lax` cookie, redirects to the clean URL. Standard fragment-auth pattern; the token never appears in server logs. (The `SameSite=Lax` choice over the originally-planned `Strict` is the only deviation from the design — the Strict variant blocked the post-mint navigation cross-site bounce.)
+Browser JS shim (`clavenar-console/templates/base.html`) reads the URL fragment, POSTs to `/api/demo-session/exchange` → console sets HttpOnly `Secure SameSite=Lax` cookie, redirects to the clean URL. Standard fragment-auth pattern; the token never appears in server logs. (The `SameSite=Lax` choice over the originally-planned `Strict` is the only deviation from the design — the Strict variant blocked the post-mint navigation cross-site bounce.)
 
-The prefix is then spliced into the proxy's correlation IDs (`<prefix>-<rest of uuid>`) via the `X-Warden-Demo-Prefix` request header; ledger and HIL read endpoints filter on it; HIL `/decide` writes reject if the target pending's correlation ID doesn't carry the prefix.
+The prefix is then spliced into the proxy's correlation IDs (`<prefix>-<rest of uuid>`) via the `X-Clavenar-Demo-Prefix` request header; ledger and HIL read endpoints filter on it; HIL `/decide` writes reject if the target pending's correlation ID doesn't carry the prefix.
 
 #### 3.3 In-console action surface
 
@@ -1469,7 +1469,7 @@ Visitor lands on `/audit`, scoped by token to:
 - Their own `correlation_id LIKE 'demo-7f3a-%'` rows.
 - *Plus* `source = 'simulator'` rows from the always-on simulator (ambient feel; visitor's actions accent-highlighted).
 
-A new `/demo/fire` page renders the chaos-catalog scenarios as tiles. Click → demo console's backend handler validates the session token, calls `warden_chaos_catalog::fire(scenario_id, agent_id, correlation_prefix, proxy_url)`, redirects to `/audit?correlation_id=…&highlight=…` with the new rows scrolled into view.
+A new `/demo/fire` page renders the chaos-catalog scenarios as tiles. Click → demo console's backend handler validates the session token, calls `clavenar_chaos_catalog::fire(scenario_id, agent_id, correlation_prefix, proxy_url)`, redirects to `/audit?correlation_id=…&highlight=…` with the new rows scrolled into view.
 
 HIL approve/deny works on the visitor's own pendings (per-prefix filter enforces). Simulator's auto-decide path skips agent IDs starting with `demo-` (via `--hil-skip-agent-id-prefix demo-` / `SIM_HIL_SKIP_AGENT_ID_PREFIX=demo-`) so visitors aren't raced.
 
@@ -1501,10 +1501,10 @@ VPS firewall: Cloudflare IP ranges only on the public surfaces. The mint endpoin
 
 #### 5.1 Token mint
 
-`warden-demo-mint` (Rust service, port 9200, behind Caddy at `/mint`) holds:
+`clavenar-demo-mint` (Rust service, port 9200, behind Caddy at `/mint`) holds:
 
-- `WARDEN_DEMO_MINT_TURNSTILE_SECRET` — Cloudflare Turnstile siteverify secret.
-- `WARDEN_DEMO_MINT_HS256_SECRET` — HS256 signing key, shared with `warden-console`, `warden-ledger`, and `warden-hil` for validation via the compose YAML anchor `*demo-session-hs256`. Rotated quarterly.
+- `CLAVENAR_DEMO_MINT_TURNSTILE_SECRET` — Cloudflare Turnstile siteverify secret.
+- `CLAVENAR_DEMO_MINT_HS256_SECRET` — HS256 signing key, shared with `clavenar-console`, `clavenar-ledger`, and `clavenar-hil` for validation via the compose YAML anchor `*demo-session-hs256`. Rotated quarterly.
 
 Mint shape:
 
@@ -1519,17 +1519,17 @@ POST /mint
   5. 303 → `https://console-demo.vanteguardlabs.com/#token=<jwt>`
 ```
 
-Every successful mint emits a `demo.session_minted` chain v1 forensic event to `warden.forensic` with `agent_id = "demo-mint"`, `correlation_id = <prefix>-mint`, and the pseudonymous `sub` carried in `signal`. The ledger appends the row alongside proxy/policy events so the audit chain has a record of when each demo session was created. `WARDEN_DEMO_MINT_NATS_URL` toggles it (unset → the mint still serves; the chain just doesn't get a session-creation row).
+Every successful mint emits a `demo.session_minted` chain v1 forensic event to `clavenar.forensic` with `agent_id = "demo-mint"`, `correlation_id = <prefix>-mint`, and the pseudonymous `sub` carried in `signal`. The ledger appends the row alongside proxy/policy events so the audit chain has a record of when each demo session was created. `CLAVENAR_DEMO_MINT_NATS_URL` toggles it (unset → the mint still serves; the chain just doesn't get a session-creation row).
 
 #### 5.2 Scope enforcement
 
 **Defense-in-depth**: console proxy filters for performance, backends enforce for security.
 
-- A shared HS256 validator (`warden-console/src/demo_session.rs` + parallel paths in `warden-hil` and `warden-ledger`) parses the cookie/header JWT, verifies signature, returns `{ correlation_prefix, agent_id }` or rejects.
-- The proxy splices `X-Warden-Demo-Prefix` into the front of the UUID v4 correlation ID (`<prefix>-<rest of uuid>`) on inbound `/mcp`.
-- `warden-ledger` read endpoints (`/audit`, `/audit/correlation/{id}`, `/stream/audit`) honor the demo-session cookie and filter to `correlation_id LIKE prefix || '%' OR source = 'simulator'`.
-- `warden-hil` read endpoints filter the same way; **`/decide` writes reject if target pending's `correlation_id` doesn't carry the prefix** — the load-bearing safety check.
-- `warden-console` reads the token from cookie and includes it on backend calls; backends also re-validate from their own copy of the HS256 secret.
+- A shared HS256 validator (`clavenar-console/src/demo_session.rs` + parallel paths in `clavenar-hil` and `clavenar-ledger`) parses the cookie/header JWT, verifies signature, returns `{ correlation_prefix, agent_id }` or rejects.
+- The proxy splices `X-Clavenar-Demo-Prefix` into the front of the UUID v4 correlation ID (`<prefix>-<rest of uuid>`) on inbound `/mcp`.
+- `clavenar-ledger` read endpoints (`/audit`, `/audit/correlation/{id}`, `/stream/audit`) honor the demo-session cookie and filter to `correlation_id LIKE prefix || '%' OR source = 'simulator'`.
+- `clavenar-hil` read endpoints filter the same way; **`/decide` writes reject if target pending's `correlation_id` doesn't carry the prefix** — the load-bearing safety check.
+- `clavenar-console` reads the token from cookie and includes it on backend calls; backends also re-validate from their own copy of the HS256 secret.
 
 The `OR source = 'simulator'` is essential — it's how the visitor sees ambient traffic and the audit page never feels dead. Don't accidentally tighten it during code review.
 
@@ -1540,7 +1540,7 @@ The `OR source = 'simulator'` is essential — it's how the visitor sees ambient
 3. Per-token quota: 50 ledger writes / 50 HIL pendings over 30-min lifetime, then 429.
 4. VPS firewall: Cloudflare IP ranges only.
 5. Brain stays in `mock-key` mode on demo (no Anthropic cost).
-6. Deep-review pinned to `WARDEN_DEEP_REVIEW_DAILY_TOKEN_CAP=200000` (~$12/day Opus) and `WARDEN_DEEP_REVIEW_ANTHROPIC_API_KEY=mock-key` so even if the API key is ever wired, daily spend is bounded.
+6. Deep-review pinned to `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP=200000` (~$12/day Opus) and `CLAVENAR_DEEP_REVIEW_ANTHROPIC_API_KEY=mock-key` so even if the API key is ever wired, daily spend is bounded.
 
 ### 6. Operations
 
@@ -1560,17 +1560,17 @@ The `OR source = 'simulator'` is essential — it's how the visitor sees ambient
 
 - **UptimeRobot** free tier, 5-min ping to `/health`. Email + SMS on outage.
 - **Plausible Analytics** for the funnel (no cookie banner needed).
-- On-call truth: it's the operator. SLA = "best effort, business hours, ~15 min response time." Documented in `warden-website/README.md`.
+- On-call truth: it's the operator. SLA = "best effort, business hours, ~15 min response time." Documented in `clavenar-website/README.md`.
 
 No status page (broadcasts outages to competitors / journalists; CISOs don't subscribe). Failure-state banner is the entire status surface.
 
 #### 6.4 Reset cadence
 
-**Weekly auto-reset.** Schedule fires Sundays 03:00 UTC via `warden-demo-reset.service` + `warden-demo-reset.timer`; script `warden-e2e/prod/run-demo-reset.sh` wipes the `warden-prod_ledger-data` and `warden-prod_hil-data` volumes while preserving `caddy-data` (LE certs!), `secrets`, and `identity-data`. This deviates from the original "never auto-reset" plan: in practice an unbounded demo chain accumulated noisy traffic faster than the cryptographic-realness narrative needed, and resetting the chain weekly gives every visitor a freshly-coherent timeline. The hash-chain integrity story is now demonstrated on the *current* week's rows; long-term integrity demos run off the dev mirror.
+**Weekly auto-reset.** Schedule fires Sundays 03:00 UTC via `clavenar-demo-reset.service` + `clavenar-demo-reset.timer`; script `clavenar-e2e/prod/run-demo-reset.sh` wipes the `warden-prod_ledger-data` and `warden-prod_hil-data` volumes while preserving `caddy-data` (LE certs!), `secrets`, and `identity-data`. This deviates from the original "never auto-reset" plan: in practice an unbounded demo chain accumulated noisy traffic faster than the cryptographic-realness narrative needed, and resetting the chain weekly gives every visitor a freshly-coherent timeline. The hash-chain integrity story is now demonstrated on the *current* week's rows; long-term integrity demos run off the dev mirror.
 
 #### 6.5 Cost ceiling
 
-~$40/mo total (Hetzner VPS + R2 backups). If costs cross $100/mo, investigate — the most likely cause is a deep-review API key with the daily cap raised. The demo VPS pins `WARDEN_DEEP_REVIEW_DAILY_TOKEN_CAP=200000` (~$12/day Opus) as the ceiling.
+~$40/mo total (Hetzner VPS + R2 backups). If costs cross $100/mo, investigate — the most likely cause is a deep-review API key with the daily cap raised. The demo VPS pins `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP=200000` (~$12/day Opus) as the ceiling.
 
 ### 7. Sequencing (historical — shipped 2026-05)
 
@@ -1579,11 +1579,11 @@ No status page (broadcasts outages to competitors / journalists; CISOs don't sub
 | 1 | Tour animation (3 scenarios, auto-play + click-through) + polished marketing page + Plausible events wired | Visual story worked; copy landed; conversion measurable |
 | 2 | Receipts-page handoff (live chain rows fetched by sentinel correlation-id, `curl /verify` snippet) | Cryptographic-realness flex without backend complexity |
 | 3 | VPS + compose deployed at `console-demo.vanteguardlabs.com`; CF DNS + WAF in front | Real console URL works; ops baseline |
-| 4 | `warden-demo-mint` (in-stack Rust + Turnstile) + console demo-session cookie + HIL approve-prefix enforcement | Per-session isolation; defense-in-depth. *Deviation: in-stack Rust mint replaced the originally-planned CF Worker.* |
-| 5 | Ledger filter enforcement; `warden-chaos-catalog` library; `/demo/fire` curated attack menu | Full kick-the-tires console |
+| 4 | `clavenar-demo-mint` (in-stack Rust + Turnstile) + console demo-session cookie + HIL approve-prefix enforcement | Per-session isolation; defense-in-depth. *Deviation: in-stack Rust mint replaced the originally-planned CF Worker.* |
+| 5 | Ledger filter enforcement; `clavenar-chaos-catalog` library; `/demo/fire` curated attack menu | Full kick-the-tires console |
 | 6 | Simulator `--hil-skip-agent-id-prefix demo-`; UptimeRobot; weekly R2 backups; weekly demo-reset systemd timer | Production-grade ops |
 
-Watch-out that held: **never deploy the console with auth disabled on a non-loopback bind.** Console refuses to boot in this configuration unless `WARDEN_CONSOLE_ALLOW_BASIC_ADMIN_NETWORK=true` is set, which is the documented opt-in for the demo VPS (where the open posture is intentional and Caddy + Cloudflare IP allowlist gate the surface).
+Watch-out that held: **never deploy the console with auth disabled on a non-loopback bind.** Console refuses to boot in this configuration unless `CLAVENAR_CONSOLE_ALLOW_BASIC_ADMIN_NETWORK=true` is set, which is the documented opt-in for the demo VPS (where the open posture is intentional and Caddy + Cloudflare IP allowlist gate the surface).
 
 ### 8. Out of scope
 
@@ -1597,16 +1597,16 @@ Watch-out that held: **never deploy the console with auth disabled on a non-loop
 
 ### 9. Implementation questions resolved during build
 
-- ~~Specific attack scenario payloads~~ — live in `warden-chaos-catalog/src/lib.rs`; 13 scenarios cover injection, theft/replay, policy escape, velocity, HIL state, denylist enforcement.
-- ~~Animation copy and narrative beats per scenario~~ — finalized in the warden-website tour.
-- ~~Token-expiry-mid-session UX~~ — 401 surfaces as a banner; visitor returns to `warden.…/#contact` for a fresh token.
+- ~~Specific attack scenario payloads~~ — live in `clavenar-chaos-catalog/src/lib.rs`; 13 scenarios cover injection, theft/replay, policy escape, velocity, HIL state, denylist enforcement.
+- ~~Animation copy and narrative beats per scenario~~ — finalized in the clavenar-website tour.
+- ~~Token-expiry-mid-session UX~~ — 401 surfaces as a banner; visitor returns to `clavenar.…/#contact` for a fresh token.
 - ~~CSS / brand polish on the demo console vs. operator console default~~ — single console build serves both; demo-session cookie is the only state difference.
 - ~~Domain choice~~ — resolved 2026-05-08: `warden.vanteguardlabs.com` + `console-demo.vanteguardlabs.com` (operator surface, also serves the mint endpoint at `/mint`).
-- ~~Where the `warden-chaos-catalog` crate lives~~ — new sibling repo; consumed as a path-dep by `warden-chaos-monkey` CLI and `warden-console` `/demo/fire`.
+- ~~Where the `clavenar-chaos-catalog` crate lives~~ — new sibling repo; consumed as a path-dep by `clavenar-chaos-monkey` CLI and `clavenar-console` `/demo/fire`.
 
 Still open after ship:
 
-- (Resolved 2026-05-13) ~~`demo.session_minted` chain row~~ — `warden-demo-mint` now publishes a chain v1 `demo.session_minted` event to `warden.forensic` on every successful mint. Toggled via `WARDEN_DEMO_MINT_NATS_URL`.
+- (Resolved 2026-05-13) ~~`demo.session_minted` chain row~~ — `clavenar-demo-mint` now publishes a chain v1 `demo.session_minted` event to `clavenar.forensic` on every successful mint. Toggled via `CLAVENAR_DEMO_MINT_NATS_URL`.
 
 ### 10. Confirmed before writing code (historical record)
 
@@ -1614,7 +1614,7 @@ The four operational tradeoffs that gated the green light, all confirmed at the 
 
 1. The week-2 kill-switch was real — receipts-only would have shipped if metrics had said so. Metrics cleared the threshold; the full handoff shipped.
 2. Single VPS, no HA, "best effort business hours" demo SLA is acceptable.
-3. `warden-chaos-catalog` extraction is in scope; chaos-monkey becomes a thin wrapper. **Held.**
+3. `clavenar-chaos-catalog` extraction is in scope; chaos-monkey becomes a thin wrapper. **Held.**
 4. Shared HS256 JWT secret across the mint service + ledger + HIL is acceptable, rotated quarterly. **Held**, except substrate flipped from CF Worker to in-stack Rust mid-build (see §3.2 — the secret-rotation story didn't change).
 
 ---
@@ -1622,15 +1622,15 @@ The four operational tradeoffs that gated the green light, all confirmed at the 
 ## Console policy management
 
 
-Companion to [Console config page](#console-config-page) (read-only diagnostic) and the policy-engine description in `README.md` §11.2 ("Layer 3 — The Law"). Where the config page exposes deployment metadata and four-backend health probes, this section adds a *write* surface: viewing, editing, activating, deactivating, and deleting the `*.rego` and `*.json` files that `warden-policy-engine` loads.
+Companion to [Console config page](#console-config-page) (read-only diagnostic) and the policy-engine description in `README.md` §11.2 ("Layer 3 — The Law"). Where the config page exposes deployment metadata and four-backend health probes, this section adds a *write* surface: viewing, editing, activating, deactivating, and deleting the `*.rego` and `*.json` files that `clavenar-policy-engine` loads.
 
-**Module status:** **shipped.** Lives in `warden-policy-engine` (SQLite-backed policy store, write API, atomic engine rebuild, NATS-published outbox), `warden-console` (`/policies` surface + `Role::Admin`), `warden-sdk` (`PoliciesClient`), and `warden-ledger` (consumes new `policy.*` chain v3 event kinds — no schema bump, chain v3 is event-kind-polymorphic). End-to-end coverage in `warden-e2e/dev/run-policies.sh`.
+**Module status:** **shipped.** Lives in `clavenar-policy-engine` (SQLite-backed policy store, write API, atomic engine rebuild, NATS-published outbox), `clavenar-console` (`/policies` surface + `Role::Admin`), `clavenar-sdk` (`PoliciesClient`), and `clavenar-ledger` (consumes new `policy.*` chain v3 event kinds — no schema bump, chain v3 is event-kind-polymorphic). End-to-end coverage in `clavenar-e2e/dev/run-policies.sh`.
 
 Design decided by a `/grill-me` walkthrough. Eight architectural decisions resolved in sequence. This doc is the consolidated record so the implementation work can begin from a stable baseline.
 
 ### 1. What this closes
 
-`warden-policy-engine` today loads `policies/*.rego` + `policies/*.json` from disk via `build_engine_from_dir` at boot, then never re-reads them. The operational consequences:
+`clavenar-policy-engine` today loads `policies/*.rego` + `policies/*.json` from disk via `build_engine_from_dir` at boot, then never re-reads them. The operational consequences:
 
 | Gap | Today | After this section |
 |---|---|---|
@@ -1659,7 +1659,7 @@ The console UI is *not* a rule editor for non-engineers — it's still a rego te
 - Rule-level toggles inside a file (would require either rego AST rewriting or per-rule feature flags; defer until file-level granularity proves insufficient).
 - Splitting `governance.rego` into per-axis files (`governance_denylist.rego`, `governance_velocity.rego`, …); a separate refactor with its own rollback story.
 - Two-person approval (4-eyes) for deactivation/delete of "critical" policies; the v1 defense is `Admin` role + chain audit + required reason.
-- Multi-replica `warden-policy-engine` consistency (NATS-KV invalidation à la velocity tracker); v1 ships single-replica.
+- Multi-replica `clavenar-policy-engine` consistency (NATS-KV invalidation à la velocity tracker); v1 ships single-replica.
 - Codemirror / Monaco editor; v1 uses plain `<textarea>` and leans on regorus error messages for syntax feedback.
 - Golden-test corpus gate on save; the chaos-monkey suite is *almost* this corpus today, but promoting it into a pre-save hook is its own project.
 - Git-backed policy storage (PR-review workflow); a different product than the console-CRUD shape we're building.
@@ -1667,7 +1667,7 @@ The console UI is *not* a rule editor for non-engineers — it's still a rego te
 
 ### 3. Service architecture
 
-The write surface lives on `warden-policy-engine`. Console is a thin UI layer calling `warden-sdk` → policy-engine, matching the existing pattern where each service owns its own state (HIL owns pending decisions, identity owns agent records, ledger owns chain rows).
+The write surface lives on `clavenar-policy-engine`. Console is a thin UI layer calling `clavenar-sdk` → policy-engine, matching the existing pattern where each service owns its own state (HIL owns pending decisions, identity owns agent records, ledger owns chain rows).
 
 Three reasons over a console-owned model:
 
@@ -1716,7 +1716,7 @@ CREATE TABLE policy_outbox (
 
 `policies.current_version` is the only mutable column on the `policies` row that affects engine state (alongside `active`). The version table is append-only — rollback creates a new version whose body matches an older one, not by mutating `current_version` to point backwards. Reasons: (i) chain-side, every state change is an event with `prev_sha256` → `new_sha256`; (ii) the version-table sequence is monotonic, easier to reason about than a directed cycle.
 
-### 5. Wire API (`warden-policy-engine`)
+### 5. Wire API (`clavenar-policy-engine`)
 
 ```
 GET    /policies                                  list (Viewer)
@@ -1755,7 +1755,7 @@ The order matters for crash safety. For a `PUT /policies/{name}`:
    - Commit.
 4. **Swap engine.** Take `Mutex<Engine>` lock; `*guard = candidate_engine`; release. Total lock-hold time is one struct assignment (microseconds). In-flight evaluations finish on the old engine; new ones see the new one.
 5. **Respond.** Return `200` with the new version metadata.
-6. **Outbox drain.** A background worker drains `policy_outbox`, publishes to NATS subject `warden.forensic`, and writes back `chain_seq` on the version row when the ledger acks.
+6. **Outbox drain.** A background worker drains `policy_outbox`, publishes to NATS subject `clavenar.forensic`, and writes back `chain_seq` on the version row when the ledger acks.
 
 Crash safety: if the process crashes between step 3's commit and step 4's swap, on reboot the engine rebuilds from SQLite, which already reflects the new state. Self-heals. No double-emit risk because step 6 is decoupled and idempotent (the outbox row carries a stable `id`; the ledger dedupes by chain row content if the worker retries after a partial publish).
 
@@ -1838,7 +1838,7 @@ listener with the console's SPIFFE id in the allowlist).
 
 ```json
 {
-  "candidate_rego": "package warden.authz\n…",
+  "candidate_rego": "package clavenar.authz\n…",
   "candidate_name": "deny_after_hours.rego",
   "mode": "add" | "replace",
   "replace_rule_name": "after_hours_rule",   // required when mode=replace
@@ -1874,7 +1874,7 @@ verdict:
 - **Deny**: `allow == false && review_reasons` empty (hard reject).
 
 Compile errors return `400` with a structured body the SDK exposes
-via `warden_sdk::parse_batch_error`:
+via `clavenar_sdk::parse_batch_error`:
 
 ```json
 {
@@ -1927,7 +1927,7 @@ Response on 200:
       "one_liner":       "12% of bulk_export Allow calls happen off-hours.",
       "rationale":       "Off-hours bulk operations…",       // present when ask_brain && brain reachable
       "brain_enriched":  true,
-      "rego_body":       "package warden.authz\n…",
+      "rego_body":       "package clavenar.authz\n…",
       "compile_ok":      true,
       "evidence_count":  142,
       "score":           87.4,                                // ∈ [0, 100]
@@ -2000,7 +2000,7 @@ Response on 200:
 
 **PII contract.** The request body holds only the pattern kind, the
 tool name, an aggregated `threshold` object, and an `evidence_count`.
-The wire struct (`ExplainPatternRequest` in `warden-brain/src/wire.rs`)
+The wire struct (`ExplainPatternRequest` in `clavenar-brain/src/wire.rs`)
 is the enforcement boundary — the policy-engine miner constructs the
 request from aggregated metrics only, and the prompt itself refuses
 to use any raw request data if it ever leaks through. A `tests/`
@@ -2030,7 +2030,7 @@ active bundle is deferred until activation.
 
 ### 8. Authorization
 
-Adds a third role to the existing two-role hierarchy in `warden-console/src/auth_session.rs`:
+Adds a third role to the existing two-role hierarchy in `clavenar-console/src/auth_session.rs`:
 
 ```rust
 pub enum Role {
@@ -2047,7 +2047,7 @@ Hierarchy: `Viewer < Approver < Admin`. `Role::has(target)` is updated so `Admin
 ```yaml
 auth:
   oidc:
-    admin_groups: ["warden-policy-admins"]
+    admin_groups: ["clavenar-policy-admins"]
     approver_groups: ["security-team", "finance-ops"]
     viewer_groups: ["engineering", "compliance"]
 ```
@@ -2060,7 +2060,7 @@ A new `require_admin` gate guards every console-side write route (`POST/PUT/DELE
 
 ### 9. Console UI
 
-Five Askama templates under `repos/warden-console/templates/`:
+Five Askama templates under `repos/clavenar-console/templates/`:
 
 - `policies.html` — list page. Table columns: name, content_type, state (active / inactive / deleted chip), current version, last updated by, last updated at. Filter chips for state. Active and inactive visible by default; deleted hidden behind a "show deleted" toggle. Action buttons rendered behind `can_edit_policies`.
 - `policies_new.html` — Admin-only create form. Name + content_type radio + textarea + reason field.
@@ -2083,7 +2083,7 @@ URL paths:
 
 ### 10. Boot-time integrity + initial seed
 
-On boot, after loading the persisted policy set from SQLite, `warden-policy-engine` attempts the engine build *before* binding the HTTP port. If the build fails (regorus version bump rendered an old policy uncompilable, or someone hand-edited SQLite into invalidity), the process exits non-zero with the regorus error. No fallback to the bundled `policies/*.rego` files. No fallback to no-policies. Loud failure is correct: silent fallback would mask the divergence.
+On boot, after loading the persisted policy set from SQLite, `clavenar-policy-engine` attempts the engine build *before* binding the HTTP port. If the build fails (regorus version bump rendered an old policy uncompilable, or someone hand-edited SQLite into invalidity), the process exits non-zero with the regorus error. No fallback to the bundled `policies/*.rego` files. No fallback to no-policies. Loud failure is correct: silent fallback would mask the divergence.
 
 **Initial seed.** First boot with an empty `policies` table: ingest the on-disk `policies/*.rego` and `policies/*.json` files as version 1 of each, with `active=true`, `actor_sub="system"`, `actor_idp="bootstrap"`, `reason="initial seed from disk"`. Subsequent boots are no-ops (table non-empty). This is how today's deployments migrate without a separate seeding step.
 
@@ -2095,14 +2095,14 @@ These emerge during build, not at design time:
 - Specific JSON Schema content for `attestation_allowlist.json` (the `additionalProperties: false` shape, allowed key patterns, etc.).
 - Retention policy for `policy_versions` (keep all vs. prune after N days). v1 ships "keep all"; revisit when version-table size becomes operationally interesting.
 - Whether create-form name validation enforces a regex or accepts any string; v1 takes any string but warns on non-matching `^[a-z0-9_]+\.(rego|json)$`.
-- How `wardenctl` exposes policy management (probably `wardenctl policies list / get / edit …` mirroring `wardenctl agents …`); deferred until the console flow stabilizes.
+- How `clavenarctl` exposes policy management (probably `clavenarctl policies list / get / edit …` mirroring `clavenarctl agents …`); deferred until the console flow stabilizes.
 
 ### 12. Confirmed before writing code
 
 The eight architectural decisions resolved by the `/grill-me` walkthrough, all confirmed:
 
 1. File-level granularity (not rule-level, not DSL-on-top).
-2. Write API on `warden-policy-engine` with single-replica SQLite (not console-owned, not external bundle service).
+2. Write API on `clavenar-policy-engine` with single-replica SQLite (not console-owned, not external bundle service).
 3. Atomic rebuild on save + diff modal + loud-fail boot (not draft+activate, not golden-test gate).
 4. Both `*.rego` and `*.json` in scope, with per-name JSON Schema validation (not rego-only, not bundled with file split).
 5. Append-only version table + chain v3 lifecycle events + soft delete (not chain-only audit, not content-addressed blob store).
@@ -2116,13 +2116,13 @@ The eight architectural decisions resolved by the `/grill-me` walkthrough, all c
 
 Companion to [Console policy management](#console-policy-management). Where that section's `/policies` surface manages the *active* rule set — Create / Update / Activate / Deactivate / Rollback — this section adds a *library* on top: the on-disk `policies/templates/` directory becomes a browseable, filter-able, one-click-installable catalog with structured metadata.
 
-**Module status:** **shipped.** Lives in `warden-policy-engine` (frontmatter parser, catalog metadata columns on the `policies` table, four new HTTP endpoints under `/policies/templates`), `warden-console` (`/policies/library` page with filter sidebar + card grid + drill-down detail + install action + htmx lab-preview, plus metadata badges on the active `/policies` index), `warden-sdk` (mirror wire types + four async client methods), and `warden-ctl` (`wardenctl policy scaffold` offline generator + `wardenctl policy library {list,install}` engine-talking). End-to-end coverage in `warden-e2e/MANUAL_TESTS.md` S-LIB-01..05, F-LIB-10..14, D-LIB-20.
+**Module status:** **shipped.** Lives in `clavenar-policy-engine` (frontmatter parser, catalog metadata columns on the `policies` table, four new HTTP endpoints under `/policies/templates`), `clavenar-console` (`/policies/library` page with filter sidebar + card grid + drill-down detail + install action + htmx lab-preview, plus metadata badges on the active `/policies` index), `clavenar-sdk` (mirror wire types + four async client methods), and `clavenar-ctl` (`clavenarctl policy scaffold` offline generator + `clavenarctl policy library {list,install}` engine-talking). End-to-end coverage in `clavenar-e2e/MANUAL_TESTS.md` S-LIB-01..05, F-LIB-10..14, D-LIB-20.
 
 Design decided by a `/grill-me` walkthrough. Nine architectural decisions resolved in sequence (audience, metadata source, target size, catalog-vs-active separation, frontmatter schema, library UX, install flow, phasing, authoring model). This section is the consolidated record.
 
 ### 1. What this closes
 
-`warden-policy-engine` has shipped a "starter pack" of `.rego` templates under `policies/templates/` since the [Console policy management](#console-policy-management) section landed. Today an operator who wants to use one:
+`clavenar-policy-engine` has shipped a "starter pack" of `.rego` templates under `policies/templates/` since the [Console policy management](#console-policy-management) section landed. Today an operator who wants to use one:
 
 1. Reads the template README to find a candidate.
 2. `cp policies/templates/<name>.rego policies/<name>.rego` on the policy-engine container.
@@ -2138,7 +2138,7 @@ This section closes those gaps:
 | Metadata | Domain phrase in a comment header, parsed by humans only | Seven structured frontmatter fields parsed at seed + on every save into the `policies` SQLite row |
 | Install audit | `cp` happens out-of-band; no chain row | `POST /policies/templates/{name}/install` reuses the create-path's transaction and emits a `policy.installed_from_template` chain row |
 | Pre-install preview | None; operator reads the rego and guesses | htmx `Preview impact` button replays the candidate against the bundled chaos catalog and renders the same diff tile as `/policies/<name>/lab/run` |
-| CLI authoring | `wardenctl generate-policy <name>` emits one of seven legacy templates verbatim | `wardenctl policy scaffold` mints a fresh template skeleton with frontmatter pre-filled + tier-conditional rule blocks; `wardenctl policy library list/install` mirrors the console flow |
+| CLI authoring | `clavenarctl generate-policy <name>` emits one of seven legacy templates verbatim | `clavenarctl policy scaffold` mints a fresh template skeleton with frontmatter pre-filled + tier-conditional rule blocks; `clavenarctl policy library list/install` mirrors the console flow |
 
 The catalog is *not* a new policy-authoring product. Operators still edit Rego files. The value is collapsing "find → cp → restart" to "filter → click → see in `/policies`" and giving the install a proper audit trail.
 
@@ -2149,13 +2149,13 @@ The catalog is *not* a new policy-authoring product. Operators still edit Rego f
 - Frontmatter schema with seven fields (Domain, Severity, Frameworks, Tags, Tier, Tool surface, Summary) plus continuity with the legacy `Template:` / `Purpose:` / `Inputs:` / `Edit:` block (parsed-and-ignored).
 - Additive `ALTER TABLE policies ADD COLUMN` migration for the seven metadata columns. Existing prod DBs upgrade in place on next boot; no row rewrite.
 - Boot-time refresh: every restart re-parses the current-version body of every (non-deleted) policy and reconciles the columns. Operators editing a `.rego` file with new frontmatter values see them surface without any explicit save.
-- Four HTTP endpoints under `/policies/templates*` on `warden-policy-engine`.
+- Four HTTP endpoints under `/policies/templates*` on `clavenar-policy-engine`.
 - `policy.installed_from_template` as a new chain-v3 event kind. Identical payload schema to `policy.created`; the kind itself is the differentiator so forensic queries can split library installs from operator-authored creates.
 - Library lab preview against the bundled chaos catalog (6 attacks). Replay against ledger corpus stays on the operator-Lab surface — that's a different audience and a different latency budget.
 - Sidebar + card grid UI at `/policies/library`. Filtering is server-side via GET query params; URL holds the state so links are sharable.
 - Read-only Library detail view at `/policies/library/{name}` with Install affordance gated on `Role::Admin`.
 - Metadata badges on `/policies` (active index) rows so operators see Domain / Severity / Frameworks inline.
-- `wardenctl policy scaffold` (offline, no engine call) + `wardenctl policy library {list, install}` (engine-talking) on `warden-ctl`.
+- `clavenarctl policy scaffold` (offline, no engine call) + `clavenarctl policy library {list, install}` (engine-talking) on `clavenar-ctl`.
 
 **Explicitly out of scope (v1 non-goals):**
 
@@ -2169,7 +2169,7 @@ The catalog is *not* a new policy-authoring product. Operators still edit Rego f
 
 ### 3. Frontmatter schema
 
-Every `.rego` (and `.json`) file in `policies/` and `policies/templates/` carries a structured comment block at the top. The engine's parser reads consecutive `#`-prefixed lines until the first non-comment line (typically `package warden.authz`); within the comment block, any `# Key: Value` line whose Key matches the recognised set populates a column on the policy's row.
+Every `.rego` (and `.json`) file in `policies/` and `policies/templates/` carries a structured comment block at the top. The engine's parser reads consecutive `#`-prefixed lines until the first non-comment line (typically `package clavenar.authz`); within the comment block, any `# Key: Value` line whose Key matches the recognised set populates a column on the policy's row.
 
 ```rego
 # Template:     phi_egress
@@ -2184,7 +2184,7 @@ Every `.rego` (and `.json`) file in `policies/` and `policies/templates/` carrie
 # Inputs:       input.tool_type, input.attestation
 # Edit:         The phi_field_needles set is the load-bearing knob.
 
-package warden.authz
+package clavenar.authz
 ```
 
 | Field | Cardinality | Semantics |
@@ -2205,7 +2205,7 @@ Parsing rules:
 - The legacy `Template:` / `Purpose:` / `Inputs:` / `Edit:` keys are pass-through — they appear in the prose-rendered Purpose block but the catalog parser ignores them. This preserves the README convention every starter template already followed.
 - Unrecognised keys (anything not in the recognised set above) are silently ignored, which keeps frontmatter forward-compatible: a future `# Authors:` or `# Last reviewed:` field can be added by writers without breaking the parser.
 
-The parser lives in `warden-policy-engine/src/frontmatter.rs`. It is exposed at the module surface and consumed both by the seeder (`storage::seed_from_dir`) and the refresh helper (`storage::refresh_frontmatter_from_bodies`); the operator-create + operator-update write paths call a transactional `update_policy_frontmatter` helper so any write through `/policies/new` or `PUT /policies/{name}` also reconciles the metadata columns inside the same SQLite transaction as the version row insert.
+The parser lives in `clavenar-policy-engine/src/frontmatter.rs`. It is exposed at the module surface and consumed both by the seeder (`storage::seed_from_dir`) and the refresh helper (`storage::refresh_frontmatter_from_bodies`); the operator-create + operator-update write paths call a transactional `update_policy_frontmatter` helper so any write through `/policies/new` or `PUT /policies/{name}` also reconciles the metadata columns inside the same SQLite transaction as the version row insert.
 
 ### 4. Data model (additive)
 
@@ -2221,11 +2221,11 @@ ALTER TABLE policies ADD COLUMN tool_surface TEXT;  -- CSV-joined
 ALTER TABLE policies ADD COLUMN summary TEXT;
 ```
 
-Each probe is wrapped in a `has_column` guard (matching the pattern `warden-ledger::init_schema` already uses for chain v2 / v3 column additions), so re-running `init_schema` on a DB that already has the columns is a no-op. Existing rows on a pre-upgrade DB get NULL values; the first boot of the new binary calls `refresh_frontmatter_from_bodies`, which re-parses the current-version body of every non-deleted policy and writes the columns in a single transaction.
+Each probe is wrapped in a `has_column` guard (matching the pattern `clavenar-ledger::init_schema` already uses for chain v2 / v3 column additions), so re-running `init_schema` on a DB that already has the columns is a no-op. Existing rows on a pre-upgrade DB get NULL values; the first boot of the new binary calls `refresh_frontmatter_from_bodies`, which re-parses the current-version body of every non-deleted policy and writes the columns in a single transaction.
 
-Multi-value fields (`frameworks`, `tags`, `tool_surface`) are stored CSV-joined at the SQLite layer for the same reason chain v3 stores its `payload_json` as a TEXT blob: the column is a transport, not a queryable index. The wire types in `warden-sdk` and the public Rust types in `storage::PolicyRow` expose them as `Vec<String>`; `storage::split_csv` and `storage::join_csv` handle the boundary. An empty vec maps to NULL in SQLite, not an empty string.
+Multi-value fields (`frameworks`, `tags`, `tool_surface`) are stored CSV-joined at the SQLite layer for the same reason chain v3 stores its `payload_json` as a TEXT blob: the column is a transport, not a queryable index. The wire types in `clavenar-sdk` and the public Rust types in `storage::PolicyRow` expose them as `Vec<String>`; `storage::split_csv` and `storage::join_csv` handle the boundary. An empty vec maps to NULL in SQLite, not an empty string.
 
-### 5. Wire API (`warden-policy-engine`)
+### 5. Wire API (`clavenar-policy-engine`)
 
 ```
 GET    /policies/templates                              list catalog with installed bool (Viewer)
@@ -2276,7 +2276,7 @@ A library install differs from `POST /policies` in exactly one place: the chain-
 Two consequences fall out for free:
 
 - **No new validation paths.** Compile-error 400s and `UNIQUE policies.name` 409s look identical between operator-create and library-install. The console maps both into its existing inline-error banner.
-- **No new audit-replay paths.** `warden-ledger` consumes `policy.installed_from_template` via the same handler as `policy.created` — chain v3 is event-kind-polymorphic and the payload schema is unchanged.
+- **No new audit-replay paths.** `clavenar-ledger` consumes `policy.installed_from_template` via the same handler as `policy.created` — chain v3 is event-kind-polymorphic and the payload schema is unchanged.
 
 A 409 from the engine surfaces in the console as a re-rendered detail page with the error in a red banner above the body; the install form is replaced by the "Already installed → View it in the active set" affordance, so the operator's next click goes to the live policy rather than retrying. The destructive-tier walk for this path is `F-LIB-11` in `MANUAL_TESTS.md`.
 
@@ -2292,7 +2292,7 @@ The endpoint exists in the engine and is wired in the console handler, but the `
 
 ### 8. SDK + CLI surfaces
 
-`warden-sdk` exposes four new types and four new async methods on `PoliciesClient`:
+`clavenar-sdk` exposes four new types and four new async methods on `PoliciesClient`:
 
 ```rust
 pub struct PolicyTemplate { /* 7 frontmatter fields + name + content_type + installed */ }
@@ -2305,33 +2305,33 @@ pub struct InstallTemplateRequest<'a> { reason, actor_sub, actor_idp }
 pub struct LabTemplateRequest { mode, replace_rule_name, inputs }
 
 impl PoliciesClient {
-    pub async fn list_templates(&self) -> Result<Vec<PolicyTemplate>, WardenError>;
-    pub async fn get_template(&self, name: &str) -> Result<PolicyTemplateDetail, WardenError>;
+    pub async fn list_templates(&self) -> Result<Vec<PolicyTemplate>, ClavenarError>;
+    pub async fn get_template(&self, name: &str) -> Result<PolicyTemplateDetail, ClavenarError>;
     pub async fn install_template(&self, name: &str, req: &InstallTemplateRequest<'_>)
-        -> Result<MutationResponse, WardenError>;
+        -> Result<MutationResponse, ClavenarError>;
     pub async fn lab_template(&self, name: &str, req: &LabTemplateRequest)
-        -> Result<EvaluateBatchResponse, WardenError>;
+        -> Result<EvaluateBatchResponse, ClavenarError>;
 }
 ```
 
 The seven new fields on `PolicyRow` are all `#[serde(default)]` — older engines (pre-frontmatter) deserialize cleanly; SDK callers see empty `Vec<String>` / `None` for the metadata when the engine hasn't been upgraded.
 
-`warden-ctl` ships two new subcommands under the existing `policy` umbrella:
+`clavenar-ctl` ships two new subcommands under the existing `policy` umbrella:
 
 ```
-wardenctl policy scaffold --name <slug> --domain <d> --tier <deny|review|mixed> --severity <s> \
+clavenarctl policy scaffold --name <slug> --domain <d> --tier <deny|review|mixed> --severity <s> \
                           [--frameworks <csv>] [--tags <csv>] [--tool-surface <csv>] \
                           [--summary <text>] [--output <path>] [--force] [--stdout]
 
-wardenctl policy library list [--domain <d>]... [--severity <s>]... [--framework <f>]... \
+clavenarctl policy library list [--domain <d>]... [--severity <s>]... [--framework <f>]... \
                               [--tier <t>]... [--installed-only | --not-installed] \
                               [--json] [--policy-url <url>]
 
-wardenctl policy library install <name> --reason <r> [--actor-sub <s>] [--actor-idp <i>] \
+clavenarctl policy library install <name> --reason <r> [--actor-sub <s>] [--actor-idp <i>] \
                                  [--policy-url <url>]
 ```
 
-`scaffold` is offline-only — no engine call, pure filesystem write of a syntactically-valid `.rego` skeleton with frontmatter pre-filled, named tool sets seeded from `--tool-surface`, and tier-conditional `deny` / `review` rule blocks. The generated file compiles cleanly against `warden.authz` and is immediately consumable by `wardenctl policy test`. `--name` is path-traversal-guarded (`[a-z0-9_]+` only).
+`scaffold` is offline-only — no engine call, pure filesystem write of a syntactically-valid `.rego` skeleton with frontmatter pre-filled, named tool sets seeded from `--tool-surface`, and tier-conditional `deny` / `review` rule blocks. The generated file compiles cleanly against `clavenar.authz` and is immediately consumable by `clavenarctl policy test`. `--name` is path-traversal-guarded (`[a-z0-9_]+` only).
 
 `library list` filters the catalog client-side after a single `GET /policies/templates` call — the SDK returns the full set, the CLI applies the operator's flags. Multi-value flags are OR-within-facet, AND-across-facets, matching the console's URL semantics exactly. `library install` returns `ExitCode::Conflict` on 409 and `ExitCode::Validation` on 404 per the [§9.3 exit-code spec](#agent-onboarding-wao).
 
@@ -2341,7 +2341,7 @@ Two new pages plus an edit on the existing `/policies` index:
 
 - **`GET /policies/library`** — filter sidebar (Domain / Severity / Frameworks / Tier checkboxes + free-text search) on the left; responsive card grid (1 / 2 / 3 columns at sm / md / xl breakpoints) on the right. Each card shows name (mono), summary, domain text, severity-colored pill, tier pill, framework chips. Filter state lives in the URL (`?domain=healthcare&framework=HIPAA`); the sidebar form submits as GET so reloads + browser-back preserve state. Viewer sees an amber "Read-only access" banner above the grid.
 - **`GET /policies/library/{name}`** — breadcrumb header (`Library / <domain>`), summary, badge row (severity, tier, frameworks, tags), tool-surface code chips, bold-highlighted rule body in a `<pre>` block with the body sha256 in the corner. The Install panel below is rendered only when `Role::Admin && !installed`; for installed templates a green "Already installed → View it in the active set" banner takes its place. The htmx-swap target for the lab preview is in place; the button itself is the deferred polish step.
-- **`GET /policies`** — each row's Name cell carries a secondary line with domain text + severity pill + framework chips, all pulled from the now-extended `warden_sdk::PolicyRow`. The page header grows a `Browse library` button (visible to Viewer-or-better) alongside the existing `Mine candidates` / `New policy` admin buttons.
+- **`GET /policies`** — each row's Name cell carries a secondary line with domain text + severity pill + framework chips, all pulled from the now-extended `clavenar_sdk::PolicyRow`. The page header grows a `Browse library` button (visible to Viewer-or-better) alongside the existing `Mine candidates` / `New policy` admin buttons.
 
 Discoverability is via the `/policies` header button rather than a dedicated `base.html` nav entry — the top nav already runs 10 deep on desktop. The `data-nav-prefix="/policies"` attribute on the existing Policies link covers `/policies/library*` for the active-tab highlight.
 
@@ -2349,14 +2349,14 @@ Discoverability is via the `/policies` header button rather than a dedicated `ba
 
 | Layer | Test | What it pins |
 |---|---|---|
-| Engine | `warden-policy-engine/src/frontmatter.rs` `#[cfg(test)]` (13 tests) | Parser tolerance: full happy path, missing fields, unknown-key passthrough, legacy preamble compat, blank-line tolerance, case-insensitive keys, CSV trim/empty-drop, duplicate-key last-wins, JSON body, empty body, indented comments, no-colon comment. |
+| Engine | `clavenar-policy-engine/src/frontmatter.rs` `#[cfg(test)]` (13 tests) | Parser tolerance: full happy path, missing fields, unknown-key passthrough, legacy preamble compat, blank-line tolerance, case-insensitive keys, CSV trim/empty-drop, duplicate-key last-wins, JSON body, empty body, indented comments, no-colon comment. |
 | Engine | `tests/storage_test.rs` (3 new) | `seed_persists_frontmatter_into_columns`, `refresh_populates_frontmatter_on_pre_existing_rows`, `refresh_skips_soft_deleted_rows`. |
 | Engine | `tests/library_test.rs` (8) | Full HTTP-layer coverage of all four `/policies/templates*` endpoints through the live axum router: list+installed flags, detail+sha, 404, install happy + 409 + 404, lab diff envelope, lab-on-missing-file error envelope. |
 | Engine | `tests/templates_test.rs::all_templates_compile` | Loads every `.rego` in `policies/templates/` via regorus. Any backfilled-frontmatter file that breaks rego compile fails loud here. |
-| SDK | `warden-sdk/src/policies.rs` `mod tests` (7 new) | Round-trip + back-compat for `PolicyRow`, `PolicyTemplate`, `PolicyTemplateDetail`; serialization of `InstallTemplateRequest` / `LabTemplateRequest` (including `skip_serializing_if = "Option::is_none"`). |
-| CLI | `warden-ctl/src/cmd/policy_scaffold.rs` `#[cfg(test)]` (10) | Frontmatter content, tier-conditional rule blocks (deny / review / mixed), tool-surface validation, slug guard, file write + force + refuse-overwrite. |
-| CLI | `warden-ctl/src/cmd/policy_library.rs` `#[cfg(test)]` (7) | Filter composition (AND-across-facets, OR-within-facet, installed-only / not-installed, severity+tier AND), URL resolution. |
-| End-to-end | `warden-e2e/MANUAL_TESTS.md` S-LIB-01..05, F-LIB-10..14, D-LIB-20 | Operator-walk scripts for the library list / filter / detail / install flow, the 409 conflict path, the lab preview against the chaos catalog, the Viewer read-only gating, the `wardenctl policy library` CLI round-trip, and path-traversal rejection. |
+| SDK | `clavenar-sdk/src/policies.rs` `mod tests` (7 new) | Round-trip + back-compat for `PolicyRow`, `PolicyTemplate`, `PolicyTemplateDetail`; serialization of `InstallTemplateRequest` / `LabTemplateRequest` (including `skip_serializing_if = "Option::is_none"`). |
+| CLI | `clavenar-ctl/src/cmd/policy_scaffold.rs` `#[cfg(test)]` (10) | Frontmatter content, tier-conditional rule blocks (deny / review / mixed), tool-surface validation, slug guard, file write + force + refuse-overwrite. |
+| CLI | `clavenar-ctl/src/cmd/policy_library.rs` `#[cfg(test)]` (7) | Filter composition (AND-across-facets, OR-within-facet, installed-only / not-installed, severity+tier AND), URL resolution. |
+| End-to-end | `clavenar-e2e/MANUAL_TESTS.md` S-LIB-01..05, F-LIB-10..14, D-LIB-20 | Operator-walk scripts for the library list / filter / detail / install flow, the 409 conflict path, the lab preview against the chaos catalog, the Viewer read-only gating, the `clavenarctl policy library` CLI round-trip, and path-traversal rejection. |
 
 ### 11. Content baseline
 
@@ -2369,7 +2369,7 @@ Authoring conventions:
 
 - Filename = template name; the engine's parser asserts the `# Template:` field matches the filename.
 - Column-aligned frontmatter — 16-char key column (`# Tool surface:` is the driver) so the colons line up. Multi-line continuations indent 15 spaces past the `#`.
-- Named tool sets at the top of each file, prefixed with the template name (`phi_egress_tools`, `kyc_bypass_tools`, …) to prevent collisions when the engine merges every file into a single `package warden.authz`.
+- Named tool sets at the top of each file, prefixed with the template name (`phi_egress_tools`, `kyc_bypass_tools`, …) to prevent collisions when the engine merges every file into a single `package clavenar.authz`.
 - Deny messages start with `Violation:`, review messages with `Review:` — the chain operator-triage tooling matches against the prefix.
 - regorus rejects Go-only sprintf verbs (`%q`, `%p`, `%T`) at eval time; templates use `%s`, `%v`, `%d`, `%f` instead.
 
@@ -2379,7 +2379,7 @@ A growth target of 100-200 templates was the original operator-UX threshold wher
 
 - **Per-template lab fixtures** (a positive-deny + positive-review + negative-allow trio shipped alongside each rule). The shape is interesting and a follow-up plan exists; v1 leans on the chaos-catalog smoke + the `all_templates_compile` test as the regression net.
 - **A query language richer than facet checkboxes + free-text search.** Operators who want "templates that fire on `phi_export` OR `bulk_export`" can issue two queries today. A unified `q=phi_export OR bulk_export` parser stays unwarranted at 576 templates — the sidebar facets carry the load.
-- **Template versioning.** A template's body on disk is the source of truth; once installed, the active policy versions independently. Diff between template-as-of-today and the installed version is `wardenctl policy library get-template <name> | diff - <(wardenctl policy get <name> --body)` — useful but not first-class.
+- **Template versioning.** A template's body on disk is the source of truth; once installed, the active policy versions independently. Diff between template-as-of-today and the installed version is `clavenarctl policy library get-template <name> | diff - <(clavenarctl policy get <name> --body)` — useful but not first-class.
 - **Soft delete of a template.** Templates aren't mutable state; removing one is a `git rm` + redeploy. Already-installed copies stay installed.
 - **Per-template RBAC.** Library install is `Role::Admin`; finer-grained "this admin can install HIPAA templates but not government templates" is out of scope.
 - **Notifications on template-set changes.** A new template landing in `policies/templates/` doesn't notify operators — they discover it on their next library visit. Push notification of new templates is plausible once the catalog has external authors; not yet.
@@ -2388,7 +2388,7 @@ A growth target of 100-200 templates was the original operator-UX threshold wher
 
 The nine `/grill-me` answers that pinned this section (chronological):
 
-1. **Audience: operators adopting Warden** — not demo visitors, not compliance buyers, not security researchers. `/policies/library` is the bottleneck surface; the library serves operators.
+1. **Audience: operators adopting Clavenar** — not demo visitors, not compliance buyers, not security researchers. `/policies/library` is the bottleneck surface; the library serves operators.
 2. **Metadata source: frontmatter inside the `.rego`** — not sidecar TOML, not DB-only, not central catalog. Round-trips with rego edits; community PRs touch one file.
 3. **Target size: 100-200 hand-curated** — not 50-80 lean, not 300-500 archetype-driven, not 1000+ community-extended. Determines the metadata + filter UX is essential not optional.
 4. **Catalog model: library-only with one-click install** — not all-active-by-default, not pack-based, not hybrid starter set. Preserves the existing template-vs-active distinction.
@@ -2396,18 +2396,18 @@ The nine `/grill-me` answers that pinned this section (chronological):
 6. **Library UX: filter sidebar + card grid** — not domain-grouped accordion, not search-first single page, not marketplace shop tiles. Multi-axis filtering at 200 entries needs persistent sidebar.
 7. **Install flow: lab-preview → confirm install** — not direct one-click, not cart bulk-apply, not filesystem copy + reload. Try-before-activate is the operator concern.
 8. **Phasing: big-bang ship** — not infra-first or thinnest-slice or content-first. Single major version delivers the whole surface together.
-9. **Authoring: scaffolder + hand-craft hybrid** — not LLM-assisted, not pure hand-write, not archetype-driven. `wardenctl policy scaffold` emits the skeleton; humans fill the body.
+9. **Authoring: scaffolder + hand-craft hybrid** — not LLM-assisted, not pure hand-write, not archetype-driven. `clavenarctl policy scaffold` emits the skeleton; humans fill the body.
 
 ---
 
 ## Forensic-tier deep review
 
 
-Companion to [Layer 2 — warden-brain](#layer-2--warden-brain) (sub-second classifier on the proxy hot path) and [Layer 4 — warden-ledger](#layer-4--warden-ledger) (the forensic store). Where brain's value proposition is sub-second verdicts via Haiku 4.5, `warden-deep-review` is the complementary forensic tier — asynchronous, slow, expensive, and substantially smarter. Runs Opus 4.7 (MVP single-provider) against a sampled slice of the audit stream to catch what Haiku missed and deepen verdicts on what it flagged.
+Companion to [Layer 2 — clavenar-brain](#layer-2--clavenar-brain) (sub-second classifier on the proxy hot path) and [Layer 4 — clavenar-ledger](#layer-4--clavenar-ledger) (the forensic store). Where brain's value proposition is sub-second verdicts via Haiku 4.5, `clavenar-deep-review` is the complementary forensic tier — asynchronous, slow, expensive, and substantially smarter. Runs Opus 4.7 (MVP single-provider) against a sampled slice of the audit stream to catch what Haiku missed and deepen verdicts on what it flagged.
 
 **This service does not gate live traffic.** HIL is the inline blocking surface; deep-review is retrospective by design. A vendor outage, a quota burst, or a slow review must never back up the audit stream and starve brain → ledger writes. Every failure mode soft-fails per event with a queryable sentinel.
 
-**Module status:** **shipped 2026-05-13** at `warden-specs/VERSION` 0.6.0. Lives in `warden-deep-review` (new repo, NATS consumer + LLM provider trait + per-agent history ring buffer + budget + retry + alert sink), wired into `warden-e2e/{prod,dev}/docker-compose.yml` as a service in the `stack` profile, and into `warden-charts/charts/warden/` as `services.deepReview` (shipped 2026-05-14 at version 0.7.0; chart covers the full eight-service stack). **Adjacent surfaces deferred:** published baseline-accuracy benchmark against real Opus.
+**Module status:** **shipped 2026-05-13** at `clavenar-specs/VERSION` 0.6.0. Lives in `clavenar-deep-review` (new repo, NATS consumer + LLM provider trait + per-agent history ring buffer + budget + retry + alert sink), wired into `clavenar-e2e/{prod,dev}/docker-compose.yml` as a service in the `stack` profile, and into `clavenar-charts/charts/clavenar/` as `services.deepReview` (shipped 2026-05-14 at version 0.7.0; chart covers the full eight-service stack). **Adjacent surfaces deferred:** published baseline-accuracy benchmark against real Opus.
 
 ### 1. What this closes
 
@@ -2425,10 +2425,10 @@ The fast classifier remains in place — it's still the only thing fast enough t
 **In scope (v1.x MVP):**
 
 - Single provider — `AnthropicOpusProvider` (Opus 4.7).
-- NATS core pubsub consumer on `warden.forensic` (subject the proxy already publishes forensic rows to; matches existing infra without a JetStream upgrade).
+- NATS core pubsub consumer on `clavenar.forensic` (subject the proxy already publishes forensic rows to; matches existing infra without a JetStream upgrade).
 - Per-event budget gate, retry, concurrency limit, paging.
 - Three sentinel ledger event types (`deep_review_finding` / `deep_review_failed` / `deep_review_skipped`).
-- Reuses existing `LogRequest` envelope — no `warden-ledger` wire change.
+- Reuses existing `LogRequest` envelope — no `clavenar-ledger` wire change.
 - Deterministic `MockProvider` in-repo so e2e and CI do not burn vendor tokens.
 - 25-case seed benchmark covering all four blind-spot classes + hermetic compliance harness.
 
@@ -2436,28 +2436,28 @@ The fast classifier remains in place — it's still the only thing fast enough t
 
 - Ensemble across vendors (Opus + Gemini + GPT majority vote) — speculative complexity before single-model benchmark data exists.
 - Sequential escalation (Opus → Gemini → GPT on disagreement) — same reasoning.
-- Per-tenant cost attribution — multi-tenant budgeting needs a deployment-level tenancy model warden doesn't have yet.
+- Per-tenant cost attribution — multi-tenant budgeting needs a deployment-level tenancy model clavenar doesn't have yet.
 - Adaptive sampling (auto-tune sample rate against remaining budget) — manual knobs for v1; auto-tune is polish.
 - Dead-letter queue for failed reviews — retry + soft-fail covers transient failures; add once telemetry shows sustained outages.
 - Auto-quarantine via identity service on Red findings — structurally unsafe with async detection; reconsider only if false-positive rate is essentially zero.
 - Pre-emptive HIL on agent's next request post-Red — cross-component state, TTL questions, race conditions; deferred with a proper design.
-- Persona-aware prompting (feed `warden-brain/personas/` into the prompt) — worth measuring against v1 baseline first.
+- Persona-aware prompting (feed `clavenar-brain/personas/` into the prompt) — worth measuring against v1 baseline first.
 - JetStream-durable consumer — MVP uses core NATS to match existing `nats:2` container (no `-js` flag); upgrading is an e2e infra change.
-- Path-dep on `warden-brain/src/pii.rs` — MVP ships a small in-tree regex masker (`warden-deep-review/src/pii.rs`); merging masker codebases is a v1.x+1 swap-in.
+- Path-dep on `clavenar-brain/src/pii.rs` — MVP ships a small in-tree regex masker (`clavenar-deep-review/src/pii.rs`); merging masker codebases is a v1.x+1 swap-in.
 
 ### 3. Architecture
 
 ```
                       proxy (publishes forensic row)
                                  ↓
-                          warden.forensic ── NATS core
+                          clavenar.forensic ── NATS core
                           ↓                ↓
-              warden-ledger        warden-deep-review
+              clavenar-ledger        clavenar-deep-review
               (appends row)         (samples → review → emits finding)
                                               ↓
-                                   warden.forensic (republishes)
+                                   clavenar.forensic (republishes)
                                               ↓
-                                   warden-ledger
+                                   clavenar-ledger
                                    (appends finding row)
 ```
 
@@ -2483,7 +2483,7 @@ Per-event pipeline:
    (brain_authorized=false, deep=Red)    → Agreed
    ```
 
-9. **Emit** — publish `deep_review_finding` row to `warden.forensic`. If `verdict == Red && confidence ≥ page_confidence`: `alert_sink.maybe_page(...)` fires the configured Slack-shape webhook (rate-limited).
+9. **Emit** — publish `deep_review_finding` row to `clavenar.forensic`. If `verdict == Red && confidence ≥ page_confidence`: `alert_sink.maybe_page(...)` fires the configured Slack-shape webhook (rate-limited).
 10. **Soft-fail on retry exhaust** — emit `deep_review_failed { reason }` where reason ∈ `timeout` / `vendor_5xx` / `parse_error` / `quota_exceeded` / `rate_limited` / `unknown_vendor_error`. Consumer advances.
 
 History capacity defaults: last 20 events by `agent_id`, capped at 50 by `correlation_id` per the roadmap. Both knobs are env-tunable.
@@ -2513,20 +2513,20 @@ All knobs are env-driven. Defaults in parens.
 
 | Env | Default | Meaning |
 |---|---|---|
-| `WARDEN_DEEP_REVIEW_SAMPLE_RATE_GREEN` | `0.01` | Fraction of brain-Green events reviewed |
-| `WARDEN_DEEP_REVIEW_SAMPLE_RATE_FLAGGED` | `1.0` | Fraction of brain-Yellow/Red events reviewed |
-| `WARDEN_DEEP_REVIEW_CONCURRENCY` | `4` | Max concurrent in-flight reviews (tokio semaphore) |
-| `WARDEN_DEEP_REVIEW_DAILY_TOKEN_CAP` | `1_000_000` | Input + output tokens per UTC day (~$60/day Opus). Demo VPS pins `200_000` |
-| `WARDEN_DEEP_REVIEW_RETRY_BUDGET_SECS` | `60` | Per-event wall-clock budget across retries |
-| `WARDEN_DEEP_REVIEW_PAGE_CONFIDENCE` | `0.85` | Confidence floor for paging on Red |
-| `WARDEN_DEEP_REVIEW_ALERT_WEBHOOK` | (none) | Slack-shape webhook URL; disabled when unset |
-| `WARDEN_DEEP_REVIEW_HISTORY_PER_AGENT` | `20` | Per-agent history ring-buffer capacity |
-| `WARDEN_DEEP_REVIEW_HISTORY_PER_CORRELATION` | `50` | Per-correlation history cap |
-| `WARDEN_DEEP_REVIEW_METRICS_PORT` | `8087` | Prometheus `/metrics` port. Sibling `identity` owns `8086` |
-| `WARDEN_DEEP_REVIEW_ANTHROPIC_API_KEY` | `mock-key` | API key; sentinel `mock-key` selects `MockProvider` |
-| `WARDEN_DEEP_REVIEW_NATS_URL` | `nats://localhost:4222` | NATS connect string. Same URL the proxy/brain/ledger consumers use |
-| `WARDEN_DEEP_REVIEW_FORENSIC_SUBJECT` | `warden.forensic` | Subscribe subject for inbound forensic rows |
-| `WARDEN_DEEP_REVIEW_FINDINGS_SUBJECT` | `warden.forensic` | Publish subject for emitted `deep_review_*` rows. Defaults to the same subject so the ledger picks them up via its existing consumer; split only when an operator runs deep-review against a dedicated audit stream |
+| `CLAVENAR_DEEP_REVIEW_SAMPLE_RATE_GREEN` | `0.01` | Fraction of brain-Green events reviewed |
+| `CLAVENAR_DEEP_REVIEW_SAMPLE_RATE_FLAGGED` | `1.0` | Fraction of brain-Yellow/Red events reviewed |
+| `CLAVENAR_DEEP_REVIEW_CONCURRENCY` | `4` | Max concurrent in-flight reviews (tokio semaphore) |
+| `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP` | `1_000_000` | Input + output tokens per UTC day (~$60/day Opus). Demo VPS pins `200_000` |
+| `CLAVENAR_DEEP_REVIEW_RETRY_BUDGET_SECS` | `60` | Per-event wall-clock budget across retries |
+| `CLAVENAR_DEEP_REVIEW_PAGE_CONFIDENCE` | `0.85` | Confidence floor for paging on Red |
+| `CLAVENAR_DEEP_REVIEW_ALERT_WEBHOOK` | (none) | Slack-shape webhook URL; disabled when unset |
+| `CLAVENAR_DEEP_REVIEW_HISTORY_PER_AGENT` | `20` | Per-agent history ring-buffer capacity |
+| `CLAVENAR_DEEP_REVIEW_HISTORY_PER_CORRELATION` | `50` | Per-correlation history cap |
+| `CLAVENAR_DEEP_REVIEW_METRICS_PORT` | `8087` | Prometheus `/metrics` port. Sibling `identity` owns `8086` |
+| `CLAVENAR_DEEP_REVIEW_ANTHROPIC_API_KEY` | `mock-key` | API key; sentinel `mock-key` selects `MockProvider` |
+| `CLAVENAR_DEEP_REVIEW_NATS_URL` | `nats://localhost:4222` | NATS connect string. Same URL the proxy/brain/ledger consumers use |
+| `CLAVENAR_DEEP_REVIEW_FORENSIC_SUBJECT` | `clavenar.forensic` | Subscribe subject for inbound forensic rows |
+| `CLAVENAR_DEEP_REVIEW_FINDINGS_SUBJECT` | `clavenar.forensic` | Publish subject for emitted `deep_review_*` rows. Defaults to the same subject so the ledger picks them up via its existing consumer; split only when an operator runs deep-review against a dedicated audit stream |
 
 Retry algorithm: full-jitter exponential backoff at `1s / 4s / 16s`. Each delay is sampled uniformly from `[0, base]` per the AWS Architecture Blog full-jitter prescription. Total wall-clock is enforced via `retry_budget` even if individual sleeps complete fast — a slow vendor call that returns one second before the budget expires is not retried.
 
@@ -2548,11 +2548,11 @@ Three sentinel types (`finding` / `failed` / `skipped`) make every coverage gap 
 
 ### 7. PII handling
 
-`warden-deep-review/src/pii.rs` is an in-tree regex masker. Patterns: SSN, email, IPv4, credit-card (Luhn-shape 13-19 digit), PEM blocks, AWS access keys. Sentinels: `[SSN]`, `[EMAIL]`, `[IPV4]`, `[CC]`, `[PEM_PRIVATE_KEY]`, `[AWS_ACCESS_KEY_ID]`. The masker is idempotent — masking twice produces the same string — verified by the compliance harness on every benchmark case.
+`clavenar-deep-review/src/pii.rs` is an in-tree regex masker. Patterns: SSN, email, IPv4, credit-card (Luhn-shape 13-19 digit), PEM blocks, AWS access keys. Sentinels: `[SSN]`, `[EMAIL]`, `[IPV4]`, `[CC]`, `[PEM_PRIVATE_KEY]`, `[AWS_ACCESS_KEY_ID]`. The masker is idempotent — masking twice produces the same string — verified by the compliance harness on every benchmark case.
 
 Mask is applied to every string leaf in the event JSON *before* the prompt builder strips brain-verdict fields. Defense in depth: even fields that get stripped never reach the vendor API in raw form.
 
-The masker is deliberately small. A future v1.x+1 task is to swap it for the more capable `warden-brain/src/pii.rs` masker (which has bigram embedding + regex). Two masker implementations is documented technical debt; the rationale for *not* path-dep'ing brain's masker at MVP is avoiding ~30 transitive deps and a BrainState coupling for a 60-line regex job.
+The masker is deliberately small. A future v1.x+1 task is to swap it for the more capable `clavenar-brain/src/pii.rs` masker (which has bigram embedding + regex). Two masker implementations is documented technical debt; the rationale for *not* path-dep'ing brain's masker at MVP is avoiding ~30 transitive deps and a BrainState coupling for a 60-line regex job.
 
 ### 8. Operator surface
 
@@ -2561,8 +2561,8 @@ The masker is deliberately small. A future v1.x+1 task is to swap it for the mor
 - Findings appear as normal rows in `/audit` with `method` ∈ `deep_review_*`.
 - `/verify` walks the chain over the new rows transparently (no ledger code change).
 - Prometheus `/metrics` exposes per-verdict and per-failure-reason counters on the configured port.
-- Slack-shape page on Red + confidence ≥ floor when `WARDEN_DEEP_REVIEW_ALERT_WEBHOOK` is set.
-- `/deep-review` console route — paginated list (50/page), columns timestamp · correlation (short hash) · agent · model · brain → deep verdict · confidence · latency. Filters: date range, verdict, brain_delta, method. Shipped in `warden-console` v0.6.1; nav-link wiring in v0.6.2.
+- Slack-shape page on Red + confidence ≥ floor when `CLAVENAR_DEEP_REVIEW_ALERT_WEBHOOK` is set.
+- `/deep-review` console route — paginated list (50/page), columns timestamp · correlation (short hash) · agent · model · brain → deep verdict · confidence · latency. Filters: date range, verdict, brain_delta, method. Shipped in `clavenar-console` v0.6.1; nav-link wiring in v0.6.2.
 - `/audit/agents/{id}/narrative` deep-review summary strip — last-7d findings count, brain_delta donut, top disagreement category, link to filtered `/deep-review`. Same v0.6.1 cut.
 - Click-through from any finding row into the unified request timeline so brain verdict + deep-review finding + any HIL events are visible in chain order. (Drill-down lands in the existing `/audit/correlation/{id}` view, which is chain-version-agnostic.)
 - Demo-prefix gate mirrors `/audit`: visitor sessions only see their own `correlation_id LIKE <demo-prefix>%` rows.
@@ -2586,7 +2586,7 @@ Producing a published baseline accuracy number against real Opus (parallel to br
 
 The architectural decisions resolved by `/grill-me`:
 
-1. Async post-hoc execution mode, NATS consumer on the same `warden.forensic` subject (not on the hot path, not a separate JetStream stream at v1 to match existing infra).
+1. Async post-hoc execution mode, NATS consumer on the same `clavenar.forensic` subject (not on the hot path, not a separate JetStream stream at v1 to match existing infra).
 2. Sampling: 100% flagged + configurable Green floor (not full traffic, not flagged-only — Green sampling is the blind-spot mitigator).
 3. Single provider per deployment behind an `LlmProvider` trait (not ensemble, not sequential escalation — both deferred pending benchmark data).
 4. Reuse `LogRequest` envelope with three new `method` values (not a new wire envelope, not a parallel chain).
@@ -2605,7 +2605,7 @@ policy / hil / identity`, `deep-review ↔ NATS`). Captures the
 substrate decision so the wire contract is pre-agreed when the
 implementation lands.
 
-**Module status:** **designed 2026-05-14; open questions resolved 2026-05-14** (see §10); **session 2 shipped 2026-05-14** (substrate provisioned: `gen_certs.sh` per-service certs + chart `tlsBundle` projection + identity allowlist extension); **session 3 shipped 2026-05-14** (brain pilot: `warden-brain` binds rustls + SPIFFE allowlist on `/inspect`; `warden-proxy` presents `service-proxy.{crt,key}` on the brain hop; verified end-to-end in dev with 3-way allowlist tests); **session 4 shipped 2026-05-14** (`warden-policy-engine` binds rustls + SPIFFE allowlist on `/evaluate` and `/policies/*`; `warden-proxy`'s `WARDEN_POLICY_URL` flips to `https://` and reuses the session-3 reqwest identity; helm chart `warden.backendEnvs` auto-injects the engine's TLS envs and probe/metrics helpers now prefer `healthPort` under mTLS); **session 5 shipped 2026-05-14** (ledger gains the dual-listener pattern: plain HTTP on `:8083` for browser/Caddy + health, stripped of internal routes; mTLS on `:8183` with SPIFFE-gated `/log` + `/audit/correlation/*` + `/stream/audit` + `/export*` + `/agents`; console grows `outbound_tls.rs` and a single `service-console` cert authenticates every backend hop; identity allowlist on policy-engine extended to include console; HIL + identity receive CODE shipped but deployment deferred to session 6 due to simulator's plain-HTTP outbound dependency); **session 6 shipped 2026-05-14** (simulator + proxy gain outbound mTLS for the identity + HIL hops; HIL flips to single-mode mTLS on `:8084` with health on `:9084`; identity adopts the dual-listener pattern on `:8086`/`:8186`; every internal application hop is now mTLS-gated). The original perimeter posture — proxy, console,
+**Module status:** **designed 2026-05-14; open questions resolved 2026-05-14** (see §10); **session 2 shipped 2026-05-14** (substrate provisioned: `gen_certs.sh` per-service certs + chart `tlsBundle` projection + identity allowlist extension); **session 3 shipped 2026-05-14** (brain pilot: `clavenar-brain` binds rustls + SPIFFE allowlist on `/inspect`; `clavenar-proxy` presents `service-proxy.{crt,key}` on the brain hop; verified end-to-end in dev with 3-way allowlist tests); **session 4 shipped 2026-05-14** (`clavenar-policy-engine` binds rustls + SPIFFE allowlist on `/evaluate` and `/policies/*`; `clavenar-proxy`'s `CLAVENAR_POLICY_URL` flips to `https://` and reuses the session-3 reqwest identity; helm chart `clavenar.backendEnvs` auto-injects the engine's TLS envs and probe/metrics helpers now prefer `healthPort` under mTLS); **session 5 shipped 2026-05-14** (ledger gains the dual-listener pattern: plain HTTP on `:8083` for browser/Caddy + health, stripped of internal routes; mTLS on `:8183` with SPIFFE-gated `/log` + `/audit/correlation/*` + `/stream/audit` + `/export*` + `/agents`; console grows `outbound_tls.rs` and a single `service-console` cert authenticates every backend hop; identity allowlist on policy-engine extended to include console; HIL + identity receive CODE shipped but deployment deferred to session 6 due to simulator's plain-HTTP outbound dependency); **session 6 shipped 2026-05-14** (simulator + proxy gain outbound mTLS for the identity + HIL hops; HIL flips to single-mode mTLS on `:8084` with health on `:9084`; identity adopts the dual-listener pattern on `:8086`/`:8186`; every internal application hop is now mTLS-gated). The original perimeter posture — proxy, console,
 and deep-review trusting the docker network or k8s
 `NetworkPolicy` for caller authenticity, threat-model tagged under
 each layer's STRIDE "Tampering" axis — is the gap this section
@@ -2624,7 +2624,7 @@ now mTLS-authenticated, no plain-text fallback remains.
 | proxy → identity `/sign` | per-request | **highest — signing oracle** |
 | console → ledger / hil / policy-engine / identity | per-page | medium — read + mutate surface |
 | deep-review → ledger (bundle fetch, if added) | per-finding | medium |
-| service → NATS pub/sub (`warden.audit`, `warden.forensic`) | continuous | **separate slice — see §8** |
+| service → NATS pub/sub (`clavenar.audit`, `clavenar.forensic`) | continuous | **separate slice — see §8** |
 
 The proxy → identity hop is structurally special: it is the
 SVID-mint surface, so the caller cannot already hold an SVID for the
@@ -2632,29 +2632,29 @@ very first call. The bootstrap pattern (§4) is what unblocks it.
 
 ### 2. Three substrates considered
 
-**A. Extend warden-identity SVIDs to services (CHOSEN).** Add a new
-SPIFFE path `spiffe://warden.local/service/<name>` and have each
+**A. Extend clavenar-identity SVIDs to services (CHOSEN).** Add a new
+SPIFFE path `spiffe://clavenar.local/service/<name>` and have each
 service hold its own SVID. Identity already mints SVIDs for *agents* —
 same primitives, same trust root, same Vault Transit rotation.
 Service code grows a "fetch + refresh SVID" client (one shared lib
-in `warden-sdk`); servers gain a SPIFFE-URI verifier with an
-allowlist. Compose, k8s, bare metal, and `warden-lite` all keep
+in `clavenar-sdk`); servers gain a SPIFFE-URI verifier with an
+allowlist. Compose, k8s, bare metal, and `clavenar-lite` all keep
 working.
 
 **B. Service mesh (Linkerd / Istio / Cilium) — REJECTED.** Zero
-application code, but three hard cons for warden: (i) the compose
+application code, but three hard cons for clavenar: (i) the compose
 dev stack has no mesh and cannot really have one — the local-loop
-story breaks; (ii) `warden-lite` (single-binary OSS) and bare-VM
+story breaks; (ii) `clavenar-lite` (single-binary OSS) and bare-VM
 deploys cannot use a mesh either; (iii) the chain v2/v3 signing
 model wants application-level identity ("this verdict came from
 brain"), not pod-level mesh identity ("this came from a pod with a
-sidecar"). Mesh-as-substrate would force warden into k8s-only.
-Operators may layer a mesh on top of the chosen substrate (warden
-is mesh-agnostic), but the *trust root* stays warden-identity.
+sidecar"). Mesh-as-substrate would force clavenar into k8s-only.
+Operators may layer a mesh on top of the chosen substrate (clavenar
+is mesh-agnostic), but the *trust root* stays clavenar-identity.
 
 **C. Statically-rolled CA + per-service certs only — partially
 absorbed as the bootstrap layer (§4).** Extending
-`warden-proxy/scripts/gen_certs.sh` to mint a cert pair per service
+`clavenar-proxy/scripts/gen_certs.sh` to mint a cert pair per service
 under the same CA root is the smallest diff and works everywhere.
 But rotation requires service restart and there is no dynamic
 identity — the cert just carries a CN. This is rejected as the
@@ -2663,7 +2663,7 @@ for option (A), via §4.
 
 ### 3. Wire shape
 
-SPIFFE URI: `spiffe://warden.local/service/<name>` where `<name>` is
+SPIFFE URI: `spiffe://clavenar.local/service/<name>` where `<name>` is
 the kebab-cased component (`proxy`, `brain`, `policy-engine`, `hil`,
 `identity`, `ledger`, `deep-review`, `console`). Identity reserves
 the `service/*` namespace alongside the existing `agent/*` and
@@ -2672,14 +2672,14 @@ applies uniformly.
 
 Server side (every backend):
 
-- Loads its server cert + key (PEM, PKCS#8) and the warden CA root
-  on boot. Cert path defaults to `${WARDEN_<SVC>_TLS_DIR:-/certs}`.
+- Loads its server cert + key (PEM, PKCS#8) and the clavenar CA root
+  on boot. Cert path defaults to `${CLAVENAR_<SVC>_TLS_DIR:-/certs}`.
 - Boots HTTPS via `axum-server` + `rustls`. Plain-HTTP listen path
   is preserved on a separate port (`/health`, `/readyz` only — same
   pattern the proxy already uses for the kubelet probe).
 - Verifies caller's client cert chains to the CA root *and* the
   caller's SAN URI matches an allowlist:
-  `WARDEN_<SVC>_ALLOWED_CALLERS=spiffe://warden.local/service/proxy,spiffe://warden.local/service/console`.
+  `CLAVENAR_<SVC>_ALLOWED_CALLERS=spiffe://clavenar.local/service/proxy,spiffe://clavenar.local/service/console`.
 - 401 (not 403) on mismatch with body `{"error":"untrusted_caller"}` —
   matches existing identity-side `unregistered_agent` shape.
 
@@ -2693,7 +2693,7 @@ Client side (proxy, console, deep-review):
   matched by URL host today (k8s Service DNS); no SPIFFE-on-server
   check at v1 — see §10 "Open questions" for the deferred follow-up.
 
-`X-Warden-Mtls-Identity` header is **not** added — caller identity
+`X-Clavenar-Mtls-Identity` header is **not** added — caller identity
 is the SAN URI on the verified client cert. Adding a header would
 let an attacker who breaches one server forge it. (Equivalent posture
 to the existing proxy-mTLS gate on `/mcp`.)
@@ -2706,7 +2706,7 @@ require an SVID the caller does not yet hold. Two-tier solution:
 1. **Bootstrap cert (option C absorbed).** `gen_certs.sh --env <env>`
    mints a long-lived (1 year default — see §10 Q1) per-service cert
    under the same CA root. Each service Secret carries its own
-   server + client pair. Configured via `WARDEN_<SVC>_TLS_DIR` and
+   server + client pair. Configured via `CLAVENAR_<SVC>_TLS_DIR` and
    mounted by the helm chart (see §7).
 2. **Workload SVID refresh (deferred to v1.x+3).** Once the
    bootstrap cert is online, a service may call identity's existing
@@ -2717,24 +2717,24 @@ require an SVID the caller does not yet hold. Two-tier solution:
 
 Identity's own `/sign` receive path accepts both forms: a bootstrap
 cert (long-lived, deploy-time) or a fresh workload SVID. The
-`WARDEN_IDENTITY_SIGN_ALLOWED_CALLERS` env (already in place) gains
+`CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS` env (already in place) gains
 the `service/*` prefix.
 
 ### 5. Trust root
 
-Single CA: the warden CA root generated by `gen_certs.sh`. The same
+Single CA: the clavenar CA root generated by `gen_certs.sh`. The same
 root signs:
 
 - The existing proxy server cert (`certs/server.pem`).
 - The existing proxy client cert (`certs/client.pem`) used as the
   CA bundle for agent-side mTLS.
 - The new per-service server + client certs (this section).
-- The existing dynamic SVIDs minted by warden-identity for agents.
+- The existing dynamic SVIDs minted by clavenar-identity for agents.
 
-One CA root keeps the trust chain simple and lets `warden-identity`
+One CA root keeps the trust chain simple and lets `clavenar-identity`
 remain the sole authority. Mesh-issued certs (if an operator
 overlays a mesh) live in a parallel trust domain and are out of
-scope for warden's chain-anchored identity model.
+scope for clavenar's chain-anchored identity model.
 
 ### 6. Rotation
 
@@ -2763,11 +2763,11 @@ ca.crt
 server.crt + server.key       (proxy agent-facing mTLS, CN=localhost)
 client.crt + client.key       (legacy starter-agent client, CN=agent-001)
 service-<name>.crt + .key     (per-workload SPIFFE identity, SAN URI
-                              spiffe://warden.local/service/<name>,
+                              spiffe://clavenar.local/service/<name>,
                               one pair per service)
 ```
 
-The chart mounts the Secret read-only at `${WARDEN_<SVC>_TLS_DIR}`
+The chart mounts the Secret read-only at `${CLAVENAR_<SVC>_TLS_DIR}`
 on each Deployment via k8s Secret `items:` projection so each pod
 sees only `ca.crt` plus its own `service-<name>.{crt,key}`. The
 proxy additionally mounts `server.{crt,key}` (agent-facing mTLS)
@@ -2785,7 +2785,7 @@ of the cryptographic mTLS check.
   application-level. Tracked as roadmap follow-up **B7.5**.~~
   **Shipped v0.8.4 (2026-05-14).** NATS server binds TLS+mTLS on
   port 4222 via `nats-server.conf` (cert: `service-nats.{crt,key}`;
-  CA: shared warden CA; `verify: true` requires every client to
+  CA: shared clavenar CA; `verify: true` requires every client to
   present a workload cert). Each of the seven NATS-connecting
   services (proxy, ledger, hil, identity, policy-engine, deep-review,
   demo-mint) carries a small `src/nats_tls.rs` helper that reads
@@ -2793,12 +2793,12 @@ of the cryptographic mTLS check.
   `ConnectOptions` with `require_tls(true) + add_client_certificate +
   add_root_certificates`. Partial config fails closed; unset triplet
   preserves the legacy plain-TCP posture for host-cargo dev.
-- **`warden-lite`.** Single-binary OSS edition has no internal hops
+- **`clavenar-lite`.** Single-binary OSS edition has no internal hops
   (proxy + ledger + sandbox all in one process). Out of scope by
   construction.
 - **Mesh integration.** Operators who run a mesh may layer it on
-  top — warden is mesh-agnostic. The substrate decision is for
-  warden's own trust root, not a ban on mesh use.
+  top — clavenar is mesh-agnostic. The substrate decision is for
+  clavenar's own trust root, not a ban on mesh use.
 - **mTLS for external HTTP egress** (webhook sinks, vendor calls
   to Anthropic etc.). Already covered by `rustls` defaults — not
   the same problem as internal s2s.
@@ -2809,12 +2809,12 @@ Six sessions, paced to keep blast radius small:
 
 | # | Scope | Touches | Status |
 |---|---|---|---|
-| 1 | **This section** — pre-agree the wire shape. No code. | `warden-specs/TECH_SPEC.md` (this section), `warden-specs/FEATURES.md` §14.12 | **Shipped** v0.7.1 |
-| 2 | Extend `gen_certs.sh` to mint per-service bootstrap certs. Helm chart `proxyTls.secretName` → `tlsBundle.secretName` with per-pod `items:` projection. Identity allowlist gains `spiffe://warden.local/service/`. | `warden-proxy/scripts/gen_certs.sh`, `warden-charts/`, `warden-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.7.3 |
-| 3 | **Brain pilot** — `axum-server` + `rustls` TLS receive path on the application port; SPIFFE SAN allowlist verifier. Proxy gains client-cert outbound on `/inspect`. Plain-HTTP health port preserved for kubelet (Q4 decision). | `warden-brain`, `warden-proxy` | **Shipped** v0.8.0 |
-| 4 | **Policy-engine receive** — mirror brain pattern: rustls + SPIFFE allowlist on `:8082`, plain-HTTP `/health` + `/readyz` + `/metrics` on `:9082`. Proxy's existing outbound mTLS (reqwest identity from session 3) auto-covers the new hop via URL scheme flip; no proxy code change. Helm chart `warden.backendEnvs` auto-injects the engine's TLS envs when `tlsBundle.secretName` is set, and the probe + metrics helpers now prefer `healthPort` so kubelet probes land on the plain port under TLS. Hil + ledger + console outbound are deferred to session 5 because hil/ledger both ship browser-facing routes on the same listener (WebAuthn approver UI, demo-session-scoped `/audit` reads); coupling them with the console outbound rollout keeps the dual-mode listener question in one place. Deep-review needs no receive-side mTLS — it consumes NATS only, has no inter-service inbound HTTP. | `warden-policy-engine`, `warden-charts`, `warden-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.1 |
-| 5 | **Ledger receive + console outbound.** Ledger gains the dual-listener pattern: plain HTTP on `:8083` (Caddy + browser `/verify` + `/audit/{agent_id}*` + kubelet probes + Prometheus) **strips** the internal write/read subset; mTLS on `:8183` serves the full router with SPIFFE-allowlist middleware on `/log`, `/audit/correlation/*`, `/stream/audit`, `/export*`, `/agents`. Console grows an `outbound_tls` module mirroring `warden-proxy/src/fork.rs::OutboundTls`; a single `service-console` cert authenticates every backend hop via reqwest `Identity::from_pem`, injected into `LedgerClient`/`HilClient`/`AgentsClient`/`PoliciesClient`/`SimClient` through their existing `with_http_client`. `WARDEN_CONSOLE_LEDGER_URL` flips to `https://...:8183`; `WARDEN_CONSOLE_POLICY_ENGINE_URL` flips scheme (latent session-4 bug — policy-engine has been TLS on `:8082` since v0.8.1, the plain-HTTP URL was reaching the wrong listener). Identity allowlist extended to include `service/console`. HIL + identity receive-side mTLS **CODE shipped** (`mtls.rs`, `tls.rs`, `build_app_split`, dual-listener `main.rs` on all three) but **deployment deferred to session 6** — simulator's auto-decider sidecar calls HIL/identity over plain HTTP and updating its outbound TLS path is out of scope here. | `warden-ledger`, `warden-console`, `warden-hil`, `warden-identity`, `warden-charts`, `warden-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.2 |
-| 6 | **HIL + identity receive deployment.** `gen_certs.sh` SERVICES list grows `simulator`; the script now mints `service-simulator.{crt,key}` alongside every other workload. `warden-simulator` grows `outbound_tls.rs` mirroring console, plus a shared `reqwest::Client` threaded into `SvidMinter`, `enroll_personas`, and `try_spawn_hil_sidecar` so all three s2s callsites pool one TLS connection per destination. `warden-proxy` follows: `OutboundTls` gets `Clone`, a new `fork::build_outbound_client(timeout, OutboundTls)` helper is shared by `SigningClient`, `A2aClient`, and the HIL poll path so identity and HIL hops authenticate as `service-proxy`. Compose flips `WARDEN_HIL_URL` (proxy, console, simulator), `WARDEN_IDENTITY_URL`/`WARDEN_SIM_SVID_URL`/`WARDEN_SIM_ENROLL_IDENTITY_URL` (all callers) to `https://`; HIL gates port `:8084` behind rustls with health on `:9084`; identity adopts the ledger dual-listener pattern (plain `:8086` strips internal routes, mTLS `:8186` carries full surface). Helm `warden.backendEnvs` auto-injects every flip when `tlsBundle.secretName` is set; `services.hil.healthPort`/`services.identity.mtlsPort` expose the new ports. | `warden-proxy/scripts/gen_certs.sh`, `warden-simulator`, `warden-proxy`, `warden-charts`, `warden-e2e/{prod,dev}/docker-compose.yml`, `warden-specs/TECH_SPEC.md` | **Shipped** v0.8.3 |
+| 1 | **This section** — pre-agree the wire shape. No code. | `clavenar-specs/TECH_SPEC.md` (this section), `clavenar-specs/FEATURES.md` §14.12 | **Shipped** v0.7.1 |
+| 2 | Extend `gen_certs.sh` to mint per-service bootstrap certs. Helm chart `proxyTls.secretName` → `tlsBundle.secretName` with per-pod `items:` projection. Identity allowlist gains `spiffe://clavenar.local/service/`. | `clavenar-proxy/scripts/gen_certs.sh`, `clavenar-charts/`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.7.3 |
+| 3 | **Brain pilot** — `axum-server` + `rustls` TLS receive path on the application port; SPIFFE SAN allowlist verifier. Proxy gains client-cert outbound on `/inspect`. Plain-HTTP health port preserved for kubelet (Q4 decision). | `clavenar-brain`, `clavenar-proxy` | **Shipped** v0.8.0 |
+| 4 | **Policy-engine receive** — mirror brain pattern: rustls + SPIFFE allowlist on `:8082`, plain-HTTP `/health` + `/readyz` + `/metrics` on `:9082`. Proxy's existing outbound mTLS (reqwest identity from session 3) auto-covers the new hop via URL scheme flip; no proxy code change. Helm chart `clavenar.backendEnvs` auto-injects the engine's TLS envs when `tlsBundle.secretName` is set, and the probe + metrics helpers now prefer `healthPort` so kubelet probes land on the plain port under TLS. Hil + ledger + console outbound are deferred to session 5 because hil/ledger both ship browser-facing routes on the same listener (WebAuthn approver UI, demo-session-scoped `/audit` reads); coupling them with the console outbound rollout keeps the dual-mode listener question in one place. Deep-review needs no receive-side mTLS — it consumes NATS only, has no inter-service inbound HTTP. | `clavenar-policy-engine`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.1 |
+| 5 | **Ledger receive + console outbound.** Ledger gains the dual-listener pattern: plain HTTP on `:8083` (Caddy + browser `/verify` + `/audit/{agent_id}*` + kubelet probes + Prometheus) **strips** the internal write/read subset; mTLS on `:8183` serves the full router with SPIFFE-allowlist middleware on `/log`, `/audit/correlation/*`, `/stream/audit`, `/export*`, `/agents`. Console grows an `outbound_tls` module mirroring `clavenar-proxy/src/fork.rs::OutboundTls`; a single `service-console` cert authenticates every backend hop via reqwest `Identity::from_pem`, injected into `LedgerClient`/`HilClient`/`AgentsClient`/`PoliciesClient`/`SimClient` through their existing `with_http_client`. `CLAVENAR_CONSOLE_LEDGER_URL` flips to `https://...:8183`; `CLAVENAR_CONSOLE_POLICY_ENGINE_URL` flips scheme (latent session-4 bug — policy-engine has been TLS on `:8082` since v0.8.1, the plain-HTTP URL was reaching the wrong listener). Identity allowlist extended to include `service/console`. HIL + identity receive-side mTLS **CODE shipped** (`mtls.rs`, `tls.rs`, `build_app_split`, dual-listener `main.rs` on all three) but **deployment deferred to session 6** — simulator's auto-decider sidecar calls HIL/identity over plain HTTP and updating its outbound TLS path is out of scope here. | `clavenar-ledger`, `clavenar-console`, `clavenar-hil`, `clavenar-identity`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.2 |
+| 6 | **HIL + identity receive deployment.** `gen_certs.sh` SERVICES list grows `simulator`; the script now mints `service-simulator.{crt,key}` alongside every other workload. `clavenar-simulator` grows `outbound_tls.rs` mirroring console, plus a shared `reqwest::Client` threaded into `SvidMinter`, `enroll_personas`, and `try_spawn_hil_sidecar` so all three s2s callsites pool one TLS connection per destination. `clavenar-proxy` follows: `OutboundTls` gets `Clone`, a new `fork::build_outbound_client(timeout, OutboundTls)` helper is shared by `SigningClient`, `A2aClient`, and the HIL poll path so identity and HIL hops authenticate as `service-proxy`. Compose flips `CLAVENAR_HIL_URL` (proxy, console, simulator), `CLAVENAR_IDENTITY_URL`/`CLAVENAR_SIM_SVID_URL`/`CLAVENAR_SIM_ENROLL_IDENTITY_URL` (all callers) to `https://`; HIL gates port `:8084` behind rustls with health on `:9084`; identity adopts the ledger dual-listener pattern (plain `:8086` strips internal routes, mTLS `:8186` carries full surface). Helm `clavenar.backendEnvs` auto-injects every flip when `tlsBundle.secretName` is set; `services.hil.healthPort`/`services.identity.mtlsPort` expose the new ports. | `clavenar-proxy/scripts/gen_certs.sh`, `clavenar-simulator`, `clavenar-proxy`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml`, `clavenar-specs/TECH_SPEC.md` | **Shipped** v0.8.3 |
 
 The dynamic SVID workload-cert refresh path (option A's full form)
 is **v1.x+3** — a follow-up that swaps bootstrap-cert reads for
@@ -2838,14 +2838,14 @@ proceeds against these.
    (session 6 deliverable).
 2. **Server-side SPIFFE check on the client side: deferred to
    v1.x+3.** Today's DNS-host match against the k8s Service name
-   protects against everything short of warden-CA compromise. The
+   protects against everything short of clavenar-CA compromise. The
    stronger SAN-URI check would only differentiate "valid cert under
    the wrong identity" from "valid cert under the right identity",
-   and an attacker who can mis-issue under the warden CA can also
+   and an attacker who can mis-issue under the clavenar CA can also
    forge any SPIFFE URI they like — the marginal protection is small
    for the code cost across every outbound caller. Bundling this
    with the v1.x+3 SVID refresh work is cheaper because the same
-   `warden-sdk` mTLS helper gains both behaviors in one change.
+   `clavenar-sdk` mTLS helper gains both behaviors in one change.
 3. **NATS TLS: separate cycle (B7.5).** Application certs close the
    larger of the two holes — they protect the signing oracle
    (`proxy → identity /sign`) and verdict integrity
@@ -2875,11 +2875,11 @@ that section ships the **bootstrap layer** (1-year per-service cert
 pairs read once at boot, plus a server-side SPIFFE allowlist on every
 receive path), this section ships the **dynamic layer**: each service
 periodically exchanges its bootstrap cert for a short-lived workload
-SVID minted by `warden-identity`, presents the SVID on subsequent
+SVID minted by `clavenar-identity`, presents the SVID on subsequent
 hops, and falls back to the bootstrap cert if refresh fails. The
 client side also gains the deferred server-identity check —
 validating the peer's SPIFFE SAN URI matches the expected
-`service/<name>` rather than just "any cert signed by the warden CA"
+`service/<name>` rather than just "any cert signed by the clavenar CA"
 (closes [§Internal service mTLS §10 Q2](#internal-service-mtls)).
 
 **Module status:** **designed 2026-05-14**; implementation is the
@@ -2894,7 +2894,7 @@ Three gaps left open by v1.x+2:
 | # | Gap (today) | Closure (v1.x+3) |
 |---|---|---|
 | G1 | A leaked bootstrap cert is valid for up to 1 year and there is no in-band rotation — the only revocation is `gen_certs.sh` + rolling restart, which requires operator action and a maintenance window. | Workload SVIDs are short-lived (≤1h TTL). A leaked SVID is valid for ≤1h after the rotation runbook flips the issuer key. The bootstrap cert moves from "primary credential" to "fallback exercised only at pod restart" — its 1-year lifetime is acceptable because it is no longer the typically-in-use credential. |
-| G2 | The receive-side allowlist (`WARDEN_<SVC>_ALLOWED_CALLERS`) validates *who* the caller claims to be, but the client side does not validate *who the server claims to be* beyond "DNS-host match + valid CA cert." A compromised brain pod could plant a brain-signed cert at the policy-engine DNS name and intercept proxy→policy calls. | Every outbound caller gains an `expected_server_spiffe` config equivalent to the receive-side allowlist. The reqwest client validates the server cert's SAN URI matches one entry in the expected list; mismatch = closed connection before any request body is sent. |
+| G2 | The receive-side allowlist (`CLAVENAR_<SVC>_ALLOWED_CALLERS`) validates *who* the caller claims to be, but the client side does not validate *who the server claims to be* beyond "DNS-host match + valid CA cert." A compromised brain pod could plant a brain-signed cert at the policy-engine DNS name and intercept proxy→policy calls. | Every outbound caller gains an `expected_server_spiffe` config equivalent to the receive-side allowlist. The reqwest client validates the server cert's SAN URI matches one entry in the expected list; mismatch = closed connection before any request body is sent. |
 | G3 | Rotation of an in-service issuer key (Vault Transit `rotate`) only takes effect for *agents* (they re-fetch SVIDs on every long-running session). Services hold the bootstrap cert until pod restart, so a Transit rotation does not propagate into the s2s trust path until the operator rolls every Deployment. | A workload-SVID refresh inherits Transit rotation for free — the next refresh after a rotation picks up the new issuer kid. Services rotate at TTL/2 cadence, so within ~30 min of an issuer rotation every s2s leg is using a freshly-minted SVID under the new key. |
 
 The closure is most-valuable for **G1** (revocation effectiveness),
@@ -2912,7 +2912,7 @@ the relationship is unchanged from v1.x+2 — the allowlist already
 accepts `service/<name>` SAN URIs, and short-lived SVIDs carry the
 same SAN URI as the bootstrap cert, so no receive-side code changes.
 
-`warden-identity` is the bootstrap target for the refresh call
+`clavenar-identity` is the bootstrap target for the refresh call
 itself. Its receive path accepts either a bootstrap cert *or* a
 freshly-minted workload SVID, identically — the SAN-URI allowlist
 match is what gates `/workload-svid`. This avoids the chicken-and-egg
@@ -2927,7 +2927,7 @@ for the NATS handshake the same way they reuse it for HTTP hops.
 
 ### 3. Wire shape
 
-New endpoint on `warden-identity`:
+New endpoint on `clavenar-identity`:
 
 ```text
 POST /workload-svid
@@ -2937,7 +2937,7 @@ Body: { "ttl_seconds": 1800 }    // optional, capped at MAX_TTL_SECONDS
 
 200 → {
   "id":          "<uuidv7>",
-  "spiffe_id":   "spiffe://warden.local/service/<name>",
+  "spiffe_id":   "spiffe://clavenar.local/service/<name>",
   "cert_pem":    "...",
   "key_pem":     "...",
   "ca_cert_pem": "...",
@@ -2948,7 +2948,7 @@ Body: { "ttl_seconds": 1800 }    // optional, capped at MAX_TTL_SECONDS
 400 → { "error": "ttl_seconds_too_large" }      // > MAX_TTL_SECONDS
 401 → { "error": "caller_spiffe_missing" }      // no client cert
 403 → { "error": "caller_not_allowed" }         // SAN not in allowlist
-503 → { "error": "ca_unavailable" }             // warden-identity boot incomplete
+503 → { "error": "ca_unavailable" }             // clavenar-identity boot incomplete
 ```
 
 **The caller does not choose its own identity.** The issued SVID's
@@ -2959,20 +2959,20 @@ it can request is a fresh `service/brain` cert.
 The handler validates:
 
 1. The mTLS handshake produced a verified client cert chained to the
-   warden CA (failure → connection closed by rustls before the
+   clavenar CA (failure → connection closed by rustls before the
    handler runs).
 2. The cert's SAN URI matches one entry in
-   `WARDEN_IDENTITY_WORKLOAD_ALLOWED_CALLERS` (new env, defaults to
-   the existing `WARDEN_IDENTITY_SIGN_ALLOWED_CALLERS` value if
+   `CLAVENAR_IDENTITY_WORKLOAD_ALLOWED_CALLERS` (new env, defaults to
+   the existing `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS` value if
    unset — they describe the same caller set).
 3. The requested `ttl_seconds` ≤ `MAX_TTL_SECONDS` (3600).
 
 On success the handler:
 
 1. Generates a fresh keypair (`ed25519-dalek` or `ring` depending on
-   warden-identity's CA backend).
+   clavenar-identity's CA backend).
 2. Mints a cert valid for `ttl_seconds` (default 1800), SAN URI =
-   caller's SAN URI, signed by the warden CA.
+   caller's SAN URI, signed by the clavenar CA.
 3. Persists a `workload_svids` row (`id`, `spiffe_id`, `not_before`,
    `not_after`, `caller_kind` ∈ {`bootstrap`, `workload`} —
    distinguishes "first refresh after boot" from "background
@@ -2982,13 +2982,13 @@ On success the handler:
 5. Returns the cert + key + CA + lifetime.
 
 The handler **does not** echo the requesting caller's key material;
-key generation happens inside warden-identity to keep the trust
+key generation happens inside clavenar-identity to keep the trust
 chain anchored on identity-controlled randomness.
 
 **Why a new endpoint, not extending `/svid`?** Two reasons. (i)
 `/svid` carries agent-attestation semantics (`tenant`, `agent_name`,
 `AttestationEvidence`) and SPIFFE path
-`spiffe://warden.local/tenant/<>/agent/<>/instance/<uuid>`. Reusing
+`spiffe://clavenar.local/tenant/<>/agent/<>/instance/<uuid>`. Reusing
 the handler would mean a polymorphic body that branches on a
 `kind: workload` discriminator and skips most of the validation —
 adds risk without saving meaningful code. (ii) `/svid` is unauth at
@@ -3041,14 +3041,14 @@ new connections use the new SVID. Receive-side rustls's
 A single helper module owns the state machine, the atomic swap, and
 the client-side SPIFFE check. Two location candidates:
 
-- **Option A: New module in `warden-sdk`** — `warden_sdk::mtls`. Pros:
-  every service already depends on `warden-sdk` (the typed async
-  client surface) so no new dep edge. Cons: `warden-sdk` is the
+- **Option A: New module in `clavenar-sdk`** — `clavenar_sdk::mtls`. Pros:
+  every service already depends on `clavenar-sdk` (the typed async
+  client surface) so no new dep edge. Cons: `clavenar-sdk` is the
   *integrator* SDK consumed by external code; adding internal
   refresh plumbing widens its surface.
-- **Option B: New crate `warden-workload-identity`** — narrow scope,
+- **Option B: New crate `clavenar-workload-identity`** — narrow scope,
   zero external surface, depended on by every workspace service.
-  Pros: clean module boundary; `warden-sdk` stays integrator-facing.
+  Pros: clean module boundary; `clavenar-sdk` stays integrator-facing.
   Cons: one more crate in the workspace.
 
 The §11 open-question block locks the answer in session 2 — both
@@ -3068,10 +3068,10 @@ impl WorkloadIdentity {
 ```
 
 `from_env` reads the bootstrap-cert paths
-(`WARDEN_<SVC>_TLS_DIR`/`WARDEN_<SVC>_TLS_CA_PATH` etc.), the
+(`CLAVENAR_<SVC>_TLS_DIR`/`CLAVENAR_<SVC>_TLS_CA_PATH` etc.), the
 expected-peer allowlist
-(`WARDEN_<SVC>_EXPECTED_PEER_SPIFFE=spiffe://warden.local/service/identity,...`),
-and the refresh URL (`WARDEN_<SVC>_WORKLOAD_REFRESH_URL`, default
+(`CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE=spiffe://clavenar.local/service/identity,...`),
+and the refresh URL (`CLAVENAR_<SVC>_WORKLOAD_REFRESH_URL`, default
 `https://identity:8186/workload-svid` in compose; absent → refresh
 disabled, behave exactly as v1.x+2 — bootstrap-only).
 
@@ -3100,11 +3100,11 @@ and rustls closes the TLS connection before the HTTP layer
 sees the response.
 
 The check is **strict equality** against one entry in the list, not
-prefix-match. `spiffe://warden.local/service/policy-engine` matches
+prefix-match. `spiffe://clavenar.local/service/policy-engine` matches
 only itself; the allowlist is typically 1-3 entries (the legitimate
 servers this caller talks to).
 
-**Configuration:** `WARDEN_<SVC>_EXPECTED_PEER_SPIFFE` — comma-
+**Configuration:** `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` — comma-
 separated list. Per-caller (proxy, console, simulator, …), each with
 its own set. Missing env → check disabled (warn-mode log on each
 call); operators flip to enforce by setting the env. This staged
@@ -3112,7 +3112,7 @@ rollout means a misconfigured allowlist after a CA-root rotation
 fails open rather than taking the stack down — the v1.x+2 posture is
 strictly preserved as the warn-mode default.
 
-Helm chart `warden.backendEnvs` auto-injects the expected-peer envs
+Helm chart `clavenar.backendEnvs` auto-injects the expected-peer envs
 when `tlsBundle.secretName` is set, deriving the value from the
 graph (proxy talks to brain/policy/hil/identity; console talks to
 ledger/policy/hil/identity/agents — all already encoded in the
@@ -3120,13 +3120,13 @@ backend-URL helper).
 
 ### 7. Chain v3 forensic event
 
-Each successful `/workload-svid` mint emits to `warden.forensic`:
+Each successful `/workload-svid` mint emits to `clavenar.forensic`:
 
 ```json
 {
   "event_kind": "svid.workload_refreshed",
   "issued_id":  "<uuidv7>",
-  "spiffe_id":  "spiffe://warden.local/service/<name>",
+  "spiffe_id":  "spiffe://clavenar.local/service/<name>",
   "caller_kind": "bootstrap" | "workload",
   "ttl_seconds": 1800,
   "issued_at":  "2026-05-14T13:00:00Z",
@@ -3135,13 +3135,13 @@ Each successful `/workload-svid` mint emits to `warden.forensic`:
 ```
 
 Persisted as a chain v3 row with the standard signed envelope
-(`warden-identity` self-signs via Vault Transit or
+(`clavenar-identity` self-signs via Vault Transit or
 `Ed25519FileSigner`, same path the existing `svid.minted` event
 takes). The `caller_kind` field is the operator-relevant tell — a
 sustained run of `caller_kind=bootstrap` past pod-uptime + first-
 refresh-window flags a service whose refresh is failing.
 
-A new Grafana panel (`warden_identity_workload_refreshes_total{
+A new Grafana panel (`clavenar_identity_workload_refreshes_total{
 caller_kind, service }`) plus a stat-tile of "bootstrap-only services
 in the last 1h" lands in session 2.
 
@@ -3149,10 +3149,10 @@ in the last 1h" lands in session 2.
 
 | Failure | Behaviour | Reasoning |
 |---|---|---|
-| `warden-identity` unreachable on `/workload-svid` | Caller logs `warn`, retries with `1s/4s/16s` backoff; keeps current credential. After current credential expires: falls back to bootstrap cert. | Refresh is *additive*; the bootstrap path is always available. A long identity outage degrades to "running on bootstrap" — same posture as v1.x+2. |
-| `/workload-svid` returns 403 (`caller_not_allowed`) | Caller logs `error` once per backoff loop and continues to retry. Operator must extend `WARDEN_IDENTITY_WORKLOAD_ALLOWED_CALLERS` and roll identity. | Persistent 403 means the operator removed this service from the allowlist deliberately or accidentally — let the human notice; do not bake-in auto-decommission. |
+| `clavenar-identity` unreachable on `/workload-svid` | Caller logs `warn`, retries with `1s/4s/16s` backoff; keeps current credential. After current credential expires: falls back to bootstrap cert. | Refresh is *additive*; the bootstrap path is always available. A long identity outage degrades to "running on bootstrap" — same posture as v1.x+2. |
+| `/workload-svid` returns 403 (`caller_not_allowed`) | Caller logs `error` once per backoff loop and continues to retry. Operator must extend `CLAVENAR_IDENTITY_WORKLOAD_ALLOWED_CALLERS` and roll identity. | Persistent 403 means the operator removed this service from the allowlist deliberately or accidentally — let the human notice; do not bake-in auto-decommission. |
 | Server-side SPIFFE SAN-URI mismatch (client-side check) | rustls closes the TLS connection before the HTTP layer sees the response. Caller surfaces as a `reqwest::Error` with `is_request()` true; the existing retry / circuit-breaker logic on each call site handles it. | Cryptographic check, not policy — no body to read. |
-| `WARDEN_<SVC>_EXPECTED_PEER_SPIFFE` unset | Client-side check disabled (warn-mode log on each call). Connection succeeds against any warden-CA cert at the configured DNS name. | Staged rollout: v1.x+2 posture preserved as default; operators flip the env when ready to enforce. |
+| `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` unset | Client-side check disabled (warn-mode log on each call). Connection succeeds against any clavenar-CA cert at the configured DNS name. | Staged rollout: v1.x+2 posture preserved as default; operators flip the env when ready to enforce. |
 | Helper start failure (env missing, cert unparseable) | Service refuses to boot with a precise error message naming the missing env or unparseable file. | Misconfiguration must be loud — silent fall-back to a partial trust posture is the failure mode this slice exists to prevent. |
 | Vault Transit unreachable mid-refresh | Identity returns `503 signing_unavailable`; caller treats as transient (retry loop). | Same posture as v1.x+2 — Vault is a hard dep for identity. |
 
@@ -3169,11 +3169,11 @@ Five sessions, each independently shippable:
 
 | # | Scope | Touches | Status |
 |---|---|---|---|
-| 1 | **This section** — pre-agree the wire shape, refresh state machine, and SDK helper API. No code. | `warden-specs/TECH_SPEC.md` (this section), `warden-specs/FEATURES.md` §14.20 | **Shipped** v0.8.5 |
-| 2 | **Helper crate + `/workload-svid` endpoint + identity self-refresh.** Whichever location §11 Q1 settles for the helper. New endpoint on `warden-identity` with auth via the existing `service/*` allowlist. Chain v3 `svid.workload_refreshed` event. Identity itself adopts the helper as the first caller (proves the no-cold-start path). | `warden-sdk` (or `warden-workload-identity`), `warden-identity`, `warden-ledger` (chain v3 event type), `warden-specs/FEATURES.md` | **Queued** |
-| 3 | **Roll helper through proxy + brain + policy-engine.** Three services already speak mTLS on every receive path (B7 sessions 3+4). One-line callsite change: pass `WorkloadIdentity::rustls_server_config()` instead of static `RustlsConfig::from_pem` to `axum_server::bind_rustls`. Outbound `reqwest::Client` similarly. | `warden-proxy`, `warden-brain`, `warden-policy-engine` | **Queued** |
-| 4 | **Roll helper through ledger + hil + console + simulator + deep-review + demo-mint.** Same pattern as session 3 across the remaining six services. Receive-side dual-listener pattern (ledger, hil, identity) keeps both ports; only the mTLS port consumes the helper's server config. | `warden-ledger`, `warden-hil`, `warden-console`, `warden-simulator`, `warden-deep-review`, `warden-demo-mint` | **Queued** |
-| 5 | **Server-side SPIFFE SAN-URI check.** Flip every outbound caller from "warn-mode" (warn-log on missing env) to "enforce" by setting `WARDEN_<SVC>_EXPECTED_PEER_SPIFFE` in compose + helm chart. Verify end-to-end: stolen brain cert presented at the policy-engine DNS name → reqwest closes the connection with `ApplicationVerificationFailure`. | `warden-e2e/{prod,dev}/docker-compose.yml`, `warden-charts/charts/warden/values.yaml`, `warden-charts/charts/warden/templates/_helpers.tpl` | **Queued** |
+| 1 | **This section** — pre-agree the wire shape, refresh state machine, and SDK helper API. No code. | `clavenar-specs/TECH_SPEC.md` (this section), `clavenar-specs/FEATURES.md` §14.20 | **Shipped** v0.8.5 |
+| 2 | **Helper crate + `/workload-svid` endpoint + identity self-refresh.** Whichever location §11 Q1 settles for the helper. New endpoint on `clavenar-identity` with auth via the existing `service/*` allowlist. Chain v3 `svid.workload_refreshed` event. Identity itself adopts the helper as the first caller (proves the no-cold-start path). | `clavenar-sdk` (or `clavenar-workload-identity`), `clavenar-identity`, `clavenar-ledger` (chain v3 event type), `clavenar-specs/FEATURES.md` | **Queued** |
+| 3 | **Roll helper through proxy + brain + policy-engine.** Three services already speak mTLS on every receive path (B7 sessions 3+4). One-line callsite change: pass `WorkloadIdentity::rustls_server_config()` instead of static `RustlsConfig::from_pem` to `axum_server::bind_rustls`. Outbound `reqwest::Client` similarly. | `clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine` | **Queued** |
+| 4 | **Roll helper through ledger + hil + console + simulator + deep-review + demo-mint.** Same pattern as session 3 across the remaining six services. Receive-side dual-listener pattern (ledger, hil, identity) keeps both ports; only the mTLS port consumes the helper's server config. | `clavenar-ledger`, `clavenar-hil`, `clavenar-console`, `clavenar-simulator`, `clavenar-deep-review`, `clavenar-demo-mint` | **Queued** |
+| 5 | **Server-side SPIFFE SAN-URI check.** Flip every outbound caller from "warn-mode" (warn-log on missing env) to "enforce" by setting `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` in compose + helm chart. Verify end-to-end: stolen brain cert presented at the policy-engine DNS name → reqwest closes the connection with `ApplicationVerificationFailure`. | `clavenar-e2e/{prod,dev}/docker-compose.yml`, `clavenar-charts/charts/clavenar/values.yaml`, `clavenar-charts/charts/clavenar/templates/_helpers.tpl` | **Queued** |
 
 Sessions 2 and 5 are the only ones that materially change behavior;
 sessions 3 + 4 are mechanical callsite swaps once session 2 ships
@@ -3183,7 +3183,7 @@ credential, bootstrap as fallback only."
 
 ### 10. What this spec deliberately does not include
 
-- **Hot-reload of the warden CA root.** A CA-root rotation still
+- **Hot-reload of the clavenar CA root.** A CA-root rotation still
   requires re-running `gen_certs.sh` and rolling every Deployment.
   The workload SVID is signed by the CA root, so a root rotation
   invalidates every outstanding workload SVID; the bootstrap cert
@@ -3212,11 +3212,11 @@ credential, bootstrap as fallback only."
 The six originally-open questions are answered below — sessions 2–5
 proceed against these.
 
-1. **SDK helper location: new crate `warden-workload-identity`.**
+1. **SDK helper location: new crate `clavenar-workload-identity`.**
    Cleaner module boundary than folding mTLS plumbing into
-   `warden-sdk` (which stays integrator-facing). Every workspace
+   `clavenar-sdk` (which stays integrator-facing). Every workspace
    service that already speaks mTLS gains one path-dep on the new
-   crate; no widening of `warden-sdk`'s public surface. Trade-off
+   crate; no widening of `clavenar-sdk`'s public surface. Trade-off
    is one more crate in the workspace; that cost is one-time and
    small relative to the surface-area win.
 2. **Default `ttl_seconds`: 1800s (30min).** Halves the leak
@@ -3242,7 +3242,7 @@ proceed against these.
    of warn-only telemetry across every outbound caller (proxy,
    brain, policy-engine in session 3; ledger, hil, console,
    simulator, deep-review, demo-mint in session 4) before the
-   posture flip. A bad `WARDEN_<SVC>_EXPECTED_PEER_SPIFFE`
+   posture flip. A bad `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE`
    value fails open during warn-mode, loud-logs the mismatch,
    and the operator fixes it ahead of the flip. Cheaper than
    debugging a "stack didn't come up after upgrade" during the
@@ -3276,7 +3276,7 @@ response body. The Egress Inspector closes that blind spot: it scans the
 upstream response before relaying it to the agent.
 
 **Threat-model note.** Because the response must be fetched to be
-inspected, Warden blocks the response from reaching the **agent** — it
+inspected, Clavenar blocks the response from reaching the **agent** — it
 cannot un-compute what the upstream already produced. The block still
 prevents the agent (and anything downstream of it) from receiving the
 data. This is the correct and only model for a response-inspecting proxy.
@@ -3285,7 +3285,7 @@ data. This is the correct and only model for a response-inspecting proxy.
 
 1. After `forward_upstream` returns on the `Authorized` or HIL-approved
    arm, the proxy runs a cheap **inline pre-filter** on the response body
-   (`warden-proxy/src/egress.rs`): Shannon entropy `>` threshold OR size
+   (`clavenar-proxy/src/egress.rs`): Shannon entropy `>` threshold OR size
    `>` threshold. Neither tripping ⇒ relay unchanged (no LLM call).
 2. On a trip, the proxy POSTs the body to Brain `POST /scan-response`
    (below). The body is sent **unmasked** — detecting the PII is the point.
@@ -3305,7 +3305,7 @@ data. This is the correct and only model for a response-inspecting proxy.
    proxy outage. (Contrast the *request* pipeline, which fails closed.)
 
 5. **Off by default.** The whole layer is inert unless
-   `WARDEN_PROXY_EGRESS_SCAN_TOOLS` names at least one MCP method.
+   `CLAVENAR_PROXY_EGRESS_SCAN_TOOLS` names at least one MCP method.
 
 ### Brain wire shape — `POST /scan-response`
 
@@ -3334,7 +3334,7 @@ Response (`ScanResponseVerdict`):
 `detected_entities` carries entity **type** labels only — never raw
 values — so the verdict is safe to log and show an approver. The detector
 model is configured by `detectors.scan_response` in
-`WARDEN_BRAIN_MODELS_FILE`; unset falls back to the `pii` provider.
+`CLAVENAR_BRAIN_MODELS_FILE`; unset falls back to the `pii` provider.
 
 ### Forensic recording (Layer 4)
 
@@ -3346,7 +3346,7 @@ queryable `signal` column (vocabulary extended with `egress_violation`,
 to `reasoning` as `| egress: <detail>`. An inline-deny row reads
 `authorized: false` with `intent_category = "EgressBlocked"`. Rows join
 the originating request by `correlation_id`. Under
-`WARDEN_PROXY_EGRESS_MODE=observe` (or the proxy-wide `WARDEN_MODE=observe`)
+`CLAVENAR_PROXY_EGRESS_MODE=observe` (or the proxy-wide `CLAVENAR_MODE=observe`)
 the layer classifies but never blocks or escalates — it records the
 `would_deny_egress` / `would_pend_egress` signal and forwards regardless,
 so egress can be soaked on live traffic while the request pipeline keeps
@@ -3356,14 +3356,14 @@ enforcing.
 
 | Service | Var | Default |
 |---|---|---|
-| proxy | `WARDEN_PROXY_EGRESS_SCAN_TOOLS` (CSV of tool names — MCP `params.name`, e.g. `read_file`; the JSON-RPC method also matches) | `""` (off) |
-| proxy | `WARDEN_PROXY_EGRESS_MODE` (`enforce`\|`observe`) | `enforce` |
-| proxy | `WARDEN_BRAIN_SCAN_URL` | `WARDEN_BRAIN_URL` with `/inspect`→`/scan-response` |
-| proxy | `WARDEN_PROXY_EGRESS_ENTROPY_THRESHOLD` | `6.5` |
-| proxy | `WARDEN_PROXY_EGRESS_SIZE_THRESHOLD_BYTES` | `65536` |
-| proxy | `WARDEN_PROXY_EGRESS_MAX_RESPONSE_BYTES` | `10000000` |
-| proxy | `WARDEN_PROXY_EGRESS_DENY_CONFIDENCE` | `0.95` |
-| proxy | `WARDEN_PROXY_EGRESS_REVIEW_CONFIDENCE` | `0.5` |
+| proxy | `CLAVENAR_PROXY_EGRESS_SCAN_TOOLS` (CSV of tool names — MCP `params.name`, e.g. `read_file`; the JSON-RPC method also matches) | `""` (off) |
+| proxy | `CLAVENAR_PROXY_EGRESS_MODE` (`enforce`\|`observe`) | `enforce` |
+| proxy | `CLAVENAR_BRAIN_SCAN_URL` | `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-response` |
+| proxy | `CLAVENAR_PROXY_EGRESS_ENTROPY_THRESHOLD` | `6.5` |
+| proxy | `CLAVENAR_PROXY_EGRESS_SIZE_THRESHOLD_BYTES` | `65536` |
+| proxy | `CLAVENAR_PROXY_EGRESS_MAX_RESPONSE_BYTES` | `10000000` |
+| proxy | `CLAVENAR_PROXY_EGRESS_DENY_CONFIDENCE` | `0.95` |
+| proxy | `CLAVENAR_PROXY_EGRESS_REVIEW_CONFIDENCE` | `0.5` |
 | brain | `detectors.scan_response` (YAML) | unset → `pii` provider |
 
 Per-tool entropy baselines (to suppress naturally-high-entropy tools) are
@@ -3373,7 +3373,7 @@ a documented future tunable; v1 uses one global threshold.
 
 ## Threat model
 
-The five system-wide threats Warden treats as in-scope, plus where
+The five system-wide threats Clavenar treats as in-scope, plus where
 each one's mitigation lives. STRIDE per-layer detail follows below.
 
 ```mermaid
@@ -3384,10 +3384,10 @@ flowchart LR
   T4[T4 — Insider replays a ledger row claiming the agent did it]
   T5[T5 — Human user repudiates an HIL approval — not me]
 
-  L1[Layer 1 — warden-proxy]
-  ID[warden-identity]
-  L3[Layer 3 — warden-policy-engine]
-  L4[Layer 4 — warden-ledger]
+  L1[Layer 1 — clavenar-proxy]
+  ID[clavenar-identity]
+  L3[Layer 3 — clavenar-policy-engine]
+  L4[Layer 4 — clavenar-ledger]
 
   T1 -->|cert TTL up to 1h, attested issuance| L1
   T1 -->|short-lived SVID minting| ID
@@ -3402,7 +3402,7 @@ flowchart LR
 ```
 
 
-This document is the public threat model for Agent Warden. It is written
+This document is the public threat model for Clavenar. It is written
 for two audiences:
 
 1. **Security reviewers and pen-testers** — to know precisely where to
@@ -3426,12 +3426,12 @@ wins.
 ```
                             ┌────────────────────────┐
                             │   Operator             │  human, browser, mTLS
-                            │  (console / wardenctl) │
+                            │  (console / clavenarctl) │
                             └────────────┬───────────┘
                                          │ HTTPS + bearer (OIDC)
                                          ▼
 ┌───────────────┐   mTLS    ┌────────────────────────┐
-│   AI agent    │──────────▶│  warden-proxy (L1)     │
+│   AI agent    │──────────▶│  clavenar-proxy (L1)     │
 │  (any LLM)    │   SVID    │  port 8443             │
 └───────────────┘           │  • mTLS termination    │
                             │  • SPIFFE SAN parse    │
@@ -3444,14 +3444,14 @@ wins.
               ┌───────────────┘   │      │      └───────────────┐
               ▼                   ▼      ▼                      ▼
     ┌─────────────┐   ┌──────────────────┐   ┌──────────────┐  ┌─────────────┐
-    │ warden-brain│   │ warden-policy    │   │ warden-hil   │  │warden-      │
+    │ clavenar-brain│   │ clavenar-policy    │   │ clavenar-hil   │  │clavenar-      │
     │ (L2, 8081)  │   │ -engine (L3,8082)│   │ (8084)       │  │ identity    │
     └──────┬──────┘   └────────┬─────────┘   └──────┬───────┘  │ (8086)      │
            │                   │                    │          └──────┬──────┘
-           │   NATS (warden.forensic) ─────────────────────────────────┤
+           │   NATS (clavenar.forensic) ─────────────────────────────────┤
            ▼                   ▼                    ▼                  ▼
                        ┌────────────────────────────────────┐
-                       │         warden-ledger (L4, 8083)    │
+                       │         clavenar-ledger (L4, 8083)    │
                        │ SQLite + hash chain v1/v2/v3        │
                        └────────────────────────────────────┘
 ```
@@ -3471,7 +3471,7 @@ External trust dependencies:
 - **OIDC IdP** — operator and capability-resolver auth.
 - **The operator's browser session** — console SSE + htmx + WebAuthn.
 
-### Layer 1 — warden-proxy
+### Layer 1 — clavenar-proxy
 
 The proxy is the single ingress for agent traffic. Everything else is
 defense-in-depth behind it.
@@ -3483,7 +3483,7 @@ defense-in-depth behind it.
 | An unauthenticated agent calls the proxy. | mTLS-only — `WebPkiClientVerifier` validates the cert chain against the proxy's CA root before any handler runs. |
 | An agent presents a peer's certificate (replay). | The proxy's TLS stack only accepts the cert if the private key is held by the connecting peer (TLS finished MAC). Stolen private keys are still a real threat → defended by identity action signing + per-action JTI. |
 | An agent forges an SVID by editing the SAN URI. | The SAN is bound to the cert by the issuing CA's signature. A forged SAN means a forged cert means chain verification fails. |
-| A peer Warden cell mints an A2A token for a tenant it doesn't own. | `warden-identity` `/actor-token/redeem` consults the federation bundle and rejects with `peer_bundle_unknown:<td>` if the issuer isn't in the configured peer set. |
+| A peer Clavenar cell mints an A2A token for a tenant it doesn't own. | `clavenar-identity` `/actor-token/redeem` consults the federation bundle and rejects with `peer_bundle_unknown:<td>` if the issuer isn't in the configured peer set. |
 
 #### Tampering
 
@@ -3491,13 +3491,13 @@ defense-in-depth behind it.
 |---|---|
 | Network MitM modifies the JSON-RPC body in flight. | mTLS provides record-layer integrity. Plaintext is never on the wire. |
 | An agent edits the `source` header to claim simulator origin. | `source` is metadata only, **not in the hashable** — untrusted by design. The console's "hide simulated traffic" filter is convenience, not authorization. |
-| An agent sets `x-warden-actor-token` to bypass A2A verification. | Tokens are JWTs signed by the issuing identity; signature verification is what makes the bypass attempt fail, not the absence of the header. |
+| An agent sets `x-clavenar-actor-token` to bypass A2A verification. | Tokens are JWTs signed by the issuing identity; signature verification is what makes the bypass attempt fail, not the absence of the header. |
 
 #### Repudiation
 
 | Threat | Defense |
 |---|---|
-| An agent claims it never made a request. | Every verdict emits a forensic event keyed on a UUIDv4 `correlation_id`. The chain v2/v3 entries carry per-action signatures from `warden-identity` `/sign`, so the agent's identity is cryptographically anchored to each entry. |
+| An agent claims it never made a request. | Every verdict emits a forensic event keyed on a UUIDv4 `correlation_id`. The chain v2/v3 entries carry per-action signatures from `clavenar-identity` `/sign`, so the agent's identity is cryptographically anchored to each entry. |
 
 #### Information disclosure
 
@@ -3510,7 +3510,7 @@ defense-in-depth behind it.
 
 | Threat | Defense |
 |---|---|
-| An agent floods `handle_mcp` to exhaust upstream quota. | `warden-policy-engine`'s velocity tracker (`InProcessTracker` or `NatsKvTracker`) breaks the circuit per-agent on configurable thresholds. |
+| An agent floods `handle_mcp` to exhaust upstream quota. | `clavenar-policy-engine`'s velocity tracker (`InProcessTracker` or `NatsKvTracker`) breaks the circuit per-agent on configurable thresholds. |
 | Brain/Anthropic call latency cascades. | Brain has per-call timeout + Voyage embedding fallback. Policy verdict resolves even if Brain is slow (`authorized=false` defaults to `intent_score=0.5`, which fails the policy gate — fail-closed). |
 | Slowloris on the mTLS handshake. | axum's hyper backend has connection-level read timeouts. |
 
@@ -3521,7 +3521,7 @@ defense-in-depth behind it.
 | An agent escalates from auto-allow tier to wire-transfer tier by altering the JSON-RPC `method`. | Policy rego is keyed on `tool_type`, which the proxy derives from `method` — not from any agent-supplied field. The mapping table is server-side. |
 | An agent bypasses HIL by abandoning the long-poll. | `forward_upstream` only fires on `Authorized` or HIL-Approved. A timed-out long-poll resolves to 403, never auto-Approve. |
 
-### Layer 2 — warden-brain
+### Layer 2 — clavenar-brain
 
 Semantic inspection. Five signals: intent classifier (Haiku), persona
 drift (Haiku), indirect-injection scanner (Haiku + heuristic),
@@ -3532,7 +3532,7 @@ typosquat shape check; gated on shell-shape methods +
 package-manager prefix regex). The last two land verdicts via the
 same `intent_category` + `authorized` axes as the classifier — no
 schema change. Bundled list lives in
-`warden-brain/data/compromised_packages.json` and refreshes weekly
+`clavenar-brain/data/compromised_packages.json` and refreshes weekly
 via an OSV.dev cron PR.
 
 #### Spoofing & Tampering
@@ -3546,7 +3546,7 @@ k8s NetworkPolicy) is the perimeter.
 mTLS to the proxy↔brain, proxy↔policy, proxy↔hil, proxy↔identity links
 so an attacker who lands on the cluster's overlay network cannot speak
 directly to the brain and forge `BrainRequest` payloads. Substrate
-decided (warden-identity SVIDs over a single warden CA); implementation
+decided (clavenar-identity SVIDs over a single clavenar CA); implementation
 deferred to v1.x+2.
 
 #### Repudiation
@@ -3577,7 +3577,7 @@ A compromised brain that returns `authorized=true` for everything would
 fail-open at L2 only — Layer 3 (policy) still has independent veto, and
 Layer 4 (ledger) still records the verdict. Defense-in-depth.
 
-### Layer 3 — warden-policy-engine
+### Layer 3 — clavenar-policy-engine
 
 Pure-Rust Rego (`regorus`) over `policies/*.rego`. Policy data is
 file-system-loaded.
@@ -3607,17 +3607,17 @@ NATS-KV backend rebalances under JetStream's own retention policy.
 Pure Rego cannot escape the policy engine. `regorus` is sandboxed —
 no host bridge.
 
-### Layer 4 — warden-ledger
+### Layer 4 — clavenar-ledger
 
 SHA-256 hash-chained, SQLite-backed forensic store. Subscribes to
-`warden.forensic` on NATS.
+`clavenar.forensic` on NATS.
 
 #### Tampering
 
 | Threat | Defense |
 |---|---|
 | An attacker edits a row in the SQLite DB directly. | The hash chain detects it on the next `verify_chain` call — every entry's `entry_hash` covers the previous `prev_hash`, so any single-row edit invalidates every later row. Operator runbook ("ledger chain invalid" in [Runbooks](#runbooks)) covers detection. |
-| An attacker adds a row claiming a forensic event that never happened. | Same — the new row has to satisfy the chain or it's detected. Chain v2/v3 rows carry per-action signatures from `warden-identity` `/sign`; an attacker forging both the chain and the signature needs the identity service's signing key. |
+| An attacker adds a row claiming a forensic event that never happened. | Same — the new row has to satisfy the chain or it's detected. Chain v2/v3 rows carry per-action signatures from `clavenar-identity` `/sign`; an attacker forging both the chain and the signature needs the identity service's signing key. |
 | An attacker replays a NATS forensic message. | NATS at-least-once semantics already mean the ledger may see duplicate publishes. Each `LogRequest` is content-hashed; duplicate appends produce identical `entry_hash`, which `record_entry` deduplicates by `(correlation_id, source_layer)`. |
 
 #### Repudiation
@@ -3637,9 +3637,9 @@ Append throughput is SQLite-bounded. NATS subscriber is single-threaded
 by design (chain order matters). Operator runbook covers backlog
 diagnosis.
 
-### warden-deep-review
+### clavenar-deep-review
 
-Async forensic auditor. Subscribes to the same `warden.forensic`
+Async forensic auditor. Subscribes to the same `clavenar.forensic`
 subject the ledger consumes from; emits findings via three new
 `method` values on the existing `LogRequest` envelope. See
 [Forensic-tier deep review](#forensic-tier-deep-review) for the
@@ -3674,7 +3674,7 @@ applies (Opus is separate from any agent's primary LLM).
 
 PII regex masking runs before the vendor call (see §7 of
 [Forensic-tier deep review](#forensic-tier-deep-review)). The
-mock-mode path (`WARDEN_DEEP_REVIEW_ANTHROPIC_API_KEY=mock-key`)
+mock-mode path (`CLAVENAR_DEEP_REVIEW_ANTHROPIC_API_KEY=mock-key`)
 bypasses the vendor entirely and is used by e2e + CI.
 
 #### Denial of service
@@ -3683,7 +3683,7 @@ bypasses the vendor entirely and is used by e2e + CI.
   soft-fail + `deep_review_failed` sentinel make each per-event
   failure recoverable; the consumer keeps advancing.
 - **Token bomb.** A pathological attacker who can publish to
-  `warden.forensic` could try to drive deep-review into a budget
+  `clavenar.forensic` could try to drive deep-review into a budget
   exhaustion that hides their own subsequent events from review.
   Daily token cap defends against catastrophic spend; `_skipped`
   sentinels make the coverage gap auditable. The real defense is
@@ -3699,7 +3699,7 @@ A compromised deep-review can only forge `deep_review_*` rows; the
 brain → proxy → policy → ledger pipeline is unaffected by its
 verdicts. Defense-in-depth.
 
-### warden-hil
+### clavenar-hil
 
 Pending → Approved/Denied/Expired state machine for Yellow-tier
 requests.
@@ -3728,7 +3728,7 @@ operator's identity is on the row.
 |---|---|
 | An attacker auto-approves their own request. | OIDC + RBAC. The `approver` role is required to call `decide`. WebAuthn step-up adds a possession factor. |
 
-### warden-identity
+### clavenar-identity
 
 SVID issuance, OIDC delegation grants, per-action signing, SPIFFE
 federation, agent registry / lifecycle.
@@ -3737,10 +3737,10 @@ federation, agent registry / lifecycle.
 
 | Threat | Defense |
 |---|---|
-| An attacker calls `/sign` directly to mint a chain signature for a forged event. | `X-Caller-Spiffe` allowlist (`WARDEN_IDENTITY_SIGN_ALLOWED_CALLERS`). The identity service refuses signing requests from any SPIFFE ID not in the allowlist. |
+| An attacker calls `/sign` directly to mint a chain signature for a forged event. | `X-Caller-Spiffe` allowlist (`CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS`). The identity service refuses signing requests from any SPIFFE ID not in the allowlist. |
 | An attacker calls `/svid` to mint a cert for an arbitrary `agent_id`. | The agent registry (enforce mode) gates `/svid` on `(tenant, agent_name)` registration + lifecycle state. `unregistered_agent`, `agent_suspended`, `agent_decommissioned`, `scope_outside_envelope` all reject. |
 | An attacker calls `/grant` to forge an OIDC delegation. | The IdP-issued bearer is verified against the trusted IdP's JWKS before any grant is minted. |
-| An attacker mints an A2A token for a foreign tenant. | `/actor-token` is gated on `WARDEN_IDENTITY_SIGN_ALLOWED_CALLERS`. Cross-tenant minting requires the federation bundle exchange. |
+| An attacker mints an A2A token for a foreign tenant. | `/actor-token` is gated on `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS`. Cross-tenant minting requires the federation bundle exchange. |
 
 #### Repudiation
 
@@ -3750,17 +3750,17 @@ operator actions are anchored.
 
 #### Information disclosure
 
-Private keys never leave Vault on the production path. `warden-identity` holds no private
+Private keys never leave Vault on the production path. `clavenar-identity` holds no private
 key material in-process: every signature goes out over the `vaultrs`
 client to Vault Transit (`transit/sign/<key>`). The identity service's
 own surface exposes only public material — JWKS at `GET /jwks.json`
 and the federation bundle at `GET /.well-known/spiffe-bundle`. A
 compromise of the identity host doesn't compromise the signing key;
 rotating the issuer is a `vault write -f transit/keys/<name>/rotate`,
-not a Warden code path. The OSS / `warden-lite` alt-backend
+not a Clavenar code path. The OSS / `clavenar-lite` alt-backend
 (`Ed25519FileSigner`, shipped v0.6.6) deliberately trades this
 property for operational simplicity — it loads a PKCS#8 PEM key from
-`WARDEN_IDENTITY_SIGNING_KEY_PATH` and holds it in process memory.
+`CLAVENAR_IDENTITY_SIGNING_KEY_PATH` and holds it in process memory.
 Operators choosing the file backend should treat the host as
 sensitive (read-protected key file, no debug shell access, audited
 container build) since a host compromise leaks the signing key.
@@ -3783,7 +3783,7 @@ to re-onboard. Documented in [Runbooks](#runbooks) §5 "identity
 service unreachable" (operational outage) and §6 "issuer-key
 compromise" (this incident class).
 
-### warden-console
+### clavenar-console
 
 Operator UI. Reads ledger, drives HIL approve/deny, manages WAO
 agent registry.
@@ -3793,7 +3793,7 @@ agent registry.
 | Threat | Defense |
 |---|---|
 | An attacker accesses the console without operator auth. | OIDC + WebAuthn (HIL holds passkeys; console proxies the ceremony). All routes except `/health` require an authenticated session. |
-| An attacker abuses the `/sim` panel to flood the simulator. | The `/sim` panel only proxies to `WARDEN_SIMULATOR_URL`; the simulator's admin server is unauthenticated and only loopback-bound by default. In production deployments the simulator is not deployed. |
+| An attacker abuses the `/sim` panel to flood the simulator. | The `/sim` panel only proxies to `CLAVENAR_SIMULATOR_URL`; the simulator's admin server is unauthenticated and only loopback-bound by default. In production deployments the simulator is not deployed. |
 | An attacker tampers with the audit feed via SSE. | `/stream/audit` is read-only; the SSE stream is authenticated. |
 
 #### Information disclosure
@@ -3836,7 +3836,7 @@ threats are real but addressed elsewhere or deferred deliberately.
 - **Insider threat from a fully compromised operator.** An operator
   with `admin` role + WebAuthn passkey can do anything an admin could
   do. The chain records what they did, but does not prevent it. This
-  is a board / audit-committee concern, not a Warden control.
+  is a board / audit-committee concern, not a Clavenar control.
 - **Physical access to the deployment host.** SQLite + private keys
   on disk; physical access defeats both. Customer's hosting
   responsibility.
@@ -3849,7 +3849,7 @@ threats are real but addressed elsewhere or deferred deliberately.
   single-tenant per deployment. Multi-tenant SaaS is a year-2
   product question.
 - **Client-side typosquatting against `vanteguardlabs.com`.** Domain
-  hygiene, not a Warden control.
+  hygiene, not a Clavenar control.
 - **DoS that requires resource limits the deployment guide already
   documents.** Operator's deployment configuration responsibility.
 

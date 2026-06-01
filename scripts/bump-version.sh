@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Anchor to warden-specs root regardless of CWD.
+# Anchor to clavenar-specs root regardless of CWD.
 cd "$(dirname "$0")/.."
 
 MODE="patch"
@@ -31,7 +31,7 @@ esac
 new="${major}.${minor}.${patch}"
 
 # VERSION is the source of truth for "what version we're on". The
-# served version per env lives in warden-e2e/<env>/version.json
+# served version per env lives in clavenar-e2e/<env>/version.json
 # and is updated by that env's deploy.sh on a successful
 # `compose up -d`. Bumping here doesn't change what visitors see
 # until you actually deploy.
@@ -42,8 +42,8 @@ git -c user.name=VanteguardLabs -c user.email=vanteguardlabs@gmail.com \
     commit -m "bump to ${new}"
 git push origin main
 
-# Mirror into warden-website/public/version.json so a local-dev clone
-# of the website (`cd warden-website && python -m http.server` etc.)
+# Mirror into clavenar-website/public/version.json so a local-dev clone
+# of the website (`cd clavenar-website && python -m http.server` etc.)
 # shows the bumped version in the footer immediately on next pull —
 # without waiting for an env deploy.sh run. The prod / dev compose
 # stacks override this with the env-local version.json bind-mount,
@@ -54,7 +54,7 @@ git push origin main
 # bump itself. The "if file changed" guard means a no-op bump
 # (script ran twice, second time same version) doesn't churn the
 # website repo's history.
-website_dir="../warden-website"
+website_dir="../clavenar-website"
 if [ -f "${website_dir}/public/version.json" ]; then
     printf '{"version":"%s"}\n' "$new" > "${website_dir}/public/version.json"
     if ! git -C "$website_dir" diff --quiet -- public/version.json; then
