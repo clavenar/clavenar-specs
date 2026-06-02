@@ -18,6 +18,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
 - [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (designed; implementation v1.x+3)
+- [Agent-facing error envelope](#agent-facing-error-envelope) — the shared JSON 403/429/503 body the data plane returns to callers
 - [Threat model](#threat-model) — STRIDE-organized, layer-by-layer
 - [Runbooks](#runbooks) — five on-call failure modes
 
@@ -3368,6 +3369,48 @@ enforcing.
 
 Per-tool entropy baselines (to suppress naturally-high-entropy tools) are
 a documented future tunable; v1 uses one global threshold.
+
+---
+
+## Agent-facing error envelope
+
+Every non-2xx the data plane returns to a caller — `clavenar-proxy`'s
+`/mcp` and `/tool/{name}`, and `clavenar-lite`'s `/mcp` — serializes as
+one JSON envelope (`Content-Type: application/json`). It tells the caller
+which stage rejected the request, why, and which `correlation_id` to
+quote when pulling the audit row. The full edition and Lite share the
+shape; the SDKs (`clavenar-sdk`, `clavenar-ai-sdk`, `clavenar-ai-py`)
+parse it into their typed `Veto` / `ClavenarDenied` surfaces.
+
+```json
+{
+  "verdict": "denied",
+  "layer": "policy",
+  "error": "security_violation",
+  "reasons": ["Wire transfers require human approval before execution."],
+  "review_reasons": [],
+  "intent_category": "DangerousTool",
+  "correlation_id": "a1b2c3d4-…",
+  "retry_after_secs": null
+}
+```
+
+| Field | Notes |
+|---|---|
+| `verdict` | `denied` · `review_denied` · `review_expired` · `rate_limited` · `error` (infra/pipeline failure). |
+| `layer` | Stage that produced the rejection: `brain` · `policy` · `hil` · `egress` · `identity` · `upstream` · `gateway` · `proxy`. |
+| `error` | Stable machine code (`security_violation`, `egress_blocked`, `review_denied`, `grant_expired`, `a2a_redeem_failed`, `rate_limited`, `pipeline_unavailable`, …). |
+| `reasons` | Human-readable deny reasons — the Rego strings, Brain reasoning, or a single infra message. Omitted when empty. |
+| `review_reasons` | Yellow-tier reasons, when the rejection followed a held request. Omitted when empty. |
+| `intent_category` | Brain intent bucket, when a verdict was reached. Omitted otherwise. |
+| `correlation_id` | Always present on rejections; also on the `X-Clavenar-Correlation-Id` header (the header is authoritative). |
+| `retry_after_secs` | Seconds to wait before retrying, on `rate_limited`. Omitted otherwise. |
+
+HTTP status is unchanged by this contract (403 for denies/holds, 429 for
+rate limits, 503 for HIL/identity unavailable, 400 for malformed). The
+body shape is additive: consumers that only read the status code or the
+correlation header are unaffected, and SDKs that predate the envelope
+fall back to treating the raw body as opaque text.
 
 ---
 
