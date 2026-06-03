@@ -1623,7 +1623,7 @@ The four operational tradeoffs that gated the green light, all confirmed at the 
 ## Console policy management
 
 
-Companion to [Console config page](#console-config-page) (read-only diagnostic) and the policy-engine description in `README.md` §11.2 ("Layer 3 — The Law"). Where the config page exposes deployment metadata and four-backend health probes, this section adds a *write* surface: viewing, editing, activating, deactivating, and deleting the `*.rego` and `*.json` files that `clavenar-policy-engine` loads.
+Companion to [Console config page](#console-config-page) (read-only diagnostic) and the policy-engine description in `README.md` §6 ("Layer 3 — governance & policy-as-code"). Where the config page exposes deployment metadata and four-backend health probes, this section adds a *write* surface: viewing, editing, activating, deactivating, and deleting the `*.rego` and `*.json` files that `clavenar-policy-engine` loads.
 
 **Module status:** **shipped.** Lives in `clavenar-policy-engine` (SQLite-backed policy store, write API, atomic engine rebuild, NATS-published outbox), `clavenar-console` (`/policies` surface + `Role::Admin`), `clavenar-sdk` (`PoliciesClient`), and `clavenar-ledger` (consumes new `policy.*` chain v3 event kinds — no schema bump, chain v3 is event-kind-polymorphic). End-to-end coverage in `clavenar-e2e/dev/run-policies.sh`.
 
