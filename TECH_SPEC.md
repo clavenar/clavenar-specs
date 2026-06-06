@@ -20,7 +20,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (designed; implementation v1.x+3)
 - [Agent-facing error envelope](#agent-facing-error-envelope) — the shared JSON 403/429/503 body the data plane returns to callers
 - [Threat model](#threat-model) — STRIDE-organized, layer-by-layer
-- [Runbooks](#runbooks) — five on-call failure modes
+- [Runbooks](#runbooks) — operational; maintained privately
 
 ---
 
@@ -47,9 +47,9 @@ authoritative wire-contract detail still lives in those sections.
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | designed (implementation v1.x+3) | — | `clavenar-identity` (issuer), every internal service (consumer) |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
-| 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures, no new service) |
+| 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
 
-Versions in the **Landed** column reference `clavenar-specs/VERSION`
+Versions in the **Landed** column reference `clavenar-internal-specs/VERSION`
 (the demo-VPS deploy axis) or chain versions where the wire schema
 moved. Modules without a single landed version were rolled in over
 several patches and the per-section "Module status" line carries the
@@ -2408,7 +2408,7 @@ Companion to [Layer 2 — clavenar-brain](#layer-2--clavenar-brain) (sub-second 
 
 **This service does not gate live traffic.** HIL is the inline blocking surface; deep-review is retrospective by design. A vendor outage, a quota burst, or a slow review must never back up the audit stream and starve brain → ledger writes. Every failure mode soft-fails per event with a queryable sentinel.
 
-**Module status:** **shipped 2026-05-13** at `clavenar-specs/VERSION` 0.6.0. Lives in `clavenar-deep-review` (new repo, NATS consumer + LLM provider trait + per-agent history ring buffer + budget + retry + alert sink), wired into `clavenar-e2e/{prod,dev}/docker-compose.yml` as a service in the `stack` profile, and into `clavenar-charts/charts/clavenar/` as `services.deepReview` (shipped 2026-05-14 at version 0.7.0; chart covers the full eight-service stack). **Adjacent surfaces deferred:** published baseline-accuracy benchmark against real Opus.
+**Module status:** **shipped 2026-05-13** at `clavenar-internal-specs/VERSION` 0.6.0. Lives in `clavenar-deep-review` (new repo, NATS consumer + LLM provider trait + per-agent history ring buffer + budget + retry + alert sink), wired into `clavenar-e2e/{prod,dev}/docker-compose.yml` as a service in the `stack` profile, and into `clavenar-charts/charts/clavenar/` as `services.deepReview` (shipped 2026-05-14 at version 0.7.0; chart covers the full eight-service stack). **Adjacent surfaces deferred:** published baseline-accuracy benchmark against real Opus.
 
 ### 1. What this closes
 
@@ -3896,6 +3896,10 @@ threats are real but addressed elsewhere or deferred deliberately.
 - **DoS that requires resource limits the deployment guide already
   documents.** Operator's deployment configuration responsibility.
 
+### Open items
+
+Tracked threat-model gaps and forward-looking roadmap items are
+maintained privately in `clavenar-internal-specs/ROADMAP.md`.
 
 ### Reporting
 
@@ -3906,3 +3910,9 @@ triage faster.
 
 ---
 
+## Runbooks
+
+On-call runbooks — proxy / NATS / ledger / HIL / identity failure
+modes, issuer-key compromise, and routine issuer-key rotation — are
+operational procedures maintained privately in
+`clavenar-internal-specs/RUNBOOKS.md`, not in this public spec.
