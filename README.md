@@ -8,8 +8,7 @@ reaches a tool, a database, or money.
 **Why this exists.** AI agents are non-deterministic software with the access of
 an insider and none of the oversight. Firewalls, EDR, and IAM govern *identity*
 and *access*; they are blind to *intent*. Clavenar adds the missing column — the
-guardrail that lets an enterprise run autonomous agents at full speed. The market,
-moat, pricing, and exit thesis live in [`STRATEGY.md`](STRATEGY.md).
+guardrail that lets an enterprise run autonomous agents at full speed.
 
 ### Document map
 
@@ -19,7 +18,6 @@ moat, pricing, and exit thesis live in [`STRATEGY.md`](STRATEGY.md).
 | [`TECH_SPEC.md`](TECH_SPEC.md) | Every wire contract — the source of truth. |
 | [`FEATURES.md`](FEATURES.md) | Per-feature claims with copy-paste verification commands. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | C4 context + container view, deployment topology, demo-prefix flow, trust chain. |
-| [`STRATEGY.md`](STRATEGY.md) | Market, competitive landscape, pricing, exit thesis. |
 
 ### Glossary
 
@@ -764,8 +762,7 @@ through **NIST AI 100-1** and **DORA**.
 ### Longer-horizon product bets
 
 Three modules each pull Clavenar into a new category, uniquely enabled by the
-four-layer substrate. The market case for each is in
-[`STRATEGY.md` §4](STRATEGY.md#4-the-next-horizon-product-bets-for-20262027).
+four-layer substrate.
 
 - **Counterfactual policy replay.** Re-evaluate a draft Rego rule against the last
   90 days of real `PolicyInput` from the ledger — byte-deterministically — to
@@ -795,5 +792,4 @@ This document is the narrative. The shipped runtime lives in sibling repos.
 
 For per-feature claims with copy-paste verification commands and expected output,
 see [`./FEATURES.md`](./FEATURES.md). For design records, the threat model, and
-on-call runbooks, see [`./TECH_SPEC.md`](./TECH_SPEC.md). For the business case,
-see [`./STRATEGY.md`](./STRATEGY.md).
+on-call runbooks, see [`./TECH_SPEC.md`](./TECH_SPEC.md).
