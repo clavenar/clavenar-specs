@@ -1099,6 +1099,22 @@ tar -xzf bundle.tar.gz
 cat README.txt
 ```
 
+### 7.5 Continuous compliance evidence (Article 14/15 + SOC 2 / ISO 27001)
+
+**Concept.** The Article 11/12 bundle covers documentation + logging. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), plus the operational-monitoring controls auditors ask about under SOC 2 / ISO 27001, are *auto-derived from the chain* — no operator prose required. A live JSON register the operator renders at `/compliance` and downloads as a signed pack. It is evidence projection, not a legal conformity assessment, and says so on the wire.
+
+**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of five seed controls (`EU-AI-Act-Article-14`, `-15`, `ISO-27001-8.13`, `SOC2-CC7.2`, `SOC2-CC7.3`), each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v1: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, representative `sample_seqs`, and a narrative). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (manifest **v4**, committed by sha256, `article_scope` widened to 14 + 15) — both go through one derivation function so the live view and the bundled artifact agree. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`); Article 15 from deny-signal distribution + `verify_chain` pass + signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
+
+**Verify.**
+
+```bash
+# Live register
+clavenarctl regulatory export --from <RFC3339> --to <RFC3339> \
+  --include-compliance --output pack.tar.gz
+tar -xzf pack.tar.gz && cat clavenar-regulatory-bundle-*/compliance_register.json
+# manifest.json: schema_version "4", article_scope includes 14 + 15
+```
+
 ---
 
 ## 8. Forensic / audit pipeline
