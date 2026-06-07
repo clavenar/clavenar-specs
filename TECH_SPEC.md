@@ -2344,11 +2344,11 @@ POST   /policies/templates/{name}/lab/run               replay against chaos cat
 ]
 ```
 
-`installed: true` iff a `policies` row with the same `name` exists and is not soft-deleted. The join is computed server-side at request time; the engine never persists the flag.
+`installed: true` iff a `policies` row with the same `name` is **active** (and not soft-deleted). A seeded-but-inactive template — the dev-console default, where `CLAVENAR_POLICY_SEED_TEMPLATE_STATE=inactive` lands every template as an inactive row (see [Console policy management §10](#console-policy-management)) — reads as `installed: false`, so the library's Install action targets it. The join is computed server-side at request time; the engine never persists the flag.
 
 `GET /policies/templates/{name}` returns the same shape plus `body` (raw `.rego` source) and `body_sha256` (hex digest). 404 on a name that doesn't exist on disk; 400 on a path-traversal attempt.
 
-`POST /policies/templates/{name}/install` takes `{reason, actor_sub, actor_idp}` and reuses the create-path's `apply_create` helper with `event_kind = "policy.installed_from_template"`. Returns the same `MutationResponse` shape as `POST /policies` — `name`, `version: 1`, `body_sha256`, `current_version: 1`, `active: true`, `event_kind: "policy.installed_from_template"`.
+`POST /policies/templates/{name}/install` takes `{reason, actor_sub, actor_idp}` and makes the template active, emitting `event_kind = "policy.installed_from_template"`. Two shapes: when the template is already a (seeded-but-inactive) row it **activates** that row; when no row exists yet it **creates** one via the operator-create path. Returns a `MutationResponse` (`active: true`, `event_kind: "policy.installed_from_template"`). 409 if the template is already active (installed) or soft-deleted; 404 if the template file is missing.
 
 `POST /policies/templates/{name}/lab/run` takes `{mode, replace_rule_name, inputs}` and reuses the batch-evaluator's `run_batch` helper. The `candidate_name` and `candidate_rego` are sourced from the on-disk file instead of the request body. Return shape is the unmodified `EvaluateBatchResponse` — identical to `/policies/evaluate-batch` so console reuses its existing Lab-results renderer.
 
@@ -2357,9 +2357,11 @@ POST   /policies/templates/{name}/lab/run               replay against chaos cat
 A library install differs from `POST /policies` in exactly one place: the chain-v3 event kind on the outbox row. Everything else is shared:
 
 1. The `install_template` handler reads the template body from disk (`<policy_dir>/templates/<name>`) and infers `content_type` from the extension. 404 / 400 surface here.
-2. Composes a `CreatePolicyRequest` (the SDK's own request type) with the on-disk body + the operator's reason + their session sub / idp.
-3. Calls `write_api::apply_create(state, req, "policy.installed_from_template")`.
-4. `apply_create` runs the exact create flow [§6 of Console policy management](#console-policy-management) describes — validate, build candidate engine, single transaction with insert-policy + insert-version + update-frontmatter + enqueue-outbox, swap the live engine — but the outbox payload's `event_kind` is the library variant.
+2. It looks up the `policies` row for `name`:
+   - **Row exists, inactive** (the seeded default) → `write_api::activate_existing(state, name, …, "policy.installed_from_template")` flips it active.
+   - **Row exists, active** → 409 (already installed); **soft-deleted** → 409 (undelete first).
+   - **No row** → composes a `CreatePolicyRequest` from the on-disk body + the operator's reason / sub / idp and calls `write_api::apply_create(state, req, "policy.installed_from_template")`.
+3. Both the activate and create paths run the same transaction shape [§6 of Console policy management](#console-policy-management) describes — validate / build candidate engine, single transaction (insert-version + advance pointer (+ insert-policy on create) + enqueue-outbox), swap the live engine — differing only in the outbox payload's `event_kind` (the library variant).
 
 Two consequences fall out for free:
 
