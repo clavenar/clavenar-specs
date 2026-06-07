@@ -16,6 +16,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
+- [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
 - [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (designed; implementation v1.x+3)
@@ -45,6 +46,7 @@ authoritative wire-contract detail still lives in those sections.
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
+| 9a | [Policy exchange](#policy-exchange) | shipped | v1.5.0 | `clavenar-sdk` (pack manifest + `PackSigner`), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange {sign,install}`); reuses `/sign/blob` + `evaluate-batch` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | designed (implementation v1.x+3) | — | `clavenar-identity` (issuer), every internal service (consumer) |
@@ -2464,6 +2466,54 @@ The nine `/grill-me` answers that pinned this section (chronological):
 7. **Install flow: lab-preview → confirm install** — not direct one-click, not cart bulk-apply, not filesystem copy + reload. Try-before-activate is the operator concern.
 8. **Phasing: big-bang ship** — not infra-first or thinnest-slice or content-first. Single major version delivers the whole surface together.
 9. **Authoring: scaffolder + hand-craft hybrid** — not LLM-assisted, not pure hand-write, not archetype-driven. `clavenarctl policy scaffold` emits the skeleton; humans fill the body.
+
+---
+
+## Policy exchange
+
+Distribute governance as **signed, versioned Rego packs** that an operator installs only after a **mandatory local backtest** proves the pack doesn't regress known-attack coverage. Where the [Policy catalog](#policy-catalog) is the in-stack starter library, Policy Exchange is the *cross-deployment* distribution unit: sign a pack once, hand it to another operator, and their `install` is fail-closed on both signature and backtest.
+
+**Module status:** **shipped (v1.5.0).** Lives in `clavenar-sdk` (pack manifest types + `PackSigner` + verify), `clavenar-chaos-catalog` (`Attack::policy_input` backtest corpus), `clavenarctl` (`policy exchange {sign,install}`). No policy-engine or identity code change — the gate reuses `POST /policies/evaluate-batch` and signing reuses `POST /sign/blob`.
+
+### 1. Pack format
+
+A pack is a directory of `*.rego` files plus two artifacts:
+
+```
+pack.json   — manifest: name, version, per-file sha256, signature ref
+pack.sig    — detached ed25519 signature, 128 hex chars + LF
+```
+
+The manifest (`schema_version "1"`) commits to each entry's `body_sha256`; the signature commits to `sha256(canonical pack.json with signature blanked to null)`, so tampering with any `.rego` body breaks both its `body_sha256` and the signature. This is the **regulatory-export manifest protocol verbatim** ([Regulatory export](#regulatory-export) §5–6), reused so external tooling that can verify one can verify the other.
+
+```jsonc
+{
+  "schema_version": "1",
+  "name": "acme-finance",
+  "version": "3",
+  "entries": [{ "path": "money_moves.rego", "content_type": "rego", "body_sha256": "<hex>" }],
+  "generated_at": "<RFC 3339 UTC>",
+  "signature": { "sidecar": "pack.sig", "algorithm": "ed25519", "digest_alg": "sha256",
+                 "key_id": "clavenar-identity:v3", "signed_at": "<RFC 3339>" }  // null until signed
+}
+```
+
+### 2. Wire surface
+
+| Verb | What it does |
+|---|---|
+| `clavenarctl policy exchange sign <dir>` | hash each `.rego`, build `pack.json`, sign the digest via clavenar-identity `POST /sign/blob` (audience `policy-pack`), write `pack.json` + `pack.sig` |
+| `clavenarctl policy exchange install <dir>` | verify hashes + signature, **backtest**, then land each policy via the policy-engine write API |
+
+Signing reuses `/sign/blob` unchanged — only the new `audience: "policy-pack"` value (already permitted by identity's `[a-z0-9-]` validator). The signature is verified against the issuer JWKS (`--jwks-url`) or an operator-pinned SPKI PEM (`--pubkey`); identity signs the decoded 32 digest bytes, so verify is `ed25519_verify(pubkey, sha256(canonical), sig)`.
+
+### 3. Mandatory backtest gate
+
+Before any policy touches the live store, `install` replays the **Rego-decidable** subset of the chaos attack catalog (`clavenar-chaos-catalog::catalog_policy_inputs` — denylist / business-hours / control attacks, each projected to a `PolicyInput` with a pinned `current_time` for determinism; Brain/HIL/identity/velocity/attestation attacks are excluded because they aren't decidable from Rego alone). For each candidate policy it calls `evaluate-batch` and **refuses to install** if the candidate fails to compile *or* weakens any verdict the active set produced (`DiffClass::DenyToAllow` / `YellowToAllow`). The gate reuses the Policy Lab regression logic verbatim. It is a **non-regression + compile** net: adding coverage is fine, silently removing it is not.
+
+### 4. Install semantics & provenance
+
+Install is **fail-closed**: an unsigned pack, a signature mismatch, a file-hash mismatch, a compile failure, or any regression all abort with a non-zero exit and land nothing. On success each policy is created with `active: true` and a version `reason` carrying `[pack <name>@<version> key=<key_id>]` so the chain records where the rule came from. Name collisions are **refused** (no in-place replace in v1) so an install can't silently shadow an existing policy.
 
 ---
 
