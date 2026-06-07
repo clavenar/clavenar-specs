@@ -47,10 +47,10 @@ authoritative wire-contract detail still lives in those sections.
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
-| 9a | [Policy exchange](#policy-exchange) | shipped | v1.5.0 | `clavenar-sdk` (pack manifest + `PackSigner`), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange {sign,install}`); reuses `/sign/blob` + `evaluate-batch` |
+| 9a | [Policy exchange](#policy-exchange) | shipped | v1.3.0 | `clavenar-sdk` (pack manifest + `PackSigner`), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange {sign,install}`); reuses `/sign/blob` + `evaluate-batch` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
-| 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.6.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
+| 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | designed (implementation v1.x+3) | — | `clavenar-identity` (issuer), every internal service (consumer) |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
 | 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
@@ -2475,7 +2475,7 @@ The nine `/grill-me` answers that pinned this section (chronological):
 
 Distribute governance as **signed, versioned Rego packs** that an operator installs only after a **mandatory local backtest** proves the pack doesn't regress known-attack coverage. Where the [Policy catalog](#policy-catalog) is the in-stack starter library, Policy Exchange is the *cross-deployment* distribution unit: sign a pack once, hand it to another operator, and their `install` is fail-closed on both signature and backtest.
 
-**Module status:** **shipped (v1.5.0).** Lives in `clavenar-sdk` (pack manifest types + `PackSigner` + verify), `clavenar-chaos-catalog` (`Attack::policy_input` backtest corpus), `clavenarctl` (`policy exchange {sign,install}`). No policy-engine or identity code change — the gate reuses `POST /policies/evaluate-batch` and signing reuses `POST /sign/blob`.
+**Module status:** **shipped (v1.3.0).** Lives in `clavenar-sdk` (pack manifest types + `PackSigner` + verify), `clavenar-chaos-catalog` (`Attack::policy_input` backtest corpus), `clavenarctl` (`policy exchange {sign,install}`). No policy-engine or identity code change — the gate reuses `POST /policies/evaluate-batch` and signing reuses `POST /sign/blob`.
 
 ### 1. Pack format
 
@@ -3540,7 +3540,7 @@ agent's recent authorized-tool sequence across the fleet over a NATS
 JetStream **KV** bucket, so the chain is reconstructed even though no
 single replica saw the whole thing.
 
-**Module status:** **shipped (v1.6.0).** Lives in `clavenar-proxy` (the
+**Module status:** **shipped (v1.3.0).** Lives in `clavenar-proxy` (the
 shared history store), `clavenar-policy-engine` (the `recent_sequence`
 wire field + the Rego rule). No new chain version; the deny rides the
 existing forensic `policy_decision`/`reasoning` columns. Off by default —
