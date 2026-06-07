@@ -1340,7 +1340,7 @@ clavenar-lite graduate verify --report report.json         # offline; OK on a cl
 
 **Concept.** The typed Rust client. Two artifacts share one source of truth: `clavenar-console` consumes it, `clavenarctl` consumes it, external integrators consume it. SDK is the contract.
 
-**Implementation.** `repos/clavenar-rust-sdk/`. Clients: `LedgerClient`, `HilClient`, `SimClient`, `AgentsClient`, `PoliciesClient`. Each exposes `base_url() -> &Url` for the `/config` page redaction-safe readout. `AgentsClient::bearer_fingerprint() -> Option<String>` returns sha256[..8] hex of the configured token (never the raw token). `LedgerClient::list_agents()` powers the audit page's default fan-out (§4.1). `PoliciesClient` is `Clone`-able and exposes the full Viewer/Admin surface described in §1.9; conflict responses parse via `PoliciesClient::parse_conflict()` so callers can surface the new metadata to operators.
+**Implementation.** `repos/clavenar-sdk/`. Clients: `LedgerClient`, `HilClient`, `SimClient`, `AgentsClient`, `PoliciesClient`. Each exposes `base_url() -> &Url` for the `/config` page redaction-safe readout. `AgentsClient::bearer_fingerprint() -> Option<String>` returns sha256[..8] hex of the configured token (never the raw token). `LedgerClient::list_agents()` powers the audit page's default fan-out (§4.1). `PoliciesClient` is `Clone`-able and exposes the full Viewer/Admin surface described in §1.9; conflict responses parse via `PoliciesClient::parse_conflict()` so callers can surface the new metadata to operators.
 
 **Verify.** Cargo dep:
 
