@@ -786,6 +786,20 @@ open http://localhost:8085/stats/cost-latency
 open http://localhost:8085/audit/agents/support-bot-3/narrative?window=7d
 ```
 
+### 4.13 Server-rendered chart kit (donuts, heatmap, gauge, trend lines)
+
+**Concept.** The quantitative pages leaned on counters, bar sparklines, and tables. This pass adds four reusable chart primitives so the dashboards read at a glance instead of as spreadsheets: a donut/pie (part-of-whole mixes), a weekday×hour activity heatmap, a radial gauge (one value against a limit), and a line/area trend. The landing page gains a showcase row — verdict-mix donut + 7-day request-volume trend + a 7×24 activity heatmap — so the first screen an evaluator sees is alive, not a list. Every chart is paired with a labelled legend or numeric value so it carries meaning without relying on colour, and degrades to a muted "no data" / "collecting traffic…" state on an empty window.
+
+**Implementation.** All geometry is precomputed in Rust layout helpers in `clavenar-console/src/templates.rs` (`Donut`, `ActivityHeatmap`, `LineChart`, `Gauge`, plus `heat_tone`/`heat_bg`), mirroring the existing `StatsSparkBar` pattern; templates loop over the structs and emit inline SVG — no client charting library, no build step, works with JS disabled. Donuts use the `stroke-dasharray` ring technique (a circle of radius 15.9155 has circumference ≈100, so a wedge's arc length *is* its percentage); SVG fill/stroke inherit the Tailwind `brand`/semantic palette via `class="text-…"` + `currentColor`. Placements: brain-delta donut on `/deep-review` (retires the old chip-stack), verdict-mix donut on `/stats`, intent×verdict heat-table on `/stats/intents`, deny-rate trend line on `/stats/deny-rate`, peak-load gauge on `/velocity`, decision donut on `/hil/analytics`, fleet-state donut on `/agents`, persona donut + success-rate gauge on `/sim`, token-share-by-provider donut on `/stats/cost-latency`, and the landing showcase (`/_partials/landing-charts`, htmx-loaded + lazily cached, demo-prefix-scoped). No new wire contract — every chart reshapes data the handlers already aggregate.
+
+**Verify.**
+
+```bash
+open http://localhost:8085/               # landing showcase: donut + heatmap + trend
+open http://localhost:8085/deep-review    # brain-delta donut
+open http://localhost:8085/stats/intents  # intent × verdict heat-table
+```
+
 ---
 
 ## 5. Operator authentication
