@@ -305,6 +305,23 @@ cargo test --manifest-path repos/clavenar-policy-engine/Cargo.toml policy_templa
 # 17 passed
 ```
 
+### 1.15 Policy Exchange (signed packs + mandatory backtest)
+
+**Concept.** Distribute governance across deployments as **signed, versioned Rego packs**, installable only after a **mandatory local backtest** proves the pack doesn't regress known-attack coverage. The starter pack (§1.14) seeds one stack; Policy Exchange is the cross-deployment unit — sign a pack once, and any operator's `install` is fail-closed on both signature and backtest before a rule lands.
+
+**Implementation.** A pack is a directory of `*.rego` plus `pack.json` (manifest committing to each file's sha256) + `pack.sig` (detached ed25519 over `sha256(canonical pack.json, signature blanked)`) — the regulatory-export manifest protocol verbatim. `clavenarctl policy exchange sign <dir>` hashes the files, builds the manifest (`clavenar-sdk::PackManifest`), and signs the digest via clavenar-identity `POST /sign/blob` (audience `policy-pack`, through the new `clavenar-sdk::PackSigner`). `clavenarctl policy exchange install <dir>` is fail-closed: it (1) re-hashes each file vs the manifest, (2) verifies the signature against the issuer JWKS (`--jwks-url`) or a pinned SPKI PEM (`--pubkey`) via `clavenar-sdk::verify_pack`, (3) **backtests** every candidate against the Rego-decidable chaos catalog (`clavenar-chaos-catalog::catalog_policy_inputs`) through `evaluate-batch`, refusing any policy that fails to compile or weakens a verdict (`DenyToAllow` / `YellowToAllow`), and (4) lands each policy with `[pack <name>@<ver> key=<kid>]` recorded in the version reason. Name collisions refuse (no in-place replace in v1). No policy-engine or identity code change — gate and signing reuse existing endpoints.
+
+**Verify.**
+
+```bash
+clavenarctl policy exchange sign ./acme-pack \
+  --identity-url http://localhost:8086 --caller-spiffe spiffe://clavenar.local/ctl
+clavenarctl policy exchange install ./acme-pack \
+  --jwks-url http://localhost:8086/jwks.json --reason "Q3 finance controls" \
+  --actor-sub ops@acme.com --actor-idp okta
+#   …signature OK; backtest N attacks, 0 regressions; installed money_moves
+```
+
 ---
 
 ## 2. HIL — human-in-the-loop
