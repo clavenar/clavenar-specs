@@ -12,6 +12,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Console config page](#console-config-page) — `/config` diagnostic surface
 - [Operator authentication](#operator-authentication) — console + HIL human auth, RBAC, cross-channel identity
 - [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
+- [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
@@ -40,6 +41,7 @@ authoritative wire-contract detail still lives in those sections.
 | 4 | [Console config page](#console-config-page) | shipped | — | `clavenar-console`, `clavenar-sdk` (+3 public getters) |
 | 5 | [Operator authentication](#operator-authentication) | shipped | — | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
 | 6 | [Regulatory export](#regulatory-export) | shipped (slices 1+2+3) | — | `clavenar-ledger`, `clavenar-identity` (new `POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl` |
+| 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, manifest v4), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -1276,7 +1278,7 @@ The existing `/export` produces Parquet for analytics; no auditor expects to rea
 ### 2. Articles in scope
 
 - **EU AI Act Article 11** (technical documentation) and **Article 12** (automatic logging records) only.
-- **Articles 14-15** (human oversight, accuracy) need operator-supplied prose; slice 3 covers prose embedding but doesn't auto-derive the content.
+- **Articles 14-15** (human oversight, accuracy) are now **auto-derived** from chain facts by the [Continuous compliance evidence](#continuous-compliance-evidence) module; slice 3's operator prose remains available for narrative an auditor wants on top. `?include_compliance=true` embeds the derived register and widens this bundle's `article_scope` to cover 14 + 15 (manifest v4).
 - **GDPR Article 30** has a different surface (data categories, recipients) and isn't auto-derivable from forensic events; deferred until a buyer asks.
 
 ### 3. Bundle format
@@ -1346,7 +1348,7 @@ NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more 
 }
 ```
 
-The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so `technical_documentation` and `parquet_pointers` are signed transitively — tampering with the prose breaks both signature verification and a cheap recompute. v1 was the unsigned shape (slice 1); v2 added the `signature` envelope (slice 2); v3 added the optional `technical_documentation` and `parquet_pointers` blocks (slice 3). v3 with neither optional field populated is byte-identical to v2 aside from `schema_version`.
+The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so `technical_documentation`, `parquet_pointers`, and `compliance_register` are signed transitively — tampering with any of them breaks both signature verification and a cheap recompute. v1 was the unsigned shape (slice 1); v2 added the `signature` envelope (slice 2); v3 added the optional `technical_documentation` and `parquet_pointers` blocks (slice 3); **v4** adds the optional `compliance_register` block (`{ filename, sha256, byte_size }`, committing to a bundled `compliance_register.json`; see [Continuous compliance evidence](#continuous-compliance-evidence)). Each version with its newest optional field unpopulated is byte-identical to the prior version aside from `schema_version`.
 
 ### 6. Auditor verification recipe
 
@@ -1388,6 +1390,70 @@ Lives under a new top-level `regulatory` verb (own surface — distinct from `ag
 - **Empty window** → `200 OK` with a valid bundle, `row_count: 0`.
 - **Body too large** → `413 payload_too_large`.
 - **Body content-type not `text/*`** → `400 unsupported_media_type` with a diagnostic body. Surfacing a curl-without-content-type-header mistake loudly (vs. silently dropping the prose) caught operator-side configuration errors during slice-3 rollout; the loud-fail posture stuck. Operators who genuinely want a no-prose bundle pass an empty body or omit the body entirely.
+
+---
+
+## Continuous compliance evidence
+
+A live projection of the audit chain into an **EU AI Act Article 14/15 + SOC 2 / ISO 27001** evidence register. Where [Regulatory export](#regulatory-export) covers Articles 11 + 12 (technical documentation + automatic logging) as a signed bundle, this module *auto-derives* the human-oversight and accuracy/robustness controls — plus the operational-monitoring controls auditors ask about under SOC 2 / ISO 27001 — from facts the chain already carries. No operator prose required, no new chain version.
+
+**Module status:** **shipped (v1.3.0).** Lives in `clavenar-ledger` (derivation engine + `POST /compliance/evidence`), `clavenar-sdk` (`compliance_evidence`), `clavenar-console` (`/compliance`), `clavenar-ctl` (`regulatory export --include-compliance`). No chain-version change.
+
+### 1. Why auto-derive
+
+Article 11/12 are document + log facts the chain *is*. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), and the SOC 2 / ISO 27001 monitoring controls, are *also* answerable from the chain — who approved a Yellow-tier request, the distribution of deny signals, whether the chain still verifies, how many denials carry a clavenar-issued signature. Deriving them turns "write me a paragraph" into "show me the rows." The register is **evidence projection, not a conformity assessment** — every register carries that disclaimer on the wire.
+
+### 2. Control catalog
+
+The catalog is the static source of truth in `clavenar-ledger/src/compliance.rs`; this table mirrors it. Each control's `status` is `satisfied` / `partial` / `no_data` (the honest answer for an empty window).
+
+| Control | Framework | Derived from | `satisfied` when |
+|---|---|---|---|
+| `EU-AI-Act-Article-14` | EU AI Act | HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) | every recorded human decision carries an approver assertion |
+| `EU-AI-Act-Article-15` | EU AI Act | deny-signal distribution + chain-verify pass + signed-denial coverage | chain verifies and every denial is signed |
+| `ISO-27001-8.13` | ISO/IEC 27001 | chain continuity + overlapping cold-tier export snapshots | chain verifies and ≥1 export overlaps the window |
+| `SOC2-CC7.2` | SOC 2 | deny-signal distribution non-empty + verdict rows present | requests monitored and ≥1 anomaly signal seen |
+| `SOC2-CC7.3` | SOC 2 | presence of HIL human-review rows | ≥1 security event reached human evaluation |
+
+### 3. Wire surface
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/compliance/evidence?from=…&to=…` (clavenar-ledger, **internal mTLS only**) | — | `application/json` (`ComplianceRegister`) |
+| POST | `/export/regulatory?…&include_compliance=true` (clavenar-ledger) | optional `text/markdown` | `.tar.gz` with embedded `compliance_register.json`, manifest v4 |
+
+`/compliance/evidence` is the cheap live read the console `/compliance` page renders and re-polls. The `?include_compliance=true` flag on the existing bundle embeds the same register as a signed artifact (one signing path, one tamper-evident container) and widens `article_scope` to include Articles 14 + 15. Both go through one derivation function so the live view and the bundled artifact agree byte-for-byte for the same window. `/compliance/evidence` sits on the ledger's internal mTLS listener only (stripped from the plain `:8083` port exactly like `/export*`). Half-open window `[from, to)`; empty window → `200` with every control `no_data`; inverted/malformed window → `400`.
+
+### 4. Register schema (v1)
+
+```jsonc
+{
+  "schema_version": "1",
+  "generated_at": "<RFC 3339 UTC>",
+  "window": { "from": "...", "to": "..." },
+  "row_count": 1234,
+  "chain_verify": { "valid": true, "entries_checked": 5000, "first_invalid_seq": null },
+  "controls": [
+    {
+      "control_id": "EU-AI-Act-Article-15",
+      "framework": "EU AI Act",
+      "title": "Accuracy, robustness and cybersecurity",
+      "status": "satisfied",                // satisfied | partial | no_data
+      "metric": { "total_requests": 1234, "denied": 12, "deny_signal_distribution": {…},
+                  "chain_valid": true, "signed_denials": 12 },
+      "sample_seqs": [4001, 4002],
+      "narrative": "Chain verified; 12 of 1234 requests denied; 12 of 12 denials carry a clavenar-issued signature."
+    }
+  ],
+  "disclaimer": "This register is a projection of logged forensic facts, not a legal conformity assessment. …"
+}
+```
+
+`metric` is a control-specific object (the auditable numbers); `sample_seqs` points at representative chain rows the auditor can spot-check. The catalog grows by appending a `ControlDef` (and a row to the §2 table) — no wire change.
+
+### 5. Placement
+
+Derivation lives in **clavenar-ledger**, not the console, for three reasons: (1) the register must be embeddable in the signed bundle for offline auditor verification, which only works if the ledger computes it before signing; (2) the ledger already owns the chain-integrity primitive (`verify_chain`) that Article 15 depends on — duplicating it in the console would be a parallel abstraction; (3) the console is a display-only read surface. The console maps each control to a status badge + narrative and prints the `clavenarctl regulatory export --include-compliance` command for the signed download (the bundle endpoint is mTLS-internal, so there is no browser link).
 
 ---
 
