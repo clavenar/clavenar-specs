@@ -363,7 +363,7 @@ curl "http://localhost:8083/audit/correlation/<correlation_id>" | jq
 
 ```bash
 CLAVENAR_LITE_CALLBACK_ALLOWLIST=https://my-agent.example.com/ \
-  clavenar-lite serve &
+  clavenar-lite start &
 # Agent makes a request and supplies the callback URL
 curl ... -H "X-Clavenar-Callback-URL: https://my-agent.example.com/decide" ...
 # Returns 202 Accepted with correlation_id. After approve via /pending/{id}/decide,
@@ -977,12 +977,13 @@ clavenarctl agents get <id> --bad-flag || echo "exit: $?"  # 2
 
 **Concept.** Make `clavenarctl` the front door for new operators, not a thin client over `clavenar-sdk`. Three verbs collapse the typical first-day questions: `init` scaffolds `~/.config/clavenar/config.toml` (and optionally a `policies/templates/` starter dir); `doctor` probes `/health` on every configured service URL and reports up/down/latency in one go (skips proxy by default — the mTLS gate would register as a false-negative); `generate-policy` lists or emits the 7 starter templates from §1.14 to disk, embedded via `include_str!` against the sibling repo so the CLI is self-contained.
 
-**Implementation.** `clavenar-ctl` Cargo workspace. `init` writes `config.toml` with `--with-policies` opt-in for the starter dir. `doctor` accepts a comma-list override via `--services`; defaults to console / hil / identity / policy-engine / ledger. `generate-policy {list|<name>}` ships the seven templates from §1.14 baked into the binary so the CLI works without a checked-out sibling repo. 35 unit + integration tests pass; clippy `-D warnings` clean.
+**Implementation.** `clavenar-ctl` Cargo workspace. `init` writes `config.toml` with `--with-policies` opt-in for the starter dir. `--guard --upstream <URL>` is the one-command local-guard flow (see §10.6): it additionally scaffolds a complete `governance.rego` + `clavenar-lite.env` and prints the observe-mode launch command (`--launch` spawns it; `--print-config` resolves and prints without writing). `doctor` accepts a comma-list override via `--services`; defaults to console / hil / identity / policy-engine / ledger. `generate-policy {list|<name>}` ships the seven templates from §1.14 baked into the binary so the CLI works without a checked-out sibling repo. clippy `-D warnings` clean.
 
 **Verify.**
 
 ```bash
 clavenarctl init --with-policies                  # config + starter templates land
+clavenarctl init --guard --upstream http://localhost:9000/mcp  # local guard scaffold
 clavenarctl doctor                                # latency table
 clavenarctl generate-policy list                  # 7 names
 clavenarctl generate-policy pii_egress > pii.rego # template to stdout
@@ -1183,7 +1184,7 @@ open 'http://localhost:8085/audit?signal=peer_bundle_stale:other-tenant'
 ```bash
 # Stub sink
 nc -lk 4444 &
-CLAVENAR_LITE_WEBHOOK_URL=http://localhost:4444/ clavenar-lite serve &
+CLAVENAR_LITE_WEBHOOK_URL=http://localhost:4444/ clavenar-lite start &
 # Drive any agent → see one JSON event per outcome on the sink
 ```
 
@@ -1255,14 +1256,34 @@ clavenar-shadow-scanner --local-fs ~/code --output findings.csv
 - **Outbound webhook.** `CLAVENAR_LITE_WEBHOOK_URL` — see §8.5.
 - **Async callback URL.** `X-Clavenar-Callback-URL` on `/mcp` + `CLAVENAR_LITE_CALLBACK_ALLOWLIST` — see §2.4.
 - **Observe-only mode.** `CLAVENAR_LITE_MODE=observe` — see §1.12.
+- **Graduation report.** `clavenar-lite graduate report` — see §10.6.
 
 **Verify.**
 
 ```bash
-CLAVENAR_LITE_AGENTS=alice:tok-a,bob:tok-b clavenar-lite serve &
+CLAVENAR_LITE_AGENTS=alice:tok-a,bob:tok-b clavenar-lite start &
 # Per-agent ledger rows
 clavenar-lite backup --output /tmp/lite-backup.db
 clavenar-lite restore --input /tmp/lite-backup.db --force
+```
+
+### 10.6 One-command local guard + observe→enforce graduation
+
+**Concept.** The cheapest path from "I have a local MCP server" to "Clavenar is watching it." `clavenarctl init --guard --upstream <MCP-URL>` scaffolds a starter policy + a `clavenar-lite.env` and prints (or, with `--launch`, runs) a `clavenar-lite start --mode observe` command. After a while in observe mode, `clavenar-lite graduate report` summarizes from the local ledger exactly what enforce mode *would* have blocked or parked, and signs the summary so it's tamper-evident — the artifact a developer hands their security team to justify flipping enforce on.
+
+**Implementation.** Two halves, both offline (lite never calls clavenar-identity):
+
+- **`clavenarctl init --guard`** (`clavenar-ctl/src/cmd/init.rs`). Resolves a `GuardConfig` (port / upstream / policies dir / ledger path / mode, defaults `8088` / `http://localhost:9000/mcp` / `./policies` / `./clavenar-lite.db` / `observe`), drops the lite edition's complete `governance.rego` into `./policies/` (a single self-contained `package clavenar.authz` — loading the per-domain templates flat would risk regorus rule-name conflicts), writes `clavenar-lite.env` with the exact `CLAVENAR_LITE_*` names lite reads, and prints the launch command. `--launch` spawns the sibling `clavenar-lite` binary; `--print-config` resolves and prints the config without writing.
+- **`clavenar-lite graduate report`** (`clavenar-lite/src/report.rs` + `ledger.rs::graduation_stats`). Aggregates observe-mode verdict rows by intent category and agent (would-deny = `PolicyDeny` / `BrainDeny` / `PromptInjection` / `RateLimitDenied`; would-pend = `PendingReview`), embeds a chain-validity assertion (`Ledger::verify`), and emits a `GraduationReport`. The report body serializes in struct-declaration order (no maps / no `Value`) so it's byte-deterministic; it's signed with a local Ed25519 PKCS#8 key (`--signing-key` / `CLAVENAR_LITE_SIGNING_KEY_PATH`) and embeds its SPKI public key (`pubkey_pem`) so `clavenar-lite graduate verify` checks it with no network and no key distribution. `key_id` is `clavenar-lite-file:v1`, distinct from the full edition's `clavenar-identity-file:v1`, so an offline lite key is never confused with an issuer key. Without a signing key the report is emitted unsigned (useful summary, not tamper-evident). Enforce is recommended only when the chain verifies *and* nothing in the window would be blocked or parked.
+
+**Verify.**
+
+```bash
+clavenarctl init --guard --upstream http://localhost:9000/mcp
+openssl genpkey -algorithm ed25519 -out clavenar-lite.key
+clavenar-lite start --mode observe --policies ./policies   # drive some traffic
+clavenar-lite graduate report --signing-key clavenar-lite.key --output report.json
+clavenar-lite graduate verify --report report.json         # offline; OK on a clean report
 ```
 
 ### 10.3 `clavenar-sdk`
