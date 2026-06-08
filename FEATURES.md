@@ -1386,6 +1386,23 @@ cd repos/clavenar-typescript-sdk && npm test
 cd repos/clavenar-python-sdk && pip install -e . && pytest
 ```
 
+### 10.10 Go, Java, and .NET SDKs
+
+**Concept.** The agent-wrapper family extended to three more ecosystems, all 1:1 with the TS reference on the wire (same `POST /mcp` JSON-RPC contract, verdicts, retries, enforce/observe, `resolve()` pending loop, streaming gate, realtime helper). Each ships its own `docs/PARITY.md`.
+
+**Implementation.**
+- `repos/clavenar-go-sdk/` — Go module `github.com/clavenar/clavenar-go-sdk` (zero-dep core: `Inspect` / `InspectAll` / `PollPendingOnce`, errors via `errors.As`); provider bindings in opt-in `adapters/anthropic` + `adapters/openai` sub-modules. `go test -race` + `golangci-lint` + `govulncheck` clean.
+- `repos/clavenar-java-sdk/` — Maven `com.clavenar:agent-sdk` (Java 17). `ClavenarInspector` is the LangChain4j / Spring AI tool-boundary surface; `Clavenar.wrap` is a dynamic-proxy wrap-and-forget facade. Jackson-only, no provider dep. `mvn verify` green (JUnit 5).
+- `repos/clavenar-dotnet-sdk/` — NuGet `Clavenar.AgentSdk` (`net8.0`). `ClavenarInspector` + `Clavenar.InspectResponseAsync` (duck-typed response). `System.Text.Json`-only, no provider dep. `dotnet test` green (xUnit).
+
+**Verify.**
+
+```bash
+(cd repos/clavenar-go-sdk && go test -race ./...)
+(cd repos/clavenar-java-sdk && mvn -B verify)
+(cd repos/clavenar-dotnet-sdk && dotnet test)
+```
+
 ### 10.7 Framework recipes + Computer Use + Realtime adapters
 
 **Concept.** Working repos under `examples/` for the integrations evaluators actually ask about: native Anthropic, native OpenAI, LangChain (TS + Python), Vercel AI SDK, Mastra, LlamaIndex. Plus two adapter recipes for newer surfaces — Anthropic Computer Use (the agent that drives a GUI) and OpenAI Realtime (the WS pump pattern). Each recipe is one `run.{ts,py}` + a README pointing at the load-bearing line. The top-level `examples/README.md` indexes them and lays out the wrap-the-client vs wrap-the-dispatcher integration spectrum.
