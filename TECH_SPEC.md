@@ -2568,7 +2568,7 @@ Install is **fail-closed**: an unsigned pack, a signature mismatch, a file-hash 
 ## Forensic-tier deep review
 
 
-Companion to [Layer 2 — clavenar-brain](#layer-2--clavenar-brain) (sub-second classifier on the proxy hot path) and [Layer 4 — clavenar-ledger](#layer-4--clavenar-ledger) (the forensic store). Where brain's value proposition is sub-second verdicts via Haiku 4.5, `clavenar-deep-review` is the complementary forensic tier — asynchronous, slow, expensive, and substantially smarter. Runs Opus 4.7 (MVP single-provider) against a sampled slice of the audit stream to catch what Haiku missed and deepen verdicts on what it flagged.
+Companion to [Layer 2 — clavenar-brain](#layer-2--clavenar-brain) (sub-second classifier on the proxy hot path) and [Layer 4 — clavenar-ledger](#layer-4--clavenar-ledger) (the forensic store). Where brain's value proposition is sub-second verdicts from a pluggable inspector LLM (Claude Haiku 4.5 by default), `clavenar-deep-review` is the complementary forensic tier — asynchronous, slow, expensive, and substantially smarter. Runs Opus 4.7 (MVP single-provider) against a sampled slice of the audit stream to catch what the fast classifier missed and deepen verdicts on what it flagged.
 
 **This service does not gate live traffic.** HIL is the inline blocking surface; deep-review is retrospective by design. A vendor outage, a quota burst, or a slow review must never back up the audit stream and starve brain → ledger writes. Every failure mode soft-fails per event with a queryable sentinel.
 
@@ -3803,7 +3803,7 @@ defense-in-depth behind it.
 | Threat | Defense |
 |---|---|
 | An agent floods `handle_mcp` to exhaust upstream quota. | `clavenar-policy-engine`'s velocity tracker (`InProcessTracker` or `NatsKvTracker`) breaks the circuit per-agent on configurable thresholds. |
-| Brain/Anthropic call latency cascades. | Brain has per-call timeout + Voyage embedding fallback. Policy verdict resolves even if Brain is slow (`authorized=false` defaults to `intent_score=0.5`, which fails the policy gate — fail-closed). |
+| Brain inspector-LLM call latency cascades. | Brain has a per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`) + Voyage embedding fallback. Policy verdict resolves even if Brain is slow (`authorized=false` defaults to `intent_score=0.5`, which fails the policy gate — fail-closed). |
 | Slowloris on the mTLS handshake. | axum's hyper backend has connection-level read timeouts. |
 
 #### Elevation of privilege
@@ -3815,17 +3815,21 @@ defense-in-depth behind it.
 
 ### Layer 2 — clavenar-brain
 
-Semantic inspection. Five signals: intent classifier (Haiku), persona
-drift (Haiku), indirect-injection scanner (Haiku + heuristic),
-malicious-code detector (Haiku + regex; gated on the write-shape
-method set so it only fires on file-content writes), and
-compromised-package detector (bundled-list exact match + Haiku
-typosquat shape check; gated on shell-shape methods +
-package-manager prefix regex). The last two land verdicts via the
-same `intent_category` + `authorized` axes as the classifier — no
-schema change. Bundled list lives in
-`clavenar-brain/data/compromised_packages.json` and refreshes weekly
-via an OSV.dev cron PR.
+Semantic inspection. Five signals, all LLM-backed paths routed through
+a single `LlmProvider` trait whose `(provider, model)` pairs come from
+`CLAVENAR_BRAIN_MODELS_FILE` — Anthropic, OpenAI, Google, Bedrock,
+Vertex, or Ollama, mixed per detector. Claude Haiku 4.5 ships as the
+default for every inspector call; nothing below is hardcoded to it.
+The signals: intent classifier (inspector LLM), persona drift (numeric
+Voyage cosine, not an LLM call), indirect-injection scanner (inspector
+LLM + heuristic), malicious-code detector (inspector LLM + regex; gated
+on the write-shape method set so it only fires on file-content writes),
+and compromised-package detector (bundled-list exact match + inspector-LLM
+typosquat shape check; gated on shell-shape methods + package-manager
+prefix regex). The last two land verdicts via the same `intent_category`
++ `authorized` axes as the classifier — no schema change. Bundled list
+lives in `clavenar-brain/data/compromised_packages.json` and refreshes
+weekly via an OSV.dev cron PR.
 
 #### Spoofing & Tampering
 
@@ -3850,18 +3854,26 @@ proxy-side forensic row. Brain itself is stateless.
 
 #### Information disclosure
 
-The Brain calls **Anthropic Claude 4.5 Haiku** (separate model from any
-agent's primary LLM — the "Zero-Knowledge Bonus" invariant). Sensitive
-payloads transit the Anthropic API. This is an explicit, documented
-trust dependency in `README.md`.
+The Brain calls a configured **inspector LLM** (separate model from any
+agent's primary LLM — the "Zero-Knowledge Bonus" invariant). The default
+is **Claude Haiku 4.5**, but the provider is selected per detector from
+`CLAVENAR_BRAIN_MODELS_FILE` (Anthropic, OpenAI, Google, Bedrock, Vertex,
+or Ollama), so an operator who must keep payloads off a given vendor —
+or inside a self-hosted Ollama — swaps the provider without touching
+Brain code. Sensitive payloads transit whichever provider's API is
+configured; that this is an explicit, documented trust dependency holds
+for whichever vendor the operator picks. See `README.md`.
 
-The mock-mode path (`ANTHROPIC_API_KEY=mock-key`) does pure local regex
-+ bigram embedding inspection — used by e2e and the simulator.
+The mock-mode path (`CLAVENAR_BRAIN_MOCK_MODE=true`, or the legacy
+`ANTHROPIC_API_KEY=mock-key` sentinel) does pure local regex + bigram
+embedding inspection — used by e2e and the simulator.
 
 #### Denial of service
 
-Brain has a per-request timeout in the proxy. A slow Anthropic API does
-not stall the security verdict indefinitely.
+Brain has a per-request timeout in the proxy, plus a per-call provider
+timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy
+`CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`). A slow inspector-LLM provider
+does not stall the security verdict indefinitely.
 
 #### Elevation of privilege
 
@@ -4132,11 +4144,15 @@ threats are real but addressed elsewhere or deferred deliberately.
 - **Physical access to the deployment host.** SQLite + private keys
   on disk; physical access defeats both. Customer's hosting
   responsibility.
-- **Anthropic / Voyage / Qdrant compromise.** Brain depends on these
-  external providers; they are explicit, named trust dependencies in
-  `README.md`. A compromise of the upstream model is outside our
-  defense scope but is partially mitigated by the Zero-Knowledge
-  Bonus (Brain's model is separate from any agent's primary LLM).
+- **Inspector-LLM provider / Voyage / Qdrant compromise.** Brain
+  depends on these external providers; they are explicit, named trust
+  dependencies in `README.md`. The inspector LLM is operator-selected
+  via `CLAVENAR_BRAIN_MODELS_FILE` (Claude Haiku 4.5 by default; any of
+  Anthropic / OpenAI / Google / Bedrock / Vertex / Ollama), so this
+  trust dependency lands on whichever provider is configured. A
+  compromise of the upstream model is outside our defense scope but is
+  partially mitigated by the Zero-Knowledge Bonus (Brain's model is
+  separate from any agent's primary LLM).
 - **Multi-tenant isolation in the console.** Today the console is
   single-tenant per deployment. Multi-tenant SaaS is a year-2
   product question.
