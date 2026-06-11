@@ -645,6 +645,10 @@ zero network, capped RAM/CPU, ephemeral memory purge) is **roadmap**; see
   parameters → brute-force reasoning → human 2FA prompt.
 - **Out-of-bounds context.** *User: "What's the weather?"* → *Agent: "Accessing
   `production_db_credentials`."* → semantic mismatch, kill.
+- **No silent fail-open.** Every security fallback either fails closed or
+  emits a HIGH-severity `*_degraded` metric (and a `degraded` marker on the
+  inspection response / policy input), so reduced coverage pages an operator
+  instead of passing unnoticed.
 
 ### 12.5 Hardening comparison
 
