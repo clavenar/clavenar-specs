@@ -3688,6 +3688,16 @@ for two audiences:
 2. **Buyers and integrators** — to confirm that the security claims in
    the marketing site and `README.md` map to real, named controls.
 
+**Degraded-mode rule.** Every security-relevant fallback either fails
+closed or degrades *loudly* — no silent fail-open. The catalog:
+
+| Fallback | Behavior when the dependency fails | Alarm |
+|---|---|---|
+| Brain PII masking | unmasked text is **withheld** from every provider; all detectors pivot to local heuristics | `clavenar_brain_detector_degraded{detector="pii_masking"}` gauge + `degraded: ["pii_masking", …]` on the `/inspect` response |
+| Brain injection / malicious-code / compromised-package detectors | needle-heuristic verdict (injection cold path normalizes unicode/whitespace and, at `CLAVENAR_INJECTION_HEURISTIC_LEVEL=strict`, scans one level of base64) | `clavenar_brain_detector_degraded{detector=…}` + response `degraded` list |
+| Brain classifier | fails **closed** (`deny_unknown`) | provider-outcome counter |
+| Policy-engine velocity tracker | count degrades to zero but `input.velocity_degraded=true` reaches Rego, so policy can deny or pend on a degraded breaker | `clavenar_policy_engine_velocity_tracker_degraded` gauge |
+
 It is layer-by-layer and STRIDE-organized inside each layer. STRIDE here
 refers to the standard threat categories: Spoofing, Tampering,
 Repudiation, Information disclosure, Denial of service, Elevation of
