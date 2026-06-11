@@ -1427,6 +1427,10 @@ The catalog is the static source of truth in `clavenar-ledger/src/compliance.rs`
 | `ISO-27001-8.13` | ISO/IEC 27001 | chain continuity + overlapping cold-tier export snapshots | chain verifies and ≥1 export overlaps the window |
 | `SOC2-CC7.2` | SOC 2 | deny-signal distribution non-empty + verdict rows present | requests monitored and ≥1 anomaly signal seen |
 | `SOC2-CC7.3` | SOC 2 | presence of HIL human-review rows | ≥1 security event reached human evaluation |
+| `SOC2-CC6.1` | SOC 2 | chain-anchored `agent.envelope_narrowed` events (Blast-Radius Autopilot's apply path) | ≥1 scope-envelope narrowing recorded (absence is `no_data`, not failure — an already-minimal envelope needs none) |
+| `NIST-AI-RMF-MEASURE-2.7` | NIST AI RMF | continuous inspection on a verified chain (Article-15 substrate) | chain verifies with verdict rows in the window |
+| `NIST-AI-RMF-MANAGE-4.1` | NIST AI RMF | risk-response actions: denials + human evaluations + privilege reductions | ≥1 response action recorded (`partial` when traffic exists but no response) |
+| `NIST-AI-RMF-GOVERN-1.2` | NIST AI RMF | attested human-oversight decisions (Article-14 substrate) | every human oversight decision rode an attested channel |
 
 ### 3. Wire surface
 
