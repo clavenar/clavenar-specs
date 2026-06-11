@@ -1593,6 +1593,10 @@ VPS firewall: Cloudflare IP ranges only on the public surfaces. The mint endpoin
 
 ### 5. Security model
 
+Mint hardening: `/mint` is per-IP rate-limited (fixed window) and every
+Cloudflare Turnstile solve token is single-use — a replayed token mints
+nothing even inside Turnstile's own validity window.
+
 #### 5.1 Token mint
 
 `clavenar-demo-mint` (Rust service, port 9200, behind Caddy at `/mint`) holds:
