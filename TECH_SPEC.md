@@ -3696,6 +3696,26 @@ for two audiences:
 2. **Buyers and integrators** — to confirm that the security claims in
    the marketing site and `README.md` map to real, named controls.
 
+**Native MCP server mode.** The proxy and clavenar-lite speak the MCP
+control plane: `initialize`, `tools/list`, `ping`, and
+`notifications/*` forward through to the upstream and relay the
+response without hitting the tool-call security tiers (they carry no
+tool arguments to inspect), so a spec-compliant MCP client can add
+Clavenar as a standard MCP server. The credential gate still runs, so
+an unenrolled agent can't even handshake.
+
+**MCP supply-chain shield (tool-definition pinning).** The pipeline
+inspects every tool *call*; it now also distrusts tool *definitions*.
+The first `tools/list` an agent sees is pinned (per-tool canonical
+hash of `description` + `inputSchema`); any later list whose
+definitions mutate, appear, or vanish emits a `tool_schema_poisoned`
+forensic row — catching the canonical MCP rug-pull (a benign tool at
+enrollment that rewrites its description or parameter schema later).
+The in-process pin + forensic detection ships in both editions; the
+chain-anchored, identity-signed snapshot and Brain definition-injection
+scanning are the next increment. This flips upstream tool-definition
+compromise from out-of-scope to detected.
+
 **Degraded-mode rule.** Every security-relevant fallback either fails
 closed or degrades *loudly* — no silent fail-open. The catalog:
 
