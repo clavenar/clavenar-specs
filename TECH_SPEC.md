@@ -2135,6 +2135,44 @@ drafts skip the candidate-engine build step entirely — the body
 still passes `validate()`, but compose-time composition against the
 active bundle is deferred until activation.
 
+**Decision narratives — `POST /narrate-decision` (brain, plain-HTTP health port)**
+
+After a human decides a HIL pending, the console POSTs the decision
+context to brain's `/narrate-decision` and writes the returned summary
+back onto the pending as `incident_summary` (HIL `PATCH
+/pending/{id}/incident`, refused with 409 while the row is still
+pending).
+
+```json
+{ "verdict": "deny", "decision_reason": "new payee, off-hours",
+  "risk_summary": "Wire transfer to an unrecognized account",
+  "sandbox_severity": "destructive", "sandbox_operation_class": "write",
+  "sandbox_targets": ["payments.transfer"] }
+```
+
+Response on 200: `{ "incident_summary": "Denied: …" }` (≤ 240 chars).
+
+**PII contract** mirrors `/explain-pattern`: decision-context aggregates
+only (verdict, the operator's reason, the risk summary, sandbox
+severity/operation-class/targets) — never the raw payload, agent ID,
+correlation ID, or tool arguments. `NarrateDecisionRequest`
+(`clavenar-brain/src/wire.rs`) is the boundary, the handler caps the
+free-text fields, the prompt refuses leaked data, and a `tests/`
+assertion pins both halves. Same plain-HTTP health port (9081) and
+internal-by-topology posture as `/explain-pattern`.
+
+**Non-evidentiary annotation.** `incident_summary` is an annotation,
+never evidence: it is excluded from the chain-hashable HIL forensic
+event and from `/verify` — the deterministic `decision_reason` stays the
+compliance record. Generation is best-effort and console-orchestrated
+off the decide hot path (a fire-and-forget task after the decision
+commits); brain unset/down/slow simply leaves it unset, and
+`CLAVENAR_CONSOLE_BRAIN_URL` gates the whole feature. The narrative is
+surfaced, with an explicit "annotation, not evidence" disclaimer, on the
+console audit-detail page; HIL exposes the decided pending for that join
+via `GET /pending/by-correlation/{correlation_id}` (most-recent decided
+row, 404 when none).
+
 ### 7.7 Fleet incident hunt
 
 Hunting an incident across the fleet was one `/audit/{agent_id}` call
