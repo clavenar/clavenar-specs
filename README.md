@@ -145,8 +145,8 @@ completion **before** any upstream call — security-first, not race-to-veto.
         ▼                         ▼
 ┌───────────────────┐    ┌──────────────────────┐
 │  Layer 2 — Brain  │    │  Layer 3 — Policy    │
-│  Claude Haiku 4.5 │    │  regorus (embedded   │
-│  / Opus 4.x       │    │  Rego), deterministic│
+│  pluggable LLM    │    │  regorus (embedded   │
+│  (Haiku 4.5 dflt) │    │  Rego), deterministic│
 │  intent, persona, │    │  rules, circuit      │
 │  injection scan   │    │  breakers            │
 └─────────┬─────────┘    └──────────┬───────────┘
@@ -167,9 +167,11 @@ HashiCorp Vault — the agent never holds a credential. Every agent presents a
 short-lived X.509 SVID; mTLS prevents agent spoofing.
 
 **Layer 2 — semantic evaluation (the Brain).** `POST /inspect` classifies intent,
-scores persona drift, and scans for indirect injection. Powered by Claude Haiku
-4.5 for fast paths, with Claude Opus 4.x routed in for destructive calls. A
-vector-similarity intent cache short-circuits known-safe patterns.
+scores persona drift, and scans for indirect injection. The inspector LLM is
+pluggable — Claude Haiku 4.5 ships as the default fast path, Claude Opus 4.x
+routes in for destructive calls, and any provider (OpenAI, Google, Bedrock,
+Vertex, Ollama) swaps in via `CLAVENAR_BRAIN_MODELS_FILE`. A vector-similarity
+intent cache short-circuits known-safe patterns.
 
 **Layer 3 — governance & policy-as-code (the law).** An embedded, pure-Rust Rego
 evaluator (`regorus`). Even when the AI thinks an action is helpful, hard rules can
@@ -189,7 +191,7 @@ These are 2026 design targets, not measured production numbers.
 | Metric              | Target                | Technology               |
 |---------------------|-----------------------|---------------------------|
 | Proxy data-plane    | < 1 ms                | Rust / Tokio              |
-| Semantic check      | < 200 ms (typical ~85 ms) | Claude Haiku 4.5      |
+| Semantic check      | < 200 ms (typical ~85 ms) | pluggable LLM (Haiku 4.5 default) |
 | Policy engine       | < 1 ms                | regorus (embedded Rego)   |
 | Logging throughput  | 100k events / sec     | NATS / SQLite + Iceberg   |
 | Wire protocol       | MCP v1.0              | JSON-RPC 2.0              |
@@ -281,12 +283,16 @@ Analysing meta-reasoning is the strategic edge: Clavenar can detect an agent
 
 ### Model routing
 
-The brain routes per payload: ordinary `call_tool` and read methods → **Claude
-Haiku 4.5** (jailbreak-resistant, fast); `call_tool` whose params carry
-destructive verbs (`delete` / `drop` / `plan`) → **Claude Opus 4.x**. Model names
-are configurable, not hardcoded. In tests and the e2e stack a mock provider runs a
-heuristic fallback with no live model calls; the Lite (OSS) edition ships the
-heuristic brain only.
+The inspector LLM is pluggable behind a single provider trait — each detector's
+`(provider, model)` pair is read from `CLAVENAR_BRAIN_MODELS_FILE`, so a single
+Brain can mix Anthropic, OpenAI, Google, Bedrock, Vertex, and Ollama models. The
+brain routes per payload: ordinary `call_tool` and read methods → a fast tier
+(**Claude Haiku 4.5** by default, jailbreak-resistant); `call_tool` whose params
+carry destructive verbs (`delete` / `drop` / `plan`) → a heavier tier (**Claude
+Opus 4.x** by default). Haiku/Opus are the shipped defaults, not a hardcoded
+dependency — swap either tier at the models file. In tests and the e2e stack a
+mock provider runs a heuristic fallback with no live model calls; the Lite (OSS)
+edition ships the heuristic brain only.
 
 ### Inspection techniques
 
@@ -307,7 +313,7 @@ The fastest request is the one you never send to the LLM.
 - **L2 — vector similarity.** Cosine similarity ≥ 0.98 against an approved
   embedding → known-safe, skip the scan; latency drops from ~100 ms to ~5 ms.
 
-### Target metrics (Claude Haiku 4.5)
+### Target metrics (default fast tier — Claude Haiku 4.5)
 
 Target figures for 2026; not yet measured against a held-out eval set.
 
