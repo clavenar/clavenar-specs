@@ -417,7 +417,14 @@ chain version — verifiers dispatch per row, and v1 rows keep verifying forever
 
 NATS JetStream (`clavenar.forensic`) is the **primary write path**; four publishers
 land here — proxy (v1/v2), policy engine (v1), HIL (v1 + sandbox metadata),
-identity (v3 via a durable outbox). `POST /log` is a fallback for non-NATS callers.
+identity (v3 via a durable outbox). The subject is captured by the
+`clavenar-forensic` JetStream stream and the ledger consumes it through a
+**durable pull consumer with explicit acks** — events published while the
+ledger is down replay on reconnect instead of vanishing, an append failure
+leaves the message unacked for redelivery, and deny/pend verdict rows are
+published with a required stream ack (bounded retry + a loud
+`*_forensic_publish_failed_total` counter on exhaustion). `POST /log` is a
+fallback for non-NATS callers.
 Both funnel through the same `append_entry` behind a SQLite mutex, so the chain is
 identical whichever way an event arrives. The hot store is plain SQLite; `seq …
 UNIQUE` enforces append-only ordering; `correlation_id` joins all rows for one
