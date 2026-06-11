@@ -406,7 +406,14 @@ prev_hash[n+1] = entry_hash[n]
 ```
 
 Any tamper to an entry breaks every downstream `entry_hash`, and the `GET /verify`
-walk catches it. `CURRENT_CHAIN_VERSION = 3` — three coexisting hashable shapes,
+walk catches it. The walk is checkpointed: repeat calls re-verify only rows
+appended since the last fully-valid walk (the reported `entries_checked`
+stays cumulative), a full re-walk runs automatically every ten minutes, and
+`?full=true` forces one on demand (per-IP rate-limited — a multi-million-row
+walk on a public route is otherwise a denial-of-service lever). The hot store
+runs SQLite with `journal_mode=WAL` + `synchronous=FULL`, and the
+post-export vacuum commits its cursor row and physical delete in one
+transaction, so a crash can never leave deleted rows without a verify seed. `CURRENT_CHAIN_VERSION = 3` — three coexisting hashable shapes,
 each row carrying its `chain_version`: **v1** (pre-signing verdicts), **v2**
 (adds `agent_spiffe` + identity-issued `signature` + `key_id`, themselves
 hashable so a signature can't be stripped without breaking the chain), **v3**
