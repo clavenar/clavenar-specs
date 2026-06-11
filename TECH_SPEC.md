@@ -2191,6 +2191,43 @@ matching the other analysis reads. A `timestamp` index
 (`idx_entries_timestamp`) covers the window bound; `method` / `signal`
 / `authorized` are unindexed, so the window is the selective filter.
 
+### 7.8 Incident cases
+
+A case groups the agents and correlations of one incident into a single
+mutable timeline. It is a **read-side correlation** over the chain: it
+stores `agent_ids` + `correlation_ids` and expands them at read time
+against the existing audit reads — there is **no `case_id` column on
+`entries`**, so a case never touches the hash chain and purging one
+never affects `GET /verify`. The `cases` table is a fresh SQLite-only
+sibling table; on the Postgres backend the handlers return `503`.
+
+**Routes (ledger, internal mTLS router):**
+
+```
+POST   /cases                     { title, agent_ids[], correlation_ids[], actor? } → CaseRecord (201)
+GET    /cases?[status=]&[limit=]   → [CaseRecord]   (newest-first, limit ≤ 1000)
+GET    /cases/{id}                 → { case: CaseRecord, evidence: [LedgerEntry] }
+POST   /cases/{id}/timeline        TimelineEvent     → 204
+POST   /cases/{id}/status          { status }        → 204   (open|contained|closed)
+POST   /cases/{id}/attach          { agent_ids[], correlation_ids[] } → 204
+```
+
+`CaseRecord` = `{ id, title, status, created_at, updated_at, agent_ids,
+correlation_ids, timeline: [{at,kind,actor,detail}] }`. `GET /cases/{id}`
+expands evidence by reading each `correlation_id` (`read_for_correlation`)
+and `agent_id` (`read_for_agent`) through the backend-agnostic store,
+merging + deduping by entry id, newest-first, capped at 500 rows.
+
+The console renders this at `/incidents` (list) and `/incidents/{id}`
+(detail). **Containment** is a console action (`POST
+/incidents/{id}/contain`, approver-gated): it resolves each case agent
+CN → registry UUID and suspends it via identity (the shipped revocation
+denylist kills in-flight traffic), recording each result on the case
+timeline — partial success, one agent's failure never aborts the rest.
+Containment uses **suspend** (reversible), never decommission. Case
+export (`GET /incidents/{id}/export`) bundles the case + evidence as a
+downloadable JSON report.
+
 ### 8. Authorization
 
 Adds a third role to the existing two-role hierarchy in `clavenar-console/src/auth_session.rs`:
