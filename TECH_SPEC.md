@@ -132,10 +132,14 @@ The delegation grant is the missing piece in today's architecture. It carries:
   "act":  { "sub": "user:alice@acme.com", "idp": "okta", "amr": ["webauthn"] },
   "scope": ["mcp:read:tickets", "mcp:write:tickets"],
   "yellow_scope": ["refund:<=50usd"],
+  "nbf":  1714690800,
   "exp":  1714694400,
+  "max_uses": 1,
   "jti":  "01HW..."
 }
 ```
+
+`nbf` and `max_uses` are the optional **just-in-time** terms (additive, back-compatible — a grant without them is an unmetered pass for its full lifetime). `nbf` is the activation instant; before it the proxy rejects with `grant_not_yet_valid`. `max_uses` caps consumption: the proxy meters every delegated tool call against the count in the shared `clavenar_grant_usage` NATS-KV bucket and rejects an exhausted grant with `grant_usage_exhausted`. The `GrantRequest` accepts `max_uses`, `not_before`, and `not_after`; a `not_after` shorter than the 24h ceiling rides through as the grant's `exp`. The use count is metered at the gate — every *admitted* tool call consumes one use (a control-plane handshake does not; a call later denied by brain/policy still does, since the grant authorizes the attempt). Metering is only as strong as grant-signature verification: when `CLAVENAR_PROXY_GRANT_JWKS_URL` is wired the proxy verifies every grant, and a grant carrying JIT terms is rejected (`grant_jit_unverified`) rather than honored unmetered while the JWKS cache is cold; a usage-bucket outage fails *open* with an unsampled `grant_usage_check_degraded` signal (availability over a hard cap — auditable on every bypassed request). The `clavenar_grant_usage` bucket shares the connection-level-mTLS / no-subject-authz model of `clavenar_revocation`: an agent cannot poison it (agents are not NATS clients), but a compromised in-stack workload can — the same blast radius as the revocation denylist.
 
 `act` is RFC 8693 actor-token semantics: "this agent is acting *on behalf of* this human." The proxy presents `act.sub` to HIL approvers verbatim ("Alice's support-bot-3 wants to refund $42") — this is what makes the audit story land for compliance officers reading EU AI Act Article 12 logs.
 
@@ -165,7 +169,7 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 SQLite, mirroring the ledger's "boring + auditable" stance:
 
 - `svids` (id, spiffe_id, attestation_id, not_before, not_after, revoked_at)
-- `grants` (jti, agent_spiffe, human_sub, scope_json, yellow_scope_json, exp, revoked_at)
+- `grants` (jti, agent_spiffe, human_sub, scope_json, yellow_scope_json, exp, revoked_at, max_uses, not_before, not_after)
 - `attestations` (id, kind {tpm-quote, sev-snp, sgx-dcap, gcp-tpm, aws-nitro, k8s-projected}, evidence_blob, verified_at, policy_version)
 
 No JSON in queryable columns where it can be a column — we want SQL-grep-able audits.
@@ -308,7 +312,7 @@ Console (`clavenar-console`) needs a "Delegation: alice@acme via support-bot-3" 
 Five phases, each independently shippable. **All five shipped.**
 
 1. **SVID issuance, no enforcement.** *(shipped)* `clavenar-identity` mints SVIDs alongside the existing CA. Proxy parses the SPIFFE SAN from the cert and falls back to CN for legacy clients.
-2. **Delegation grants.** *(shipped)* `/grant` exchange wired; HIL records the delegation principal on pending rows; proxy threads `X-Clavenar-Grant` through and rejects expired grants with `grant_expired`.
+2. **Delegation grants.** *(shipped)* `/grant` exchange wired; HIL records the delegation principal on pending rows; proxy threads `X-Clavenar-Grant` through and rejects expired grants with `grant_expired`. Grants are also **just-in-time**: optional `max_uses` (metered at the proxy gate, `grant_usage_exhausted`) and `nbf` / `not_after` validity windows (`grant_not_yet_valid`), with use-exhausted and unused-by-deadline grants self-revoking as `grant.auto_revoked` chain events (see [§ Suspend is hard](#identity-service)).
 3. **Action signing (chain v2).** *(shipped)* Ledger gained v2 dispatch (`HashableEntryV2` with `agent_spiffe`, `signature`, `key_id`); proxy calls `/sign` after the verdict resolves; verifier exposes JWKS-based per-row signature check; mixed-v1/v2 export verifies.
 4. **Attestation enforcement.** *(shipped)* `policies/attestation.rego` ships with `attestation_required` rules keyed on `wire_transfer` and `delete_*`; `attestation_allowlist.json` carries the per-tool measurement list; proxy attaches `AttestationClaims` (with a per-spiffe-id cache and `X-Clavenar-Attestation` per-request header override) on every `/evaluate`; chaos-monkey `unattested_binary` asserts deny.
 5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`); federation poller; two-tenant `run-federation.sh` e2e in `clavenar-e2e`.
@@ -427,6 +431,7 @@ Three states. Two reversible transitions, one terminal:
 - **Suspended → Active** requires `agents:admin`. If the team that suspended themselves can also unsuspend themselves, the suspend lever doesn't survive a compromised team account.
 - **`* → Decommissioned`** requires `agents:admin`. Terminal. The row remains; the `(tenant, agent_name)` is permanently unreusable.
 - **Suspend is hard — shipped.** Suspension lands in the `clavenar_revocation` NATS-KV bucket (identity writes on every suspend/unsuspend and reconciles the bucket from registry truth at boot; `GET /revocation/list` exposes the same set over mTLS). The proxy mirrors the bucket in-memory via a KV watch and rejects every request from a suspended agent with `403 agent_revoked` before the pipeline runs; revoked delegation grants reject in flight by `jti` with `403 grant_revoked`. While the mirror has never synced (or lost its watch) the gate fails open *loudly* — `clavenar_proxy_revocation_cache_degraded` goes HIGH and sampled `revocation_check_degraded` forensic rows land, per the no-silent-fail-open rule. Issuance-side gates (`/svid`, `/grant` refuse Suspended) were already in place, so suspension now bites at mint time *and* on the very next in-flight request. Residual: the A2A actor-token single-use `jti` denylist remains per-instance SQLite (with the `clavenar.federation.jti` announce hook) — a multi-replica identity deployment should treat that as open hardening.
+- **Just-in-time grants — shipped.** A delegation grant can carry an optional consumption cap (`max_uses`) and validity window (`nbf` / `not_after`) on top of its lifetime. The proxy enforces them at the same in-flight gate as revocation: a not-yet-valid grant rejects `403 grant_not_yet_valid`, and each admitted tool call CAS-increments the grant's counter in the shared `clavenar_grant_usage` NATS-KV bucket, rejecting an exhausted grant `403 grant_usage_exhausted`. **Self-revocation:** an identity sweep (every 30s, mirroring the chain-emission outbox sweeper) reconciles JIT grants against that bucket — a use-exhausted grant, or a windowed grant that lapsed unused, is marked revoked, written to the `clavenar_revocation` denylist (so future requests get the cleaner `grant_revoked`), and recorded as a `grant.auto_revoked` chain v3 event (`actor_sub = system:grant-sweep`, payload `reason ∈ {usage_exhausted, unused_by_deadline}`). Enforcement is immediate at the proxy; the chain event is eventually consistent within one sweep interval — audit, never the block. This composes with revocation on the consumption axis as Blast-Radius Autopilot composes on the scope axis.
 
 #### 3.3 Ownership
 
@@ -3744,7 +3749,7 @@ parse it into their typed `Veto` / `ClavenarDenied` surfaces.
 |---|---|
 | `verdict` | `denied` · `review_denied` · `review_expired` · `rate_limited` · `error` (infra/pipeline failure). |
 | `layer` | Stage that produced the rejection: `brain` · `policy` · `hil` · `egress` · `identity` · `upstream` · `gateway` · `proxy`. |
-| `error` | Stable machine code (`security_violation`, `egress_blocked`, `review_denied`, `grant_expired`, `a2a_redeem_failed`, `rate_limited`, `pipeline_unavailable`, …). |
+| `error` | Stable machine code (`security_violation`, `egress_blocked`, `review_denied`, `grant_expired`, `grant_not_yet_valid`, `grant_usage_exhausted`, `a2a_redeem_failed`, `rate_limited`, `pipeline_unavailable`, …). |
 | `reasons` | Human-readable deny reasons — the Rego strings, Brain reasoning, or a single infra message. Omitted when empty. |
 | `review_reasons` | Yellow-tier reasons, when the rejection followed a held request. Omitted when empty. |
 | `intent_category` | Brain intent bucket, when a verdict was reached. Omitted otherwise. |
