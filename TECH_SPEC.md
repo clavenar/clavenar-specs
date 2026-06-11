@@ -19,7 +19,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
-- [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (designed; implementation v1.x+3)
+- [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (shipped — `clavenar-workload-identity`, hot-reload via ArcSwap + peer-SPIFFE SAN check)
 - [Agent-facing error envelope](#agent-facing-error-envelope) — the shared JSON 403/429/503 body the data plane returns to callers
 - [Kill-chain breaker](#kill-chain-breaker) — cross-replica multi-step attack detection over a shared NATS-KV behavioral-history bucket
 - [Threat model](#threat-model) — STRIDE-organized, layer-by-layer
@@ -51,7 +51,7 @@ authoritative wire-contract detail still lives in those sections.
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
-| 12 | [Workload SVID refresh](#workload-svid-refresh) | designed (implementation v1.x+3) | — | `clavenar-identity` (issuer), every internal service (consumer) |
+| 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
 | 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
 
@@ -1229,7 +1229,7 @@ The trust path is **mode-dependent** because WebAuthn already has a stronger pri
 - **WebAuthn mode (today, unchanged):** HIL is the credential authority. The console proxies WebAuthn ceremonies and shuttles HIL's session cookie back to the browser; subsequent `/decide` calls attach the HIL cookie and HIL stamps `decided_by` from the verified principal.
 - **OIDC / basic-admin / disabled:** HIL has no credential to verify, so console and HIL share a bearer secret (`CLAVENAR_HIL_DECIDE_TOKEN`). Console verifies OIDC (or basic-admin), stamps `decided_by`, and presents the bearer on `/decide`. HIL trusts the request-body `decided_by` *only when* a valid bearer is present; without the bearer, the existing `Authn::Disabled` fallback applies. Console refuses to boot if the configured mode requires the token and it is missing; HIL defaults to per-request validation (401 on a token-less decide) but operators can opt into the same boot-time guard by setting `CLAVENAR_HIL_REQUIRE_DECIDE_TOKEN=true` — HIL then refuses to start unless `CLAVENAR_HIL_DECIDE_TOKEN` is also set. The opt-in keeps backward compatibility while letting bearer-only deployments fail loudly on first start.
 
-The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via clavenar-identity SVIDs (substrate decision recorded in [Internal service mTLS](#internal-service-mtls); implementation deferred to v1.x+2) will replace it uniformly across all modes including WebAuthn.
+The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via clavenar-identity SVIDs (see [Internal service mTLS](#internal-service-mtls) — **shipped** across all six rollout sessions plus dynamic workload-SVID refresh) gates every internal hop today.
 
 ### 7. Mechanical defaults
 
@@ -3047,10 +3047,14 @@ validating the peer's SPIFFE SAN URI matches the expected
 `service/<name>` rather than just "any cert signed by the clavenar CA"
 (closes [§Internal service mTLS §10 Q2](#internal-service-mtls)).
 
-**Module status:** **designed 2026-05-14**; implementation is the
-v1.x+3 slice (sessions 2–5). The bootstrap layer alone is operational
-today — workload-SVID refresh layers on top without breaking
-existing callers (the fallback path is the bootstrap behavior).
+**Module status:** **shipped** — the `clavenar-workload-identity`
+crate (`refresh.rs` ArcSwap hot-reload, `verifier.rs` peer-SPIFFE SAN
+check, `server_config.rs` `ResolvesServerCert`). Every internal
+service exchanges its bootstrap cert for a short-lived SVID on a
+~15-minute cadence (`CLAVENAR_<SVC>_WORKLOAD_REFRESH_URL`) and
+verifies the peer's SPIFFE SAN against `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE`;
+a refresh failure falls back to the bootstrap cert without dropping
+the connection. Live on both envs.
 
 ### 1. What this closes
 
