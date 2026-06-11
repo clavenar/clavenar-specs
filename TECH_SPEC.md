@@ -2230,14 +2230,38 @@ expands evidence by reading each `correlation_id` (`read_for_correlation`)
 and `agent_id` (`read_for_agent`) through the backend-agnostic store,
 merging + deduping by entry id, newest-first, capped at 500 rows.
 
+**Authority notification (Art 73(2)).** Classification also records a
+durable obligation in the SQLite-only `authority_notifications` outbox
+(a sibling table, not on the chain). The insert is idempotent on
+`(case_id, severity)` while a non-failed notification exists, so a no-op
+re-classify never double-notifies but a severity change is a fresh
+obligation. A background sweeper (env
+`CLAVENAR_LEDGER_AUTHORITY_INTERVAL_SECS`, default 30s) drains pending
+rows to a configured webhook (`CLAVENAR_LEDGER_AUTHORITY_WEBHOOK`, with
+optional `…_WEBHOOK_BEARER`) with per-row exponential backoff; one
+unreachable notification never blocks the others. The webhook body is
+`{ framework: "eu_ai_act_art_73", notification_id, case_id, severity,
+regulatory_deadline, classified_at }`. The insert is unconditional —
+rows accumulate as `pending` even with no webhook configured and deliver
+once one is wired. Metrics: `clavenar_ledger_authority_{notifications,
+delivered,delivery_failed}_total` counters plus `…_authority_pending` /
+`…_authority_failed` gauges (the latter, when non-zero, signals an
+exhausted retry = a missed-deadline risk).
+
 The console renders this at `/incidents` (list) and `/incidents/{id}`
 (detail). **Containment** is a console action (`POST
 /incidents/{id}/contain`, approver-gated): it resolves each case agent
 CN → registry UUID and suspends it via identity (the shipped revocation
 denylist kills in-flight traffic), recording each result on the case
 timeline — partial success, one agent's failure never aborts the rest.
-Containment uses **suspend** (reversible), never decommission. Case
-export (`GET /incidents/{id}/export`) bundles the case + evidence as a
+Containment uses **suspend** (reversible). **Decommission** (`POST
+/incidents/{id}/decommission`, **admin-gated**, behind an explicit
+confirm dialog carrying an operator reason) is the terminal escalation:
+it permanently retires each case agent via identity decommission (no
+revocation broadcast — the SVID is terminally void), encoding the
+terminal fact in distinct timeline kinds while the case status stays
+`contained` (the status enum is closed). Case export
+(`GET /incidents/{id}/export`) bundles the case + evidence as a
 downloadable JSON report.
 
 ### 8. Authorization
@@ -2388,7 +2412,7 @@ The catalog is *not* a new policy-authoring product. Operators still edit Rego f
 - ~~"Install all in domain X" bulk action.~~ **Shipped.** `POST /policies/categories/{domain}/{activate,deactivate}` (see [Console policy management §5](#console-policy-management)) flips a whole category in one transaction + one engine rebuild; the `/policies` index renders per-category Install-all / Uninstall-all buttons.
 - Editing a template in-place via the console. Templates are filesystem source-of-truth; the active-policy edit flow on `/policies/<name>/edit` remains the only console editor. Library is read-only.
 - Community / third-party template marketplace. Versioning, signing, trust-on-first-use, distribution — all of that lives behind a separate plan once the curated catalog stabilises at 100-200 entries.
-- Archetype / DSL layer over Rego. At 576 templates the file-per-policy model still scales (sub-bucketed under `policies/templates/<domain>/`); if the catalog grows past ~1000 a parametric layer becomes interesting. Follow-up: parametric / TOML-driven authoring is the natural next step at the next round of growth.
+- Archetype / DSL layer over Rego. At 577 templates the file-per-policy model still scales (sub-bucketed under `policies/templates/<domain>/`); if the catalog grows past ~1000 a parametric layer becomes interesting. Follow-up: parametric / TOML-driven authoring is the natural next step at the next round of growth.
 - Frontmatter linting at engine boot. Today the parser is tolerant (missing fields stay NULL); a strict linter that rejects templates with empty frontmatter is a follow-up once authoring drift is observable.
 - Compliance-framework view as a first-class navigation surface (`/policies/library/by-framework/HIPAA`). The frontmatter carries it; the URL filter (`?framework=HIPAA`) gives the same answer. A dedicated route is a polish iteration.
 
@@ -2587,7 +2611,7 @@ Discoverability is via the `/policies` header button rather than a dedicated `ba
 
 ### 11. Content baseline
 
-Current size: **576 templates** across **24 industry domains** — uniformly 24 templates per domain. Files live in per-domain sub-buckets at `policies/templates/<domain>/<name>.rego`; the engine's `scan_templates_dir` walks recursively. Template names remain globally unique so the loader keeps the flat namespace and the path-traversal guard in `read_template()` stays as-is.
+Current size: **577 templates** across **24 industry domains** — 24 per domain, plus a dedicated EU AI Act Article 5 prohibited-practices pack (`eu_ai_act_article_5.rego`) in `ai-governance` that hard-denies the five outright-prohibited practices (social scoring, subliminal manipulation, real-time remote biometric ID in public spaces, workplace/education emotion inference, untargeted facial-image scraping). Files live in per-domain sub-buckets at `policies/templates/<domain>/<name>.rego`; the engine's `scan_templates_dir` walks recursively. Template names remain globally unique so the loader keeps the flat namespace and the path-traversal guard in `read_template()` stays as-is.
 
 - **24 industry domains** (24 templates each): healthcare, finance, legal, coding, hr, devops, manufacturing, ml, ecommerce, government, education, insurance, support, marketing, logistics, telecom, payments-fintech, energy-utilities, capital-markets, cybersecurity-ops, ai-governance, biotech-pharma, public-sector-municipal, cross-cutting.
 - The cross-cutting bucket carries the framework-spanning patterns (governance + attestation + the generic shapes: pii_egress, prod_db_writes, money_moves, agent_impersonation, prompt_injection, off_hours_actions, rate_limit_review, mfa_disable, data_export_to_personal_email, …) rather than a single industry vertical.
@@ -2605,7 +2629,7 @@ A growth target of 100-200 templates was the original operator-UX threshold wher
 ### 12. What this section deliberately does not include
 
 - **Per-template lab fixtures** (a positive-deny + positive-review + negative-allow trio shipped alongside each rule). The shape is interesting and a follow-up plan exists; v1 leans on the chaos-catalog smoke + the `all_templates_compile` test as the regression net.
-- **A query language richer than facet checkboxes + free-text search.** Operators who want "templates that fire on `phi_export` OR `bulk_export`" can issue two queries today. A unified `q=phi_export OR bulk_export` parser stays unwarranted at 576 templates — the sidebar facets carry the load.
+- **A query language richer than facet checkboxes + free-text search.** Operators who want "templates that fire on `phi_export` OR `bulk_export`" can issue two queries today. A unified `q=phi_export OR bulk_export` parser stays unwarranted at 577 templates — the sidebar facets carry the load.
 - **Template versioning.** A template's body on disk is the source of truth; once installed, the active policy versions independently. Diff between template-as-of-today and the installed version is `clavenarctl policy library get-template <name> | diff - <(clavenarctl policy get <name> --body)` — useful but not first-class.
 - **Soft delete of a template.** Templates aren't mutable state; removing one is a `git rm` + redeploy. Already-installed copies stay installed.
 - **Per-template RBAC.** Library install is `Role::Admin`; finer-grained "this admin can install HIPAA templates but not government templates" is out of scope.
