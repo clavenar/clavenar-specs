@@ -694,7 +694,7 @@ finance, critical infrastructure), compliance is no longer optional.
 |------------------|------------------------------------------------------------------|----------------------------------|
 | Automatic logging| Real-time capture of every tool call and decision                | Immutable JSON-RPC logs          |
 | Tamper-proofing  | Cryptographically hashed and chained                             | SHA-256 audit trail              |
-| Retention        | Pluggable S3-compatible Iceberg cold tier, 6+ months             | Regulatory export API            |
+| Retention        | 183-day enforced deletion floor (non-demo) + legal hold; S3-compatible Iceberg cold tier | Regulatory export API            |
 
 > **The shift in burden of proof.** When the regulator knocks, you do not show them
 > a black-box LLM — you show a Clavenar audit trail proving control the entire time.

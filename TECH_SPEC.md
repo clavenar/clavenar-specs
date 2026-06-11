@@ -1395,6 +1395,15 @@ Lives under a new top-level `regulatory` verb (own surface — distinct from `ag
 - **Body too large** → `413 payload_too_large`.
 - **Body content-type not `text/*`** → `400 unsupported_media_type` with a diagnostic body. Surfacing a curl-without-content-type-header mistake loudly (vs. silently dropping the prose) caught operator-side configuration errors during slice-3 rollout; the loud-fail posture stuck. Operators who genuinely want a no-prose bundle pass an empty body or omit the body entirely.
 
+### 11. Retention floor & legal hold
+
+The ledger never deletes chain rows by default — cold-tier export *copies* rows out (`CLAVENAR_LEDGER_EXPORT_RETENTION_SECS` only controls when a row becomes export-eligible); the sole deletion path is the opt-in post-export vacuum.
+
+- **Vacuum opt-in:** `CLAVENAR_LEDGER_VACUUM_RETENTION_SECS` enables pruning of exported rows older than the window. Unset (the default) keeps every row forever.
+- **Production retention floor:** for non-demo deployments the vacuum window must be **≥ 183 days** (EU AI Act Art 19(1) / 26(6) "at least six months"). A shorter value refuses to boot. Disposable demo deployments opt out explicitly with `CLAVENAR_LEDGER_DEMO_MODE=true`; that flag also arms the demo-reset tooling — reset scripts refuse to wipe a ledger whose rendered compose config doesn't carry it.
+- **Legal hold:** `CLAVENAR_LEDGER_LEGAL_HOLD=true` suspends the vacuum entirely while set — exports keep running (copies are fine), deletions stop, and every export pass logs the standing hold. Releasing the hold is a restart with the variable unset.
+- The vacuum-cursor chain semantics (cursor row, `verify_chain` seeding) are unchanged; the floor and hold only gate *whether* the vacuum runs.
+
 ---
 
 ## Continuous compliance evidence
