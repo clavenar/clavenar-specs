@@ -1758,7 +1758,7 @@ The console UI is *not* a rule editor for non-engineers — it's still a rego te
 - Splitting `governance.rego` into per-axis files (`governance_denylist.rego`, `governance_velocity.rego`, …); a separate refactor with its own rollback story.
 - Two-person approval (4-eyes) for deactivation/delete of "critical" policies; the v1 defense is `Admin` role + chain audit + required reason.
 - Multi-replica `clavenar-policy-engine` *rule-set* consistency (compiled-Rego NATS-KV invalidation à la velocity tracker); still single-replica. Note: the proxy's *behavioral-history* KV substrate now ships (see [Kill-chain breaker](#kill-chain-breaker)) — that's per-agent request sequence, a different kind of state than the compiled rule set, so this rule-set item stays deferred.
-- Codemirror / Monaco editor; v1 uses plain `<textarea>` and leans on regorus error messages for syntax feedback.
+- A full IDE-grade editor (LSP, autocomplete). The console ships a CodeMirror Rego editor with a server-backed **check-syntax** action (`POST /policies/validate` surfaces regorus line/column before save); richer in-editor lint gutters and a Monaco upgrade stay out of scope.
 - Golden-test corpus gate on save; the chaos-monkey suite is *almost* this corpus today, but promoting it into a pre-save hook is its own project.
 - Git-backed policy storage (PR-review workflow); a different product than the console-CRUD shape we're building.
 - Higher-level DSL on top of rego (structured forms generating rego); ditto.
