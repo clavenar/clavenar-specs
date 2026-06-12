@@ -19,6 +19,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
+- [Fleet posture score](#fleet-posture-score) — single 0–100 landing-page health heuristic composed client-side from ledger rows + the assurance lane; no wire / chain change
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
 - [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (shipped — `clavenar-workload-identity`, hot-reload via ArcSwap + peer-SPIFFE SAN check)
 - [Agent-facing error envelope](#agent-facing-error-envelope) — the shared JSON 403/429/503 body the data plane returns to callers
@@ -52,6 +53,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9a | [Policy exchange](#policy-exchange) | shipped | v1.3.0 | `clavenar-sdk` (pack manifest + `PackSigner`), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange {sign,install}`); reuses `/sign/blob` + `evaluate-batch` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
+| 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
@@ -3101,10 +3103,57 @@ expected verdict.
   `demo-<prefix>-assurance` (so the simulator's `demo-` skip filter
   leaves it alone) and its `correlation_id` carries the prefix as its
   first UUID group (so the ledger's demo read filter scopes the row to
-  that visitor). **Honest scope:** the lane lands real fired-attack
-  scorecards on chain today; feeding them into a headline *posture
-  score* is deferred to the (unbuilt) *Live pipeline theater* surface
-  that owns the posture number.
+  that visitor). The latest run's pass ratio feeds the
+  [fleet posture score](#fleet-posture-score) as one of its four signals
+  (demo-scoped to this lane for a session visitor, the `assurance-monkey`
+  fleet lane otherwise).
+
+---
+
+## Fleet posture score
+
+The console landing page (`/`) headlines a single **0–100 fleet posture
+score** — an at-a-glance answer to "how safe is the fleet right now"
+that visibly reacts when the control plane is under pressure. It is a
+**heuristic, not a certification**: a directional health indicator, not
+a security guarantee, audit result, or compliance attestation.
+
+**No wire or chain change.** The score is composed entirely **in the
+console** from data it already reads — terminal ledger rows over a
+rolling 1 h window plus the latest `assurance_run`. There is no new
+ledger endpoint, no new chain field, and no proxy change; the
+`GET /_partials/posture` route is a console partial alongside the
+existing ops-signals / chart partials, refreshed on the page's uniform
+30 s htmx poll (the arc redraws via a CSS keyframe on each swap-in —
+there is no posture SSE producer).
+
+**Composite.** A weighted mean of four sub-signals, each normalised to a
+`[0, 1]` health fraction, scaled ×100:
+
+| Signal | Weight | Health | Source |
+|---|---|---|---|
+| Deny rate | 0.30 | `1 − (denied/total)/0.25`, clamped | `compute_deny_rate_in` over the window — an unusually high deny share signals active attack / misconfiguration pressure |
+| Velocity-breaker pressure | 0.20 | `1 − tripped_agents/3`, clamped | count of agents over the per-minute limit (count-based, robust to the rego message string) |
+| Degraded-gate events | 0.20 | `1 − degraded_rows/5`, clamped | chain rows whose `signal` is `revocation_check_degraded` / `grant_usage_check_degraded` (the only fail-open states that reach the chain; sampled ~1-in-100, so each row stands in for many real events) |
+| Assurance pass rate | 0.30 | `passed/total` of the latest run | the continuous-assurance lane (latest run pass ratio, **not** coverage) |
+
+**Renormalisation.** A sub-signal with too little data to score is
+dropped from *both* numerator and denominator, never scored as 0. The
+deny factor is excluded below a 20-request sample floor — so a single
+correctly-denied demo scenario (total 1, denied 1) cannot read as 100 %
+deny and paint the gauge red right after the system defended correctly.
+Assurance is excluded when no run exists / the latest fired zero cases.
+Velocity and degraded always score 1.0 on empty input, so the
+denominator is never 0 and a quiet fleet reads 100.
+
+**Scope.** Operator path = global fleet aggregate, served from a 60 s
+background-warmed cache (the same task that warms the ops-signals
+strip). Demo-session visitors get a posture scoped to their own
+synthetic `demo-<6hex>` agent + `demo-<prefix>-assurance` lane, computed
+fresh per request. The methodology — including the explicitly
+**not-folded-in** signals (brain/policy degraded gauges and blast-radius
+envelope tightness, which are operational metrics that do not land on
+the audit chain) — is published beside the gauge.
 
 ---
 
