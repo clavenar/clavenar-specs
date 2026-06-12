@@ -2210,7 +2210,10 @@ severity/operation-class/targets) — never the raw payload, agent ID,
 correlation ID, or tool arguments. `NarrateDecisionRequest`
 (`clavenar-brain/src/wire.rs`) is the boundary, the handler caps the
 free-text fields, the prompt refuses leaked data, and a `tests/`
-assertion pins both halves. Same plain-HTTP health port (9081) and
+assertion pins both halves. The rail has two console consumers — the
+per-decision `incident_summary` annotation and the incident post-mortem
+draft (§7.8), the latter feeding it case-level aggregates only — and
+each pins the no-identifier contract on its own side. Same plain-HTTP health port (9081) and
 internal-by-topology posture as `/explain-pattern`.
 
 **Non-evidentiary annotation.** `incident_summary` is an annotation,
@@ -2356,7 +2359,19 @@ terminal fact in distinct timeline kinds while the case status stays
 `contained` (the status enum is closed); like containment, it auto-denies
 the retired agents' linked HIL pendings. Case export
 (`GET /incidents/{id}/export`) bundles the case + evidence as a
-downloadable JSON report.
+downloadable JSON report. **Incident post-mortem draft**
+(`GET /incidents/{id}/report`, `require_viewer`) is the human-readable
+companion: a one-page Markdown write-up composing the case metadata,
+operator timeline, and a capped evidence table, prefaced by a best-effort
+prose summary from the `/narrate-decision` rail (below). The draft is
+**non-evidentiary** — it carries the same disclaimer and determinism
+posture as the `incident_summary` annotation (the chain rows stay the
+compliance record), and it is regenerated on each download, never
+persisted. The narrate call is fed **aggregates only** (action counts,
+signal categories, severity, time window) — never agent IDs, correlation
+IDs, the case title, or tool arguments — so the rail's PII contract holds
+on the console side; agents and correlations still appear in the draft
+body, which the operator already sees.
 
 ### 8. Authorization
 
