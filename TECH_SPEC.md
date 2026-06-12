@@ -1295,11 +1295,13 @@ The existing `/export` produces Parquet for analytics; no auditor expects to rea
 `.tar.gz` containing:
 
 ```
-manifest.json                 — schema v3, signed
+manifest.json                 — schema v5, signed
 manifest.sig                  — detached ed25519 sig (128 hex chars + LF)
 entries.ndjson                — one LedgerEntry per line, seq ASC
 technical_documentation.md    — operator-supplied prose (optional)
-README.txt                    — auditor verification checklist (7 steps)
+compliance_register.json      — auto-derived Art 14/15 register (optional)
+anchors.ndjson                — external chain-anchor proofs (optional)
+README.txt                    — auditor verification checklist (8 steps)
 ```
 
 NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more readily than Parquet tooling. Detached signature rather than embedded — keeps the `manifest.json` byte-stable across signing implementations. Half-open window `[from, to)`. Empty windows return a valid bundle with `row_count: 0` (auditors expect a verifiable artifact even for "we logged nothing"). Operator stores; Clavenar does not retain bundles server-side.
@@ -1313,11 +1315,11 @@ NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more 
 
 `POST /export/regulatory` is the auditor-facing export. `POST /sign/blob` is the new signing primitive on clavenar-identity (sibling to `/sign`, same caller-allowlist gate, audience-tagged forensic event), wired via `CLAVENAR_IDENTITY_URL` + `CLAVENAR_LEDGER_SPIFFE` and routed through `clavenar-ledger::identity_client::ManifestSigner` / `HttpManifestSigner`.
 
-### 5. Manifest schema (v3)
+### 5. Manifest schema (v5)
 
 ```jsonc
 {
-  "schema_version": "3",
+  "schema_version": "5",
   "generated_at": "<RFC 3339 UTC>",
   "window": { "from": "...", "to": "..." },
   "row_count": 1234,
@@ -1353,11 +1355,22 @@ NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more 
       "seq_lo": 4000,
       "seq_hi": 6500
     }
-  ]
+  ],
+  "compliance_register": {         // optional, v4, with ?include_compliance=true
+    "filename": "compliance_register.json",
+    "sha256": "...",
+    "byte_size": 4096
+  },
+  "anchors": {                     // optional, v5, when the window holds anchored roots
+    "filename": "anchors.ndjson",
+    "sha256": "...",
+    "byte_size": 2048,
+    "count": 3
+  }
 }
 ```
 
-The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so `technical_documentation`, `parquet_pointers`, and `compliance_register` are signed transitively — tampering with any of them breaks both signature verification and a cheap recompute. v1 was the unsigned shape (slice 1); v2 added the `signature` envelope (slice 2); v3 added the optional `technical_documentation` and `parquet_pointers` blocks (slice 3); **v4** adds the optional `compliance_register` block (`{ filename, sha256, byte_size }`, committing to a bundled `compliance_register.json`; see [Continuous compliance evidence](#continuous-compliance-evidence)). Each version with its newest optional field unpopulated is byte-identical to the prior version aside from `schema_version`.
+The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so `technical_documentation`, `parquet_pointers`, `compliance_register`, and `anchors` are signed transitively — tampering with any of them breaks both signature verification and a cheap recompute. v1 was the unsigned shape (slice 1); v2 added the `signature` envelope (slice 2); v3 added the optional `technical_documentation` and `parquet_pointers` blocks (slice 3); **v4** adds the optional `compliance_register` block (`{ filename, sha256, byte_size }`, committing to a bundled `compliance_register.json`; see [Continuous compliance evidence](#continuous-compliance-evidence)); **v5** adds the optional `anchors` block (`{ filename, sha256, byte_size, count }`, committing to a bundled `anchors.ndjson` of external chain-anchor proofs; see [External chain anchoring](#external-chain-anchoring)). Each version with its newest optional field unpopulated is byte-identical to the prior version aside from `schema_version`. The `anchors` field is declared last in the manifest so an anchorless bundle stays byte-identical to a v4 manifest.
 
 ### 6. Auditor verification recipe
 
@@ -4128,6 +4141,40 @@ SHA-256 hash-chained, SQLite-backed forensic store. Subscribes to
 | An attacker edits a row in the SQLite DB directly. | The hash chain detects it on the next `verify_chain` call — every entry's `entry_hash` covers the previous `prev_hash`, so any single-row edit invalidates every later row. Operator runbook ("ledger chain invalid" in [Runbooks](#runbooks)) covers detection. |
 | An attacker adds a row claiming a forensic event that never happened. | Same — the new row has to satisfy the chain or it's detected. Chain v2/v3 rows carry per-action signatures from `clavenar-identity` `/sign`; an attacker forging both the chain and the signature needs the identity service's signing key. |
 | An attacker replays a NATS forensic message. | NATS at-least-once semantics already mean the ledger may see duplicate publishes. Each `LogRequest` is content-hashed; duplicate appends produce identical `entry_hash`, which `record_entry` deduplicates by `(correlation_id, source_layer)`. |
+| An attacker who has **stolen the signing keys** rebuilds and re-signs the whole chain from genesis. | The internal chain alone cannot detect this — re-signed rows verify clean. **External chain anchoring** (below) closes the gap: a third party (an RFC 3161 TSA, or an operator notary) holds a timestamped commitment to a prior chain root that the box's keys cannot forge. The caveat is real and stated plainly: this is detectable only by a party that holds an out-of-band copy of the proof (the TSA's own log, or proofs streamed to an auditor) — an attacker who also deletes the `chain_anchors` table and the `chain.root_anchored` rows leaves `GET /verify` reporting `valid:true` with an empty `anchors[]`. |
+
+#### External chain anchoring
+
+Opt-in, additive (`CLAVENAR_LEDGER_ANCHOR_INTERVAL_SECS`). A detached
+sweeper periodically submits the chain's tail `entry_hash` (the chain
+root) to an RFC 3161 Timestamp Authority (`..._ANCHOR_TSA_URL`) and/or a
+generic webhook notary (`..._ANCHOR_WEBHOOK_URL`). The returned proof —
+an RFC 3161 `TimeStampToken` (the chain root is the 32-byte `hashedMessage`
+of the request's `messageImprint`, declared `id-sha256`) — is stored
+verbatim in the SQLite-only `chain_anchors` table, and a
+`chain.root_anchored` **v1 chain row** records the anchor in the chain
+itself (the `{anchored_seq, anchored_entry_hash, source, proof_sha256,
+gen_time}` detail rides `policy_decision`, which is hashable, so the
+committed proof reference is tamper-evident).
+
+Anchoring is strictly additive: the sweeper only reads the chain and
+self-appends on success; a notary outage retries with backoff and
+**never blocks an append** or flips `GET /verify`'s `valid`.
+
+`GET /verify` surfaces `anchors[]` (each `{anchored_seq,
+anchored_entry_hash, source, status, gen_time, proof_sha256,
+anchored_at, chain_match}`) plus a top-level `anchor_mismatch`. A
+`chain_match: false` means the live chain row at `anchored_seq` no longer
+hashes to the notarized `anchored_entry_hash` — a rewrite-below-a-root
+signal that stands even when `valid` is `true`. A row vacuumed below the
+cold-tier cursor reports `chain_match: null` (verify its proof offline).
+The regulatory export bundles every in-window anchor in `anchors.ndjson`
+(base64 token + commitment), so an auditor runs
+`openssl ts -verify -digest <anchored_entry_hash> -in <token>` against
+the TSA's certificate. The box does **not** validate the TSA's
+certificate chain — that verification is the offline auditor's, and the
+proof is self-authenticating to anyone holding the TSA cert regardless of
+the box's keys.
 
 #### Repudiation
 
