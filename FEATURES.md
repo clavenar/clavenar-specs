@@ -802,6 +802,21 @@ open http://localhost:8085/stats/intents  # intent × verdict heat-table
 
 ---
 
+### 4.14 Fleet posture score (landing-page gauge)
+
+**Concept.** The landing page headlines a single **0–100 fleet posture score** — an at-a-glance answer to "how safe is the fleet right now" that visibly reacts when the control plane is under pressure. It is a **heuristic, not a certification**: a directional health indicator, never a security guarantee, audit result, or compliance attestation, and the methodology (including the signals deliberately *not* folded in) ships in a disclosure beside the gauge. The score blends four on-chain signals over the last hour — deny rate, velocity-breaker pressure, degraded-gate fail-open events, and the latest continuous-assurance pass rate — into a weighted mean. A sub-signal with too little data to score is renormalised out rather than scored as 0, so a quiet fleet reads 100 and a single correctly-denied demo scenario can't paint the gauge red right after the system defended.
+
+**Implementation.** Composed entirely in `clavenar-console` from data it already reads (terminal ledger rows + the `assurance_run` lane) — **no new ledger endpoint, no chain field, no proxy change**. `GET /_partials/posture` is a console partial beside the existing ops-signals / chart partials, refreshed on the page's uniform 30 s htmx poll; the radial gauge reuses the `Gauge` chart-kit helper (§4.13) and redraws via a CSS keyframe on each swap-in (no SSE producer exists; the whole landing page is poll-based). Operator path serves a 60 s background-warmed global aggregate; demo-session visitors get a posture scoped to their own `demo-<6hex>` agent + `demo-<prefix>-assurance` lane, computed fresh per request. See `clavenar-specs/TECH_SPEC.md#fleet-posture-score` for the formula and weights.
+
+**Verify.**
+
+```bash
+open http://localhost:8085/                       # posture gauge above the ops-signals strip
+curl -s http://localhost:8085/_partials/posture   # the htmx-loaded gauge partial
+```
+
+---
+
 ## 5. Operator authentication
 
 ### 5.1 Four auth modes
