@@ -4296,6 +4296,25 @@ is never fingerprinted into the regulator-shipped chain) and is absent
 on a cache hit; even so the verdict derived from the raw input, so the
 recorded fingerprint is a privacy-preserving proxy.
 
+**Per-detector scores ride separately, non-hashable.** The verdict's
+confidence *outputs* (`persona_drift_score`, `injection_confidence`,
+`malicious_code_confidence`, `compromised_package_confidence`, plus the
+intent + authorized verdict and free-text reason) are LLM/heuristic
+outputs — non-deterministic in live mode — so they must never enter the
+hashed evidence. They travel as an opaque `brain_scores` JSON object:
+optional on HIL `CreatePending` (stored verbatim on the pending row,
+surfaced on every pending read), forwarded top-level on HIL's forensic
+event, and persisted on the ledger row as the non-hashable
+`brain_scores` column (same posture as `signal` / `cost_micros` — no
+chain-version bump; setting it cannot move any `entry_hash`). First
+consumer: the demo pipeline visualizer, where `demo_fire` runs the
+canned payload through `/inspect` best-effort (the console's workload
+SVID is allowlisted on the brain's mTLS listener for this) and renders
+the captured verdict as per-detector bars. A `drift_available: false`
+marker travels with the scores when drift is structurally absent
+(bigram fallback / no persona baseline) so consumers render "n/a"
+rather than a measured-looking 0%.
+
 #### Information disclosure
 
 The Brain calls a configured **inspector LLM** (separate model from any
