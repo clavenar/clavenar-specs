@@ -817,6 +817,22 @@ curl -s http://localhost:8085/_partials/posture   # the htmx-loaded gauge partia
 
 ---
 
+### 4.15 Pipeline visualizer (`/demo/run/{cid}`)
+
+**Concept.** Firing a curated demo scenario now opens an **animated three-panel run-down** of the request's journey instead of dropping the visitor onto a static queue: **Semantic** (Brain — intent & injection) → **Governance** (Policy — deterministic rules) → **Decision & forensic** (human review + the hash-chained rows). The visitor approves or denies *in place* and watches the chain rows land. Honest by design: a demo request is routed straight to human review and never traverses the proxy, so the first two panels show the **scenario's classification** (explicitly labeled "scenario classification — not live detector output"), while the third panel is entirely **real** — the visitor's own HIL pending, their decision, and the chain rows read back with per-row `+Δms`.
+
+**Implementation.** Console-only — **no proxy, ledger, wire, or chain change.** The pipeline completes server-side in milliseconds, so there is nothing to *stream*; the run-down is a **client-paced replay**. `POST /demo/fire/{scenario}` now redirects to `/demo/run/{cid}?scenario=…` (carrying the scenario id, since the tier lives on the catalog entry, not the HIL pending). The page reuses the existing `audit_correlation` read for the chain rows and the existing `/hil/{id}/approve|deny` routes for the in-place decision; `GET /demo/pipeline/{cid}` returns the chain rows as JSON for the JS to re-fetch after a decision. Both new routes are demo-prefix gated (a visitor only sees correlations under their own session prefix) and return `403` (never a redirect) so the page's `fetch()` can act on them. The staged reveal is a CSS keyframe paced by a small inline script that branches on `prefers-reduced-motion` to render all panels immediately for motion-sensitive visitors; with JS disabled the panels are server-rendered static and the run-down degrades to a labeled diagram. (Raw per-detector Brain scores are computed in the Brain but discarded at the proxy boundary and never reach the chain — capturing them is a separate follow-up that only pays off once a demo fire actually proxies.)
+
+**Verify.**
+
+```bash
+# (demo session required) fire a scenario, then:
+open http://localhost:8085/demo                   # each card now opens the run-down
+curl -s http://localhost:8085/demo/pipeline/<cid> # chain rows JSON (prefix-gated)
+```
+
+---
+
 ## 5. Operator authentication
 
 ### 5.1 Four auth modes
