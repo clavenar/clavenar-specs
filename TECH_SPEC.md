@@ -40,6 +40,7 @@ authoritative wire-contract detail still lives in those sections.
 |---|---|---|---|---|
 | 1 | [Identity service](#identity-service) | shipped | — | `clavenar-identity` (new, port 8086 / 8186), `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil` |
 | 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | shipped | chain v3 | `clavenar-identity`, `clavenar-ctl` (new binary `clavenarctl`), `clavenar-console`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-chaos-monkey` |
+| 2a | [Pre-flight certification](#agent-onboarding-wao) | shipped | v1.22.0 | `clavenar-ctl` (`agents certify`), `clavenar-identity` (`/agents/{id}/certification` + `CertificationMode` gate + `certified_at_version`), `clavenar-chaos-catalog` (`agent_cert` family), `clavenar-ledger` (no change — v3 `agent.certified` rows), `clavenar-console` (cert badge) |
 | 3 | [Tenancy scope](#tenancy-scope) | described | — | (semantics, no new service) |
 | 4 | [Console config page](#console-config-page) | shipped | — | `clavenar-console`, `clavenar-sdk` (+3 public getters) |
 | 5 | [Operator authentication](#operator-authentication) | shipped | — | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
@@ -616,6 +617,7 @@ payload_sha256 = sha256( canonical_json(payload) )
 | `agent.attestation_kinds_changed` | `{ attestation_kinds_before, attestation_kinds_after }` |
 | `agent.owner_team_transferred` | `{ owner_team_before, owner_team_after }` |
 | `agent.description_changed` | (no payload — chain row's `actor_sub` + `timestamp` is the proof; description content lives in identity's local table) |
+| `agent.certified` | `{ certified_at_version, certificate_sha256, signature, key_id, survived }` — the agent passed the pre-flight gauntlet (see [§9.4](#agent-onboarding-wao)); the row commits the signed certificate's digest so `/verify` carries the proof. |
 
 `canonical_json` for both the outer hashable and the payload is the existing v1/v2 canonicalizer in `clavenar-ledger` (sorted keys, no whitespace, UTF-8 NFC). One canonicalizer, no per-version variants.
 
@@ -684,6 +686,9 @@ clavenarctl agents envelope narrow <id> --scope mcp:read:tickets
 clavenarctl agents envelope widen  <id> --scope mcp:write:knowledge-base --yellow-scope refund:<=500usd
 clavenarctl agents transfer <id> --to-team newteam
 clavenarctl agents description <id> --text "..."
+clavenarctl agents certify <id> --tenant acme \
+  --proxy-url https://proxy:8443/mcp --cert-dir ./certs \
+  --sdk-version 1.0.0 [--out support-bot-3.cert.json]
 
 clavenarctl agents migrate \
   --identity-db /var/lib/clavenar-identity/identity.sqlite \
@@ -696,6 +701,16 @@ clavenarctl agents migrate \
 - `--if-absent` on `create` for IaC-without-Terraform patterns: a CI job loops a YAML file and runs `clavenarctl agents create --if-absent` per entry. Returns 200 if the existing record matches the requested envelope, 409 if it differs.
 - Exit codes are deterministic and documented: `0` success, `2` validation error, `3` auth/capability error, `4` conflict, `5` server error.
 
+#### 9.4 Pre-flight certification
+
+Every other gate fires at request time — the registry, envelope checks, and grants all judge an agent that is already in production. `clavenarctl agents certify` is the one *active, pre-enrollment* test. It fires the chaos catalog's `agent_cert` family — malformed MCP, poisoned tool-result content, an envelope-exceeding dangerous tool, a replayed/forged grant — at the live proxy as the candidate's own mTLS traffic, and asserts every probe is denied at the boundary. Each case targets a **standing** control (the wire-layer MCP parser, the Brain injection detector, base `governance.rego`, the grant gate), so a certification run is meaningful without any install-on-demand policy templates active.
+
+On an all-deny run, ctl submits the result to `POST /agents/{id}/certification` (admin capability). Identity computes the canonical certificate, signs its SHA-256 digest with the **same Vault key `/sign/blob` uses**, stamps `certified_at_version` + `certified_at` on the agent record, and emits an `agent.certified` chain v3 row committing the digest. The signed certificate is returned and written as a sidecar. Verification is auditor-side and self-contained: recompute `sha256(canonical_json(certificate))`, confirm it equals the chain row's `certificate_sha256`, and verify the signature against identity's JWKS by `key_id`. The certificate body embeds `agent_id` + `tenant` + `agent_name`, so a signature minted for one agent cannot recertify another.
+
+The **`CLAVENAR_IDENTITY_CERTIFICATION_MODE`** gate at `/svid` issuance is `off | flag | enforce`, defaulting `off` (the inverse of `REGISTRATION_MODE`): `flag` lets an uncertified agent mint with an `uncertified_agent` forensic signal; `enforce` rejects issuance for an agent whose `certified_at` is null (`403 uncertified_agent`). The gate is independent of the registration gate and applies only to an existing record (you must register before you can certify).
+
+**Honest scope:** certification proves the *enforcement boundary* held for a given SDK version — that every agent-targeted probe was denied at the proxy. It does **not** prove the agent's private code is correct; the catalog observes only the proxy verdict, never the agent's internal handling. The `sdk_version` is operator-asserted (there is no wire source for an agent's running version), so the certificate is identity-self-attested, not third-party-audited.
+
 ### 10. Console (`clavenar-console`) extensions
 
 The console gets the same OIDC auth dance as the CLI (auth-code flow + PKCE), holds tokens server-side, never exposes them to user-facing JS. Tenant context is inferred from the OIDC `tenant` claim or per-IdP `console.toml`. No tenant switcher in v1.
@@ -706,7 +721,7 @@ The console gets the same OIDC auth dance as the CLI (auth-code flow + PKCE), ho
 |---|---|
 | `/agents` | Tenant-scoped index. Columns: name, state badge, owner team, # scopes, # yellow scopes, last activity (joined from latest ledger row by `agent_name`). Filters: state, owner team, search. |
 | `/agents/new` | Form: tenant (auto-filled), name, owner-team (dropdown of caller's groups), scope envelope (multi-input), yellow envelope (multi-input), attestation kinds (checkboxes from global allowlist), description. Submits to `POST /agents`. |
-| `/agents/{id}` | Full record + lifecycle timeline (chain v3 rows for this agent, newest first). htmx action buttons gated on caller's capability. |
+| `/agents/{id}` | Full record + lifecycle timeline (chain v3 rows for this agent, newest first). htmx action buttons gated on caller's capability. Carries a pre-flight certification badge (certified SDK version + age, or "Uncertified") with a static re-certify hint — there is no live SDK-version-drift detection, since the proxy records no observed version. |
 
 #### 10.2 Cross-page weaving
 
@@ -809,6 +824,7 @@ The shared types are duplicated on each side of the wire (no shared crate, per r
 - **WebAuthn approver auth on lifecycle transitions.** Today's auth is OIDC-only on `/agents`. Step-up auth for high-impact transitions (decommission, widen) is a separate WebAuthn workstream; this spec only ensures the transitions are signed in the chain. WebAuthn lands independently.
 - **Per-agent attestation policy beyond `attestation_kinds_accepted`.** Per-method attestation requirements (capability attestation in [Identity service](#identity-service) §6) remain global. Per-agent rule overrides — "this specific agent's `wire_transfer` calls require measurement X" — wait for the global rule to settle before being layered on.
 - **Agent groups / hierarchies.** No nested ownership, no parent-child agents, no inheritance. Each agent is a flat record. If 50 agents share an envelope, register 50 records (the CLI's `--if-absent` makes this scriptable).
+- **Certifying the agent's private code.** Pre-flight certification ([§9.4](#agent-onboarding-wao)) proves the *enforcement boundary* denied every agent-targeted probe for an operator-asserted SDK version — not that the agent's own code is correct. There is no wire source for an agent's running SDK version, so the certificate is identity-self-attested and the console shows no live version-drift detection; both are deliberate follow-ons, not v1 claims.
 
 ---
 
