@@ -1797,7 +1797,7 @@ Design decided by a `/grill-me` walkthrough. Eight architectural decisions resol
 | Audit trail of policy changes | `git log` on the policy directory; no anchor in the chain | Every mutation lands as a chain v3 lifecycle row with operator OIDC sub + reason |
 | Rollback | Revert PR + redeploy | One-click "rollback to version N" against the version-history table |
 
-The console UI is *not* a rule editor for non-engineers — it's still a rego textarea, the audience is still operators familiar with rego. The value is collapsing the change-loop from "PR + redeploy" to "edit + Save" while strengthening the audit trail.
+The console UI is *not* a rule editor for non-engineers — it's a CodeMirror Rego editor with starter snippets, a frontmatter-metadata composer, syntax-checking, and an inline chaos-catalog test, but the audience is still operators familiar with rego. The value is collapsing the change-loop from "PR + redeploy" to "edit + Save" while strengthening the audit trail.
 
 ### 2. Scope and non-goals
 
@@ -1899,7 +1899,7 @@ All single-policy write requests carry a JSON body with `{reason: string, expect
 
 Failure modes:
 - `400 Bad Request` — regorus compile error (rego) or JSON Schema validation error (json), or a category deactivate that would leave zero active rego policies. Body carries the parser error verbatim.
-- `409 Conflict` — `expected_current_version` doesn't match `policies.current_version` on a single-policy write; or an attempt to deactivate / delete a `protected` floor policy. Response body includes the new current version's metadata so the UI can prompt "policy was changed since you opened the editor; reload?".
+- `409 Conflict` — `expected_current_version` doesn't match `policies.current_version` on a single-policy write; or an attempt to deactivate / delete a `protected` floor policy. Response body includes the new current version's full `PolicyRow` so the console can render the base-vs-current diff inline beside the operator's retained draft and rebind the hidden version for a merge-retry.
 - `403 Forbidden` — caller lacks `Admin` role.
 - `503 Service Unavailable` — outbox or NATS unreachable past retry budget; the SQLite + engine state is consistent, but the chain row hasn't landed yet. (Not surfaced in v1's happy path; documented for completeness.)
 
@@ -2410,10 +2410,10 @@ A new `require_admin` gate guards every console-side write route (`POST/PUT/DELE
 Five Askama templates under `repos/clavenar-console/templates/`:
 
 - `policies.html` — list page. Table columns: name, content_type, state (active / inactive / deleted chip), current version, last updated by, last updated at. Filter chips for state. Active and inactive visible by default; deleted hidden behind a "show deleted" toggle. Action buttons rendered behind `can_edit_policies`.
-- `policies_new.html` — Admin-only create form. Name + content_type radio + textarea + reason field.
-- `policies_detail.html` — view page. Current body in a syntax-highlighted block (server-rendered with class hints for prism.js or similar). Lifecycle timeline sidebar mirroring `agents_detail.html`: every chain v3 row for this policy, oldest first, with "view diff" links. "Edit" button links to the edit page.
-- `policies_edit.html` — Admin-only. Plain `<textarea>` (no client-side editor in v1). Reason field. Form submits via htmx; server returns either the updated detail page or an error fragment with the regorus / JSON Schema error inline.
-- `policies_diff.html` — unified-diff view. Reusable for "edit confirmation modal" (current vs. proposed) and "audit history view" (version N vs. version M).
+- `policies_new.html` — Admin-only create form. Name + content_type + CodeMirror body + reason field, plus a guided-creation panel: starter-snippet picker and Domain/Severity/Tier dropdowns + tag/framework/tool-surface/summary inputs that compose the leading `# Key: Value` frontmatter header (client-side; the body stays the source of truth the engine parses). A "Check syntax" action and an inline "Test against chaos catalog" replay (`POST /policies/lab/run-draft`) run before save.
+- `policies_detail.html` — view page. Current body in a read-only CodeMirror (the `body_class` mode hint drives the highlighting; json falls back to a plain read-only textarea). Lifecycle timeline sidebar mirroring `agents_detail.html`: every chain v3 row for this policy, oldest first, with "view diff" links. "Edit" button links to the edit page.
+- `policies_edit.html` — Admin-only CodeMirror editor + reason field, with the same inline chaos-catalog test (per-name `lab/run`). On a save that loses the `expected_current_version` race, the page renders the colorized base-vs-current diff beside the retained draft; other errors render the regorus / JSON Schema message inline.
+- `policies_diff.html` — colorized unified-diff view (added green, removed rose, hunk headers sky), shared by the version-history diff and the edit-conflict surface.
 
 The confirm-diff modal on save (§3 of Q3) is implemented as: form submits to a `POST /policies/{name}/preview` endpoint (server-side, no SQLite write); response is an htmx-swapped modal showing the diff with a "Confirm and save" button that POSTs to the actual `PUT /policies/{name}`. Two-step interaction; no client-side diffing.
 
