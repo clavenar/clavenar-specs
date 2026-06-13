@@ -4161,17 +4161,52 @@ tool arguments to inspect), so a spec-compliant MCP client can add
 Clavenar as a standard MCP server. The credential gate still runs, so
 an unenrolled agent can't even handshake.
 
-**MCP supply-chain shield (tool-definition pinning).** The pipeline
-inspects every tool *call*; it now also distrusts tool *definitions*.
-The first `tools/list` an agent sees is pinned (per-tool canonical
-hash of `description` + `inputSchema`); any later list whose
+**MCP supply-chain shield (tool-definition pinning + injection scan).**
+The pipeline inspects every tool *call*; it now also distrusts tool
+*definitions*. The first `tools/list` an agent sees is pinned (per-tool
+canonical hash of `description` + `inputSchema`); any later list whose
 definitions mutate, appear, or vanish emits a `tool_schema_poisoned`
-forensic row — catching the canonical MCP rug-pull (a benign tool at
-enrollment that rewrites its description or parameter schema later).
-The in-process pin + forensic detection ships in both editions; the
-chain-anchored, identity-signed snapshot and Brain definition-injection
-scanning are the next increment. This flips upstream tool-definition
-compromise from out-of-scope to detected.
+forensic row — the canonical MCP rug-pull (a benign tool at enrollment
+that rewrites its description or parameter schema later). Beyond the
+hash diff, the captured definitions ride the Brain's zero-knowledge
+injection detector (`POST /scan-definitions`, mTLS inspect router, same
+SPIFFE allowlist as `/inspect`) at first sight and on every drift: a
+`description` or parameter doc that smuggles an "ignore previous
+instructions / read `~/.ssh` and exfiltrate"-style payload — the
+*tool-poisoning* variant the agent's own LLM would read and obey — is
+flagged `tool_definition_injection` even on first sight, before the
+agent acts on the catalog. Detect-only by default;
+`CLAVENAR_PROXY_BLOCK_POISONED_DEFINITIONS=true` withholds a flagged
+catalog (`502`) entirely. The scan reuses the injection lane's mock +
+needle-heuristic fallback, so a Brain outage degrades loudly rather than
+blinding the check. Both pin and scan ship in both editions. The
+chain-anchored, identity-signed snapshot (today's pin is in-process per
+replica) rides the upstream-provenance registry. This flips upstream
+tool-definition compromise from out-of-scope to detected.
+
+Brain wire shape — `POST /scan-definitions`. Request:
+
+```json
+{ "correlation_id": "<uuid>", "agent_id": "...",
+  "tools": [ { "name": "search",
+               "description": "<upstream tool description>",
+               "input_schema": { "type": "object" } } ] }
+```
+
+Response (`ScanDefinitionsVerdict`):
+
+```json
+{ "flagged": [ { "name": "notes", "confidence": 0.85,
+                 "signals": ["ignore previous instructions"] } ],
+  "degraded": false }
+```
+
+`signals` carries injection signal *labels* only — never the raw
+description — so the verdict is safe to log and show an approver. URL
+default: `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-definitions`,
+overridable via `CLAVENAR_BRAIN_SCAN_DEFINITIONS_URL`. The proxy scans
+the whole catalog at pin time and only the added/mutated tools on drift,
+both capped, so a large catalog can't fan out unbounded detector calls.
 
 **Degraded-mode rule.** Every security-relevant fallback either fails
 closed or degrades *loudly* — no silent fail-open. The catalog:
@@ -4181,6 +4216,7 @@ closed or degrades *loudly* — no silent fail-open. The catalog:
 | Brain PII masking | unmasked text is **withheld** from every provider; all detectors pivot to local heuristics | `clavenar_brain_detector_degraded{detector="pii_masking"}` gauge + `degraded: ["pii_masking", …]` on the `/inspect` response |
 | Brain injection / malicious-code / compromised-package detectors | needle-heuristic verdict (injection cold path normalizes unicode/whitespace and, at `CLAVENAR_INJECTION_HEURISTIC_LEVEL=strict`, scans one level of base64) | `clavenar_brain_detector_degraded{detector=…}` + response `degraded` list |
 | Brain classifier | fails **closed** (`deny_unknown`) | provider-outcome counter |
+| Proxy tool-definition scan (Brain `/scan-definitions` unreachable) | the `tools/list` catalog is relayed **unscanned** (fail-open — a control-method defense-in-depth, not the primary gate); the hash pin still records drift | `clavenar_proxy_tool_definition_scan_degraded_total` counter |
 | Policy-engine velocity tracker | count degrades to zero but `input.velocity_degraded=true` reaches Rego, so policy can deny or pend on a degraded breaker | `clavenar_policy_engine_velocity_tracker_degraded` gauge |
 
 It is layer-by-layer and STRIDE-organized inside each layer. STRIDE here
