@@ -3937,6 +3937,43 @@ enforcing.
 Per-tool entropy baselines (to suppress naturally-high-entropy tools) are
 a documented future tunable; v1 uses one global threshold.
 
+### Streamed responses — sampled, detect-after-relay
+
+The egress posture above is **pre-relay**: the buffered path reads the
+whole upstream body, scans it, and only then relays — a `Block` returns a
+403 and leaks zero bytes. Streamed upstreams (MCP `text/event-stream` /
+chunked tool results) cannot offer that guarantee, so streaming is
+**off by default** and gated behind `CLAVENAR_PROXY_STREAMING=true`.
+
+When the flag is on AND an upstream actually answers streaming
+(`Content-Type: text/event-stream`, or `Transfer-Encoding: chunked` —
+never merely an absent `Content-Length`), the proxy relays the body
+chunk-by-chunk and scans a **sample** of the accumulated buffer every
+`SAMPLE_EVERY_N_CHUNKS` (16) chunks or ~1 second. This is
+**detect-after-relay**: the bytes forwarded before a sample fires are
+already on the wire and cannot be un-sent. A sampled `Block` *cuts* the
+rest of the stream (a body truncation + an `egress_stream_exfil` forensic
+row, `authorized=false`), but it is not a 403 and does not recover the
+already-sent prefix — strictly weaker than the buffered pre-relay block.
+A sampled `Review` cannot pause a live stream for a HIL hold, so it
+collapses to relay-and-tag (`egress_stream_review_relayed`, audited via
+its own counter, never silent). The leak window is at most one sampling
+interval. Per-stream telemetry rides `clavenar_proxy_stream_*` counters
+(`bytes`, `events`, `egress_scans`, `egress_blocks`,
+`egress_review_relayed`, `egress_scan_unavailable`) plus a duration
+histogram.
+
+The request-decision forensic row is emitted up front (authorized, marked
+streamed, carrying the v4 brain evidence); the streamed body is
+**unsigned** in v1 — a per-response signature would overclaim a
+pre-relay guarantee streaming cannot make. Buffered traffic is wholly
+unaffected: the streaming branch is unreachable unless both the flag is
+on and the upstream streams, so a flag-off deploy keeps the full
+pre-relay block on every response. `clavenar-lite` is buffered-only this
+increment (no streaming egress). This pairs with the native-MCP server
+mode — a spec-compliant streamable-HTTP MCP client connects to the proxy
+directly; the `clavenarctl mcp-bridge` stdio leg stays buffered.
+
 ---
 
 ## Agent-facing error envelope
