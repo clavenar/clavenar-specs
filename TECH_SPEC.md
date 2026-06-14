@@ -4728,6 +4728,27 @@ line) plus a drift gauge + `behavior drifted` badge on the agent page.
 Read-only, derived on demand — no new chain rows, no new columns; the
 deviation is surfaced in the console, not written back to the chain.
 
+Alongside the scalar deviation, the same response carries a `diff` block —
+the plain-language window-over-window delta: `new_tools` (called in the
+recent window, absent from baseline), `vanished_tools` (the reverse), and
+signed `deny_rate_delta` / `intent_delta` / `total_delta` (`recent −
+baseline`). Where `deviation` answers "how much drift", `diff` answers
+"what changed". It is pure-derived from the same two window profiles, so it
+adds no query cost; the field is `#[serde(default)]` on the wire so a client
+reading a pre-`diff` ledger still deserializes.
+
+`GET /analysis/fleet-behavioral-diff?baseline_days=&recent_days=&limit=`
+(same internal mTLS surface) rolls that diff up across the whole fleet: it
+enumerates every agent with a profiled row in the baseline window, computes
+each one's recent-vs-prior diff + drift, and returns them drift-descending
+(an `insufficient` window degrades to drift 0 and sorts last), `limit`
+server-clamped to `[1, 1000]`. The window defaults to a true week-over-week
+(`recent_days=7`, `baseline_days=14`). Like `/audit/hunt` it enumerates
+agent_ids fleet-wide, so it stays off the public `:8083` listener. The
+console surfaces it at `/agents/behavioral-diff` (a drift-posture donut +
+ranked table, one click from any agent page), the fleet companion to the
+per-agent baseline panel.
+
 #### Tampering
 
 | Threat | Defense |
