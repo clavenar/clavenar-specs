@@ -4576,6 +4576,27 @@ no host bridge.
 SHA-256 hash-chained, SQLite-backed forensic store. Subscribes to
 `clavenar.forensic` on NATS.
 
+#### Behavioral baseline analytics (Temporal intelligence)
+
+`GET /analysis/agent-behavioral-baseline?agent_id=&baseline_days=&recent_days=`
+(internal mTLS surface, SQLite-only — alongside the Blast-Radius Autopilot
+`agent-envelope-recommendations` read) profiles one agent's `input_replay`
+PolicyDecision corpus over two **non-overlapping** windows — recent
+`[now−recent_days, now)` and the prior baseline `[now−baseline_days,
+now−recent_days)` — and scores how far recent drifts from baseline. Each
+window's profile is its tool mix, UTC hour-of-day cadence, mean intent
+score, and deny rate. The deviation carries four components in `[0, 1]`:
+tool-mix and cadence are total-variation distances between the normalized
+histograms; intent and deny-rate are mean shifts. `overall` combines them
+as a soft-OR (`1 − ∏(1 − dᵢ)`) so a single strong shift — an agent that
+swapped its whole tool mix — surfaces instead of being averaged away, and
+`drifted` is `overall ≥ 0.35`. A window with no rows degrades its
+components to 0 and sets `insufficient`, so a fresh agent never reads as
+drifted. The console renders the recent profile (tool-mix donut + cadence
+line) plus a drift gauge + `behavior drifted` badge on the agent page.
+Read-only, derived on demand — no new chain rows, no new columns; the
+deviation is surfaced in the console, not written back to the chain.
+
 #### Tampering
 
 | Threat | Defense |
