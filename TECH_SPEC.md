@@ -4450,6 +4450,20 @@ and is structurally `0` in mock mode (no provider call fires), so
 price file are configured — a populated `0` column (not NULL) is the
 honest mock-mode reading.
 
+The breaker's cap is operator-tunable: the policy-engine reads
+`CLAVENAR_AGENT_BUDGET_MICROS` (default 50 USD) and injects it as
+`input.budget_micros`, so governance.rego denies once an agent's
+`cumulative_spend_micros` crosses the configured cap — a
+`clavenar_policy_engine_budget_denials_total` counter tracks the trips.
+The ledger exposes the aggregate side over mTLS at
+`GET /finops/spend?window=YYYY-MM` — per-agent `SUM(cost_micros)`,
+request + priced-row counts, and fleet totals — which the console's
+`/stats/finops` dashboard renders as top spenders, per-agent
+budget-utilization bars (against the same cap), and a priced-coverage
+gauge. Each Yellow-tier HIL pending also carries the Brain's per-request
+`projected_cost_micros`, surfaced to the approver as a *projected* $
+beside the blast radius.
+
 #### Information disclosure
 
 The Brain calls a configured **inspector LLM** (separate model from any
