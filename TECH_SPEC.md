@@ -4079,12 +4079,59 @@ parse it into their typed `Veto` / `ClavenarDenied` surfaces.
 | `intent_category` | Brain intent bucket, when a verdict was reached. Omitted otherwise. |
 | `correlation_id` | Always present on rejections; also on the `X-Clavenar-Correlation-Id` header (the header is authoritative). |
 | `retry_after_secs` | Seconds to wait before retrying, on `rate_limited`. Omitted otherwise. |
+| `detail` | Per-detector verdict breakdown — **present only under the verbose-verdict opt-in** (below). Omitted in the default posture. |
 
 HTTP status is unchanged by this contract (403 for denies/holds, 429 for
 rate limits, 503 for HIL/identity unavailable, 400 for malformed). The
 body shape is additive: consumers that only read the status code or the
 correlation header are unaffected, and SDKs that predate the envelope
 fall back to treating the raw body as opaque text.
+
+### Verbose verdicts — the developer's denial loop
+
+The standard envelope is built for an *operator* tracing an incident: it
+names the stage and the reason and hands over a `correlation_id`. The
+*developer* who just got denied wants the numbers behind it without
+asking an operator to open the console. With the proxy opt-in
+`CLAVENAR_PROXY_VERBOSE_VERDICTS=true` (Lite: `--verbose-verdicts` /
+`CLAVENAR_LITE_VERBOSE_VERDICTS`), a deny/pend envelope carries a
+`detail` object with the per-detector score breakdown the standard
+envelope omits:
+
+```json
+"detail": {
+  "detectors": [
+    { "detector": "persona_drift",        "score": 0.12 },
+    { "detector": "injection",            "score": 0.91, "flagged": true },
+    { "detector": "malicious_code",       "score": 0.0,  "flagged": false },
+    { "detector": "compromised_package",  "score": 0.0,  "flagged": false },
+    { "detector": "sequence_escalation",  "score": 0.4 }
+  ],
+  "degraded": ["injection"]
+}
+```
+
+`detectors[].score` is the detector's numeric signal in `[0, 1]` — a raw
+score for the threshold-folded numeric lanes (`persona_drift`,
+`sequence_escalation`) and the verdict confidence for the boolean lanes.
+`flagged` is the boolean verdict where the detector reports one
+(`injection`, `malicious_code`, `compromised_package`) and is omitted for
+the numeric lanes, where `score` is the value to read. `degraded` lists
+any detector lanes that served a fallback verdict (omitted when none).
+The rejection `stage` and the matched-rule reasons already ride the
+envelope's `layer` / `reasons`, so `detail` carries only what they don't.
+
+`detail` rides the agent-facing HTTP body **only** — it is never written
+to the audit chain, the signed payload, or the forensic row. Lite emits
+the same `detectors` shape from its embedded heuristic Brain (two lanes:
+`injection` + `intent`); it never emits a `degraded` key (no degradable
+LLM lanes).
+
+**Honest constraint:** a detailed denial is an attacker oracle — it
+reveals which detector caught a probe and how close a near-miss was. So
+the knob is **off by default** and intended for dev/staging; in the
+default prod posture the `detail` key is absent entirely (never `null`,
+never `{}`). Both editions log a startup warning when it is on.
 
 ---
 
