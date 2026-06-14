@@ -4387,6 +4387,39 @@ overridable via `CLAVENAR_BRAIN_SCAN_DEFINITIONS_URL`. The proxy scans
 the whole catalog at pin time and only the added/mutated tools on drift,
 both capped, so a large catalog can't fan out unbounded detector calls.
 
+**Tool-name lookalike detection.** The pin defends a tool's *definition*;
+a sibling check defends the *name* an agent calls. When a `tools/call`
+targets a name that is **not** an exact entry in the agent's pinned
+catalog, the proxy POSTs it with the catalog to the Brain's
+`POST /scan-tool-name` (same mTLS inspect router + SPIFFE allowlist),
+which runs a two-stage typosquat check mirroring the compromised-package
+detector: stage 1 is a length-guarded Levenshtein nearest-match (distance
+1 for names ≥ 3 chars, ≤ 2 for names ≥ 5 — no LLM, fires in mock mode);
+stage 2 is an LLM confirmation on a near-miss that can downgrade a benign-
+distinct name (`list_users` vs `list_groups`) to clean. A confirmed
+confusable (`serach` for `search`, `cIaim_approve` for `claim_approve`)
+emits a `tool_name_lookalike` forensic row. The exact-match short-circuit
+keeps the common path free of any Brain round-trip — only a catalog-miss
+consults the detector — and it is detection-only on an already-authorized
+call (a Brain blip fails open with `clavenar_proxy_tool_name_lookalike_scan_degraded_total`),
+never a gate. Request (`ScanToolNameRequest`):
+
+```json
+{ "correlation_id": "<uuid>", "agent_id": "...",
+  "called": "serach", "catalog": ["search", "fetch"] }
+```
+
+Response (`ScanToolNameVerdict`):
+
+```json
+{ "lookalike": true, "nearest": "search", "distance": 2,
+  "confidence": 0.85, "signals": ["transposition (serach~search)"],
+  "degraded": false }
+```
+
+URL default: `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-tool-name`,
+overridable via `CLAVENAR_BRAIN_SCAN_TOOL_NAME_URL`.
+
 **Degraded-mode rule.** Every security-relevant fallback either fails
 closed or degrades *loudly* — no silent fail-open. The catalog:
 
