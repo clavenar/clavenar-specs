@@ -4017,6 +4017,39 @@ Two safety properties carry over and one extends:
 Sanitize redaction in this mode follows the per-entity `sanitize` action,
 independent of the legacy uniform `CLAVENAR_PROXY_EGRESS_SANITIZE` tier.
 
+### Request-side mask — the inbound twin
+
+The sanitize tier protects the *response* from exfiltrating secrets; the
+request-side mask is its mirror on the *request*, stripping sensitive
+values out of a tool call's `params.arguments` before the upstream MCP
+server ever sees them. With `CLAVENAR_PROXY_REQUEST_MASK=true` (default
+off), an authorized request about to be forwarded has its serialized
+arguments scanned by Brain `POST /scan-request`, and each located span is
+redacted in place (`[REDACTED:TYPE]`) before the upstream POST. The
+upstream receives the masked copy; the agent's call still succeeds.
+
+`/scan-request` reuses the egress locator's deterministic, regex-free
+matchers (AWS keys, PEM private keys, `sk-ant-`/`ghp_`/`xoxb-` tokens, DB
+connection URIs, SSN, credit-card runs, emails) but runs **no LLM** — it
+returns only `{detected_entities, spans}`, never a risk verdict, since
+masking an already-authorized request is a locate-and-redact, not a
+decision. The scan is therefore cheap (one deterministic round-trip on
+forwarded tool calls when enabled).
+
+Ordering and posture: the mask runs **after** the Brain + Policy verdict
+(which judged the real, unmasked arguments) and **before** the upstream
+forward, so it never changes the security decision — it only narrows what
+leaves the perimeter. It is **best-effort fail-open**: the request was
+already authorized, so a scan blip, an arguments object with nothing
+locatable, or a redaction that can't produce valid JSON (e.g. a
+bare-number PAN whose token isn't a valid JSON value) all forward the
+original and increment `clavenar_proxy_request_mask_degraded_total`; a
+successful mask increments `clavenar_proxy_request_masked_total` and logs
+the masked types (never values). Control methods (handshake / `tools/list`
+/ ping) carry no arguments and pass through untouched. Honest scope: a
+detected-but-unmaskable value forwards unmasked under the fail-open posture
+— a future fail-closed option would block instead.
+
 ### Forensic recording (Layer 4)
 
 The egress verdict rides the proxy's existing consolidated forensic row —
@@ -4043,7 +4076,9 @@ traffic while the request pipeline keeps enforcing.
 | proxy | `CLAVENAR_PROXY_EGRESS_MODE` (`enforce`\|`observe`) | `enforce` |
 | proxy | `CLAVENAR_PROXY_EGRESS_SANITIZE` (`true` ⇒ redact-and-forward fully-locatable findings instead of deny/HIL) | `false` |
 | proxy | `CLAVENAR_PROXY_EGRESS_POLICY` (`true` ⇒ per-entity `deny`/`sanitize`/`pend`/`allow` via policy `/evaluate-egress` instead of the confidence band) | `false` |
+| proxy | `CLAVENAR_PROXY_REQUEST_MASK` (`true` ⇒ mask located secrets in `params.arguments` via brain `/scan-request` before the upstream forward) | `false` |
 | proxy | `CLAVENAR_BRAIN_SCAN_URL` | `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-response` |
+| proxy | `CLAVENAR_BRAIN_SCAN_REQUEST_URL` | `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-request` |
 | proxy | `CLAVENAR_POLICY_EGRESS_URL` | `CLAVENAR_POLICY_URL` with `/evaluate`→`/evaluate-egress` |
 | proxy | `CLAVENAR_PROXY_EGRESS_ENTROPY_THRESHOLD` | `6.5` |
 | proxy | `CLAVENAR_PROXY_EGRESS_SIZE_THRESHOLD_BYTES` | `65536` |
