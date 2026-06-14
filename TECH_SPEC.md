@@ -4826,6 +4826,46 @@ certificate chain — that verification is the offline auditor's, and the
 proof is self-authenticating to anyone holding the TSA cert regardless of
 the box's keys.
 
+#### SIEM egress streaming
+
+Opt-in, additive (`CLAVENAR_LEDGER_EGRESS_INTERVAL_SECS`). A detached
+sweeper tails freshly-appended rows and pushes each one to one or more
+external SIEMs in near-real-time — distinct from the cold-tier
+[regulatory export](#regulatory-export), which is batched archival. Each
+configured sink owns an independent cursor in `egress_cursors`, advanced
+*after* a successful push, so a crash mid-batch replays cleanly: sinks are
+**at-least-once** and dedup on the entry's immutable `id` UUID. A sink
+failure holds that sink's cursor and retries on the next sweep without
+blocking the others or the append path.
+
+Five sink shapes ship. Three speak JSON over HTTPS — **Splunk HEC**,
+**Datadog Logs**, and a **generic JSON** sink (Loki / Vector / Logstash /
+in-house pipes). Two speak the formats a SOC ingests natively over **TCP
+syslog** (RFC 6587 octet-counted framing): **RFC 5424 syslog**
+(`SyslogSink` — verdict fields as structured data
+`[clavenar@<enterprise-id> seq=… agent=… authorized=… …]`, reasoning in
+MSG) and **ArcSight CEF** (`CefSink` — CEF-over-syslog with the verdict
+fields in the CEF extension dictionary). Both syslog formats derive a
+coarse severity from the verdict — an unauthorized (denied) action is
+high, a pend / review / escalation medium, everything else informational
+— mapped onto each format's own scale (RFC 5424 error/warning/info; CEF
+8/5/2).
+
+**Routing (optional, per sink).** Each sink can be scoped by two env keys
+keyed on its id (`CLAVENAR_LEDGER_EGRESS_<SINK>_TENANTS`,
+`_MIN_SEVERITY`): a tenant allowlist (a row with no tenant never matches a
+set allowlist) AND a severity floor, AND-ed. A filtered row is an
+*intentional skip* — the cursor advances past it, never a delivery loss.
+Routing is a `StreamSink` decorator, so it composes with any sink and
+leaves the cursor keyed on the inner sink's id. An unparseable routing
+config **panics at boot** rather than silently forwarding every tenant to
+a scoped SIEM. Without routing, every sink receives every row.
+
+This is observability egress, not the authoritative record: the hash
+chain and the regulatory export remain the source of truth, and an
+operator who needs guaranteed delivery uses the HTTPS sinks (2xx-acked)
+over the best-effort syslog transports.
+
 #### Repudiation
 
 The chain is append-only and signed. The export bundle (see
