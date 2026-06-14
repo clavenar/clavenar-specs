@@ -4679,6 +4679,24 @@ gauge. Each Yellow-tier HIL pending also carries the Brain's per-request
 `projected_cost_micros`, surfaced to the approver as a *projected* $
 beside the blast radius.
 
+**Payload commitment rides separately, non-hashable.** The chain records
+the *verdict* but never the tool params that were judged. To make "what
+did the agent actually send" forensically provable without putting the
+payload on the chain, the proxy computes
+`tool_params_sha256 = sha256(canonical_json(request.params))` per call —
+canonical because the params serialize with sorted keys at every level,
+so two requests differing only in key order commit identically. It rides
+the forensic event top-level and persists on the ledger's non-hashable
+`tool_params_sha256` column (same posture as `signal` / `cost_micros` —
+no chain-version bump; setting it cannot move any `entry_hash`). `None`
+on rows with no params (pings, pre-parse gate rejects, control rows).
+The payload itself never enters the chain — an auditor holding the
+original request (from the agent's own logs or a future masked archive)
+recomputes the hash to prove the verdict judged exactly that input. This
+is the chain-value-free first half of forensic payload capture; the
+masked-payload sibling store is a later increment. Promoted into a
+hashable shape only at a deliberate chain-version bump.
+
 #### Information disclosure
 
 The Brain calls a configured **inspector LLM** (separate model from any
