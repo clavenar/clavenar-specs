@@ -3971,6 +3971,52 @@ audit reflects the real call; the row's `egress_sanitized` signal records
 the redacted entity types and count (never the values), and the row stays
 `authorized: true` (the response was forwarded, just redacted).
 
+### Per-entity action map — egress consults the policy engine
+
+The confidence-band disposition above treats every located entity the
+same. With `CLAVENAR_PROXY_EGRESS_POLICY=true` the proxy instead asks the
+policy engine what to do with **each entity type** — the first time egress
+consults Layer 3. After a scan locates typed entities, the proxy POSTs the
+type list to policy `POST /evaluate-egress` (operator-only mTLS listener,
+same as `/evaluate`), which resolves each against the
+`data.clavenar.egress.config` Rego data document
+(`policies/egress.rego` + `egress_entity_actions.json`) to one of
+`deny` / `sanitize` / `pend` / `allow`, falling back to a `default_action`
+(shipped `deny`) for any unmapped type. The response then takes the **most
+severe** action among its located types — `deny` → inline deny, `pend` →
+HIL, `sanitize` → redact-and-verify, all-`allow` → relay with an
+`egress_suspicious` audit tag. So an operator caps credentials at `deny`
+while letting PII redact-and-forward, set per deployment as data, not code.
+
+Wire shapes (`clavenar_policy_engine::{EgressPolicyInput, EgressPolicyDecision}`):
+
+```jsonc
+// request  → POST /evaluate-egress
+{ "entities": ["SSN", "AWS_ACCESS_KEY"] }   // TYPES only, never values
+// response
+{ "actions": { "SSN": "sanitize", "AWS_ACCESS_KEY": "deny" },
+  "default_action": "deny" }
+```
+
+Two safety properties carry over and one extends:
+
+- **Sanitize honors `allow` per type.** Only spans whose type resolves to
+  `sanitize` are redacted; `allow`-typed entities stay in place. A
+  sanitize-mandated type with no locatable span cannot be removed, so the
+  response falls back to deny — a redact-mandated value is never forwarded
+  unredacted. The re-scan acceptance generalizes accordingly: the redacted
+  body forwards only when every type the re-scan still finds resolves to
+  `allow` (an unmapped residual → `default_action` → typically deny → reject).
+- **Fail-safe on policy error.** A `/evaluate-egress` transport/parse error
+  falls back to the deterministic confidence-band classification — which is
+  never looser than the per-entity map — and increments
+  `clavenar_proxy_egress_policy_degraded_total`. Off by default; under
+  `EGRESS_MODE=observe` the per-entity classification enriches the `would_*`
+  tags without blocking.
+
+Sanitize redaction in this mode follows the per-entity `sanitize` action,
+independent of the legacy uniform `CLAVENAR_PROXY_EGRESS_SANITIZE` tier.
+
 ### Forensic recording (Layer 4)
 
 The egress verdict rides the proxy's existing consolidated forensic row —
@@ -3996,7 +4042,9 @@ traffic while the request pipeline keeps enforcing.
 | proxy | `CLAVENAR_PROXY_EGRESS_SCAN_TOOLS` (CSV of tool names — MCP `params.name`, e.g. `read_file`; the JSON-RPC method also matches) | `""` (off) |
 | proxy | `CLAVENAR_PROXY_EGRESS_MODE` (`enforce`\|`observe`) | `enforce` |
 | proxy | `CLAVENAR_PROXY_EGRESS_SANITIZE` (`true` ⇒ redact-and-forward fully-locatable findings instead of deny/HIL) | `false` |
+| proxy | `CLAVENAR_PROXY_EGRESS_POLICY` (`true` ⇒ per-entity `deny`/`sanitize`/`pend`/`allow` via policy `/evaluate-egress` instead of the confidence band) | `false` |
 | proxy | `CLAVENAR_BRAIN_SCAN_URL` | `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-response` |
+| proxy | `CLAVENAR_POLICY_EGRESS_URL` | `CLAVENAR_POLICY_URL` with `/evaluate`→`/evaluate-egress` |
 | proxy | `CLAVENAR_PROXY_EGRESS_ENTROPY_THRESHOLD` | `6.5` |
 | proxy | `CLAVENAR_PROXY_EGRESS_SIZE_THRESHOLD_BYTES` | `65536` |
 | proxy | `CLAVENAR_PROXY_EGRESS_MAX_RESPONSE_BYTES` | `10000000` |
