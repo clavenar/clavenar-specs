@@ -3865,10 +3865,11 @@ response body. The Egress Inspector closes that blind spot: it scans the
 upstream response before relaying it to the agent.
 
 **Threat-model note.** Because the response must be fetched to be
-inspected, Clavenar blocks the response from reaching the **agent** — it
-cannot un-compute what the upstream already produced. The block still
-prevents the agent (and anything downstream of it) from receiving the
-data. This is the correct and only model for a response-inspecting proxy.
+inspected, Clavenar blocks (or redacts) the response before it reaches the
+**agent** — it cannot un-compute what the upstream already produced. The
+disposition still prevents the agent (and anything downstream of it) from
+receiving the flagged data. This is the correct and only model for a
+response-inspecting proxy.
 
 ### Flow
 
@@ -3883,6 +3884,7 @@ data. This is the correct and only model for a response-inspecting proxy.
    | Condition | Disposition |
    |---|---|
    | `clean`, or confidence below review threshold | **Allow** (optionally tagged `egress_suspicious`) |
+   | a would-be deny/HIL where **every** flagged entity is byte-locatable, with `EGRESS_SANITIZE=true` | **Sanitize** — redact each located span in place (`[REDACTED:TYPE]`) and relay the rest; tag `egress_sanitized` |
    | `high`/`critical` and confidence ≥ `DENY_CONFIDENCE` (0.95) | **Inline deny** — HTTP 403, response withheld |
    | confidence ≥ `REVIEW_CONFIDENCE` (0.5), gray zone | **Escalate to HIL** with a redacted sample; approve ⇒ relay, deny/expire ⇒ 403 |
    | response over `MAX_RESPONSE_BYTES` (10 MB) on a scanned tool | **Inline deny** (oversize exfil) |
@@ -3917,13 +3919,56 @@ Response (`ScanResponseVerdict`):
 { "exfiltration_risk": "clean|suspicious|high|critical",
   "confidence": 0.0,
   "detected_entities": ["SSN", "AWS_ACCESS_KEY"],
+  "spans": [{ "entity_type": "SSN", "start": 41, "end": 52 }],
   "reasoning": "one short sentence" }
 ```
 
 `detected_entities` carries entity **type** labels only — never raw
-values — so the verdict is safe to log and show an approver. The detector
-model is configured by `detectors.scan_response` in
+values — so the verdict is safe to log and show an approver. `spans`
+carries the byte range `[start, end)` of each **deterministically
+locatable** entity in `response_body` (offsets, never values), the
+redaction map for the sanitize tier. Spans are computed by Brain from the
+body's shape (regex-free matchers), **never** from LLM-claimed offsets — a
+model cannot count bytes reliably. A flagged type with no deterministic
+locator (e.g. `ADDRESS`) appears in `detected_entities` but has no span,
+which the proxy reads as "not fully redactable". `spans` is omitted by
+older Brain builds (`#[serde(default)]` → empty → no sanitize). The
+detector model is configured by `detectors.scan_response` in
 `CLAVENAR_BRAIN_MODELS_FILE`; unset falls back to the `pii` provider.
+
+### Sanitize tier — redact and forward
+
+DLP that can only allow, deny, or park is brittle: when one credit-card
+number rides 50 KB of otherwise useful output, withholding the whole
+response (or waiting for a human) throws away the good with the bad. The
+**sanitize** tier is the third disposition — redact the findings, forward
+the rest, chain the proof — turning the egress inspector from a circuit
+breaker into a filter. Opt-in via `CLAVENAR_PROXY_EGRESS_SANITIZE=true`
+(default off); buffered path only (a streamed chunk already on the wire
+cannot be un-sent).
+
+The safety rule is **verified-clean or deny**. The deterministic locators
+are deliberately narrower than the LLM detector that raised the risk (a
+type can be flagged semantically, or an instance can fall outside a shape
+matcher), so per-type span coverage alone does not prove the body is clean.
+The proxy therefore:
+
+1. merges + applies the spans (`[REDACTED:TYPE]`, overlaps redact their
+   union so no tail survives) and re-parses the result as JSON — a
+   redaction that broke JSON validity (e.g. a bare-number PAN whose token
+   isn't a valid JSON value) denies;
+2. **re-scans the redacted body** through `/scan-response` and forwards
+   only on a **clean** verdict. Any residual finding — an instance the
+   locator under-covered — falls back to the disposition the verdict would
+   have had with sanitize off (deny / HIL). A re-scan that can't run also
+   falls back. Sanitize is thus a pure improvement over the deny baseline,
+   never a path to forward on faith (one extra `/scan-response` round-trip
+   on the rare, opt-in sanitize path).
+
+The original upstream still drives signing and the forensic row, so the
+audit reflects the real call; the row's `egress_sanitized` signal records
+the redacted entity types and count (never the values), and the row stays
+`authorized: true` (the response was forwarded, just redacted).
 
 ### Forensic recording (Layer 4)
 
@@ -3931,15 +3976,17 @@ The egress verdict rides the proxy's existing consolidated forensic row —
 **no new chain version, no new ledger columns**. The decision is the
 queryable `signal` column (vocabulary extended with `egress_violation`,
 `egress_review_denied`, `egress_review_approved`, `egress_review_unreachable`,
-`egress_suspicious`, `would_deny_egress`, `would_pend_egress`); the risk + entity types append
+`egress_sanitized`, `egress_suspicious`, `would_deny_egress`,
+`would_pend_egress`, `would_sanitize_egress`); the risk + entity types append
 to `reasoning` as `| egress: <detail>`. An inline-deny row reads
-`authorized: false` with `intent_category = "EgressBlocked"`. Rows join
-the originating request by `correlation_id`. Under
+`authorized: false` with `intent_category = "EgressBlocked"`; a sanitized
+row stays `authorized: true` (the response was forwarded, just redacted).
+Rows join the originating request by `correlation_id`. Under
 `CLAVENAR_PROXY_EGRESS_MODE=observe` (or the proxy-wide `CLAVENAR_MODE=observe`)
-the layer classifies but never blocks or escalates — it records the
-`would_deny_egress` / `would_pend_egress` signal and forwards regardless,
-so egress can be soaked on live traffic while the request pipeline keeps
-enforcing.
+the layer classifies but never blocks, escalates, or redacts — it records the
+`would_deny_egress` / `would_pend_egress` / `would_sanitize_egress` signal
+and forwards the original regardless, so egress can be soaked on live
+traffic while the request pipeline keeps enforcing.
 
 ### Configuration
 
@@ -3947,6 +3994,7 @@ enforcing.
 |---|---|---|
 | proxy | `CLAVENAR_PROXY_EGRESS_SCAN_TOOLS` (CSV of tool names — MCP `params.name`, e.g. `read_file`; the JSON-RPC method also matches) | `""` (off) |
 | proxy | `CLAVENAR_PROXY_EGRESS_MODE` (`enforce`\|`observe`) | `enforce` |
+| proxy | `CLAVENAR_PROXY_EGRESS_SANITIZE` (`true` ⇒ redact-and-forward fully-locatable findings instead of deny/HIL) | `false` |
 | proxy | `CLAVENAR_BRAIN_SCAN_URL` | `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-response` |
 | proxy | `CLAVENAR_PROXY_EGRESS_ENTROPY_THRESHOLD` | `6.5` |
 | proxy | `CLAVENAR_PROXY_EGRESS_SIZE_THRESHOLD_BYTES` | `65536` |
