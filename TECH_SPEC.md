@@ -4714,11 +4714,27 @@ masking is a no-op, so a mock-mode archive holds the raw (synthetic)
 params — real redaction needs a provider key. Read it back at
 `GET /audit/entry/{entry_id}/masked-params` (mTLS-internal — even masked,
 captured params are forensic material and stay off the plain public read
-port); the console's `/audit/correlation/{id}` reconstruction page renders
-the captured params inline beside each row's verdict and decision. The
-export vacuum purges archive rows alongside the chain rows
-they key, keeping the store bounded; per-row-kind retention classes are a
-later refinement.
+port; the response carries the row's `retention_class` alongside); the
+console's `/audit/correlation/{id}` reconstruction page renders the
+captured params inline beside each row's verdict and decision.
+
+**Retention classes — per-row-kind purge windows.** Each archive row
+carries a **Rego-assigned retention class** (`data.clavenar.authz.retention_class`):
+`extended` for forensically interesting rows (any hard-deny or any
+Yellow-tier review), `standard` otherwise. The policy engine emits it on
+the verdict, the proxy ferries
+it onto the forensic event, and the ledger stores it on the
+`entry_masked_params` row. An opt-in purge sweep
+(`CLAVENAR_LEDGER_RETENTION_{STANDARD,EXTENDED}_SECS`, swept every
+`CLAVENAR_LEDGER_RETENTION_PURGE_INTERVAL_SECS`) removes rows once their
+class window elapses — touching **only** the purgeable sibling table,
+never the chain `entries`, and paused by `CLAVENAR_LEDGER_LEGAL_HOLD`.
+This is the data-minimization counterpart to the chain retention floor:
+the hash chain is held ≥ the floor for integrity, while the *readable*
+masked params purge per class — which may be **shorter** than the floor,
+since dropping the sibling row can never break `GET /verify`. The
+chain-vacuum cascade (which purges archive rows alongside the chain rows
+they key) remains the backstop for any class left unconfigured.
 
 #### Information disclosure
 
