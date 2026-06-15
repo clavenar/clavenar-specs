@@ -4714,7 +4714,9 @@ masking is a no-op, so a mock-mode archive holds the raw (synthetic)
 params — real redaction needs a provider key. Read it back at
 `GET /audit/entry/{entry_id}/masked-params` (mTLS-internal — even masked,
 captured params are forensic material and stay off the plain public read
-port). The export vacuum purges archive rows alongside the chain rows
+port); the console's `/audit/correlation/{id}` reconstruction page renders
+the captured params inline beside each row's verdict and decision. The
+export vacuum purges archive rows alongside the chain rows
 they key, keeping the store bounded; per-row-kind retention classes are a
 later refinement.
 
