@@ -4842,6 +4842,44 @@ console surfaces it at `/agents/behavioral-diff` (a drift-posture donut +
 ranked table, one click from any agent page), the fleet companion to the
 per-agent baseline panel.
 
+#### Silence watchdog (Shadow Agent Radar)
+
+An agent that skips the proxy is invisible: its enrollment stays green
+while its tool traffic vanishes around the control plane.
+`GET /analysis/silent-agents?since_hours=N` (same internal mTLS surface,
+SQLite-only) catches it from chain rows the ledger already holds — no
+new column, no cross-service read. Lifecycle rows (v3) give the **active
+roster** (an agent whose most recent state event is `agent.registered` /
+`agent.unsuspended`); verdict rows (v1/v2/v4) give **traffic recency**,
+joined to the roster on the agent name (lifecycle carries it in
+`agent_name`, traffic in `agent_id` — the cert CN). An active agent
+whose last genuine tool call — or, if it never sent one, its
+enrollment — is older than `since_hours` is reported silent, longest
+first. The ledger's own operational self-appends (anchors, assurance
+runs, prior `agent_silent` flags) are excluded from "traffic" so they
+never reset an agent's silence clock.
+
+An opt-in watchdog
+(`CLAVENAR_LEDGER_SILENCE_WATCHDOG_INTERVAL_SECS > 0`, threshold
+`CLAVENAR_LEDGER_SILENCE_THRESHOLD_HOURS`, default 6) self-appends an
+`agent_silent` v1 row for each newly-silent agent, deduped **statelessly
+against the chain**: a row is emitted only when the agent's most recent
+`agent_silent` flag predates its reference timestamp, so one silence
+episode flags once and a resumed-then-silent agent flags again. The
+console renders the watchdog as a `/agents/liveness` board — silent
+agents ranked, each with a one-click **suspend** (admin only; reuses the
+identity lifecycle `POST /agents/{id}/suspend`, reversible via
+unsuspend). The suspend control is hidden on the auth-disabled public
+demo console so a visitor can't take a fleet agent down.
+
+This flips proxy-bypass from undetected to **detected at runtime**,
+mirroring the supply-chain `tool_schema_poisoned` flip: shadow-scanner
+is static credential discovery, while this watches the running fleet for
+the credential-active-but-traffic-gone signal it can't see. It does not
+prove *where* the bypassed traffic went — provider-side correlation
+needs an external audit-log integration — only that an enrolled
+credential has gone dark.
+
 #### Tampering
 
 | Threat | Defense |
