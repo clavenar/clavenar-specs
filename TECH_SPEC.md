@@ -4691,11 +4691,32 @@ the forensic event top-level and persists on the ledger's non-hashable
 no chain-version bump; setting it cannot move any `entry_hash`). `None`
 on rows with no params (pings, pre-parse gate rejects, control rows).
 The payload itself never enters the chain — an auditor holding the
-original request (from the agent's own logs or a future masked archive)
-recomputes the hash to prove the verdict judged exactly that input. This
-is the chain-value-free first half of forensic payload capture; the
-masked-payload sibling store is a later increment. Promoted into a
-hashable shape only at a deliberate chain-version bump.
+original request (from the agent's own logs or the masked archive below)
+recomputes the hash to prove the verdict judged exactly that input.
+Promoted into a hashable shape only at a deliberate chain-version bump.
+
+**Masked-payload archive — the payload itself, outside the chain.** With
+`CLAVENAR_BRAIN_EMIT_MASKED_PARAMS=true` the Brain returns the
+PII-masked, canonical `params` for each cold-path inspection, and the
+proxy ferries them through the forensic event onto the ledger's
+**`entry_masked_params`** sibling store, keyed by entry id. Unlike the
+v3/v4 `entry_payloads` store — whose bytes are content-hashed into the
+chain row — this archive is **purgeable**: the chain commits only to
+`tool_params_sha256`, never to these bytes, so deleting an archive row
+can never break `GET /verify`. That is how data-subject erasure coexists
+with the ≥183-day chain retention floor (Regulatory export §11): the
+verifiable verdict + hash stay on chain forever, the human-readable
+payload purges on request. The store is opt-in and **cold-path only**
+(a cache hit doesn't recompute the mask, so its row carries no archive —
+the same honest limitation as `normalized_input_sha256`), and a degraded
+mask is never archived (it would be raw PII). **Mock-mode caveat:** mock
+masking is a no-op, so a mock-mode archive holds the raw (synthetic)
+params — real redaction needs a provider key. Read it back at
+`GET /audit/entry/{entry_id}/masked-params` (mTLS-internal — even masked,
+captured params are forensic material and stay off the plain public read
+port). The export vacuum purges archive rows alongside the chain rows
+they key, keeping the store bounded; per-row-kind retention classes are a
+later refinement.
 
 #### Information disclosure
 
