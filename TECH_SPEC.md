@@ -4695,6 +4695,24 @@ original request (from the agent's own logs or the masked archive below)
 recomputes the hash to prove the verdict judged exactly that input.
 Promoted into a hashable shape only at a deliberate chain-version bump.
 
+**Credential fingerprint — which credential generation made the call.**
+The proxy computes `credential_fingerprint = sha256(leaf_cert_DER)` over
+the presented mTLS client certificate and stamps it on every verdict row
+(non-hashable `credential_fingerprint` column, same posture as
+`tool_params_sha256`). `clavenar-identity` computes the identical hash
+over the leaf it issues and records it on the `svid.issued` forensic row,
+so the chain holds both the *issuance* fingerprint and the *traffic*
+fingerprint for each credential generation. Because PEM is base64(DER),
+the bytes the agent presents are exactly the bytes identity signed — the
+two hashes match by construction. An auditor can therefore attribute
+traffic to a specific SVID generation, and a fingerprint appearing in
+traffic with no matching `svid.issued` row is a credential identity never
+minted. This is the attribution substrate the *Shadow Agent Radar* builds
+on (§"Silence watchdog"): the silence watchdog proves a credential went
+dark; the fingerprint proves *which* credential a given request used.
+`None` on synthetic control rows and legacy locally-minted certs (which
+identity never issued, so they have no issuance record to match).
+
 **Masked-payload archive — the payload itself, outside the chain.** With
 `CLAVENAR_BRAIN_EMIT_MASKED_PARAMS=true` the Brain returns the
 PII-masked, canonical `params` for each cold-path inspection, and the
@@ -4879,6 +4897,14 @@ the credential-active-but-traffic-gone signal it can't see. It does not
 prove *where* the bypassed traffic went — provider-side correlation
 needs an external audit-log integration — only that an enrolled
 credential has gone dark.
+
+Where the watchdog detects *absence*, the **credential fingerprint**
+(§"Payload commitment") attributes *presence*: every verdict row and the
+matching `svid.issued` row carry `sha256(leaf_cert_DER)`, so traffic
+attributes to a specific SVID generation and a fingerprint with no
+issuance record is a credential identity never minted. The two compose —
+the watchdog says a credential stopped being used; the fingerprint says
+which credential generation was being used while it was.
 
 #### Tampering
 
