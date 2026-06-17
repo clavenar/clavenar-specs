@@ -4893,6 +4893,46 @@ console surfaces it at `/agents/behavioral-diff` (a drift-posture donut +
 ranked table, one click from any agent page), the fleet companion to the
 per-agent baseline panel.
 
+#### Model-upgrade canary (Temporal intelligence)
+
+The behavioral diffs track drift within a *fixed* model. The
+model-upgrade canary tracks the other axis — what changes when the
+Brain's model or provider is swapped.
+`GET /analysis/model-upgrade-canary?cutover=&window_hours=` (same internal
+mTLS surface, SQLite-only) compares fleet detector behavior in the window
+straight before a cutover against the window straight after. `cutover` is
+the RFC3339 instant the model changed; absent, it defaults to
+`now − window_hours`, making the read a plain prior-vs-recent comparison
+(`window_hours` default 24, clamped `[1, 720]`). Each window — `before =
+[cutover−window, cutover)`, `after = [cutover, cutover+window)` — carries
+its verdict volume, deny rate, mean intent score, the top rejection-signal
+mix, and the **Brain model identities attested in that window's on-chain
+evidence**. The identities are read from a bounded, most-recent-first sample
+of the window's v4 evidence payloads (`provider_models` + `brain_version`) —
+so the model attribution is itself tamper-evident, not self-reported. The
+response carries signed `after − before` deltas (deny-rate, intent-mean,
+volume) plus `new_signals` / `vanished_signals`, and `model_changed` is true
+when the dominant identity differs across the cutover. `insufficient` flags
+an empty window. Like the diffs it enumerates the fleet, so it stays off the
+public `:8083` listener; the console surfaces it at `/agents/model-canary`
+(before/after deny-rate gauges, signal-mix chips, per-window model-identity
+panels, and a best-effort live-config anchor from brain `/model-snapshot`).
+Pure-derived, no new chain rows or columns. **Honest scope:** latency deltas
+are not part of this view — the chain carries no per-row inspection duration
+(latency lives only in brain's Prometheus histogram), and per-detector
+*confidence* distributions aren't captured on organic verdict rows, so the
+chain-derived canary covers deny-rate, intent distribution, signal mix, and
+model identity.
+
+`GET /model-snapshot` (brain, plain-HTTP health port) reports the Brain's
+currently-configured model identity — `brain_version`, `mock_mode`, the
+six-detector `provider:model` map (the same map a v4 verdict commits in its
+evidence), `embedding_model`, and `injection_heuristic_level`. No secrets,
+no PII; it shares the plain-health-port posture of `/explain-pattern` and
+`/narrate-decision` (reachable over the compose network without an outbound
+client cert), so the console can render the canary's live "what am I running
+now" baseline beside the chain-derived windows.
+
 #### Silence watchdog (Shadow Agent Radar)
 
 An agent that skips the proxy is invisible: its enrollment stays green
