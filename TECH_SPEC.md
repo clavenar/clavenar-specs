@@ -4362,10 +4362,11 @@ agent acts on the catalog. Detect-only by default;
 `CLAVENAR_PROXY_BLOCK_POISONED_DEFINITIONS=true` withholds a flagged
 catalog (`502`) entirely. The scan reuses the injection lane's mock +
 needle-heuristic fallback, so a Brain outage degrades loudly rather than
-blinding the check. Both pin and scan ship in both editions. The
-chain-anchored, identity-signed snapshot (today's pin is in-process per
-replica) rides the upstream-provenance registry. This flips upstream
-tool-definition compromise from out-of-scope to detected.
+blinding the check. Both pin and scan ship in both editions. Upstream *server identity* is
+now attested by the **upstream-provenance registry** (below); the
+chain-anchored, identity-signed *tool-definition snapshot* remains
+in-process per replica. This flips upstream tool-definition compromise
+from out-of-scope to detected.
 
 Brain wire shape — `POST /scan-definitions`. Request:
 
@@ -4423,6 +4424,37 @@ Response (`ScanToolNameVerdict`):
 
 URL default: `CLAVENAR_BRAIN_URL` with `/inspect`→`/scan-tool-name`,
 overridable via `CLAVENAR_BRAIN_SCAN_TOOL_NAME_URL`.
+
+**Upstream provenance registry.** The pin and scans above defend a
+tool's *definition* and *name*; the registry attests the *server* an
+agent's calls are forwarded to. `clavenar-identity` registers upstream
+MCP servers the way it registers agents — `POST /upstreams` (mTLS-
+internal, `agents:create`) takes `{ tenant, name, url, tls_pin?,
+spiffe_id?, owner_team }`; `GET /upstreams[/{id}]` lists/reads; `POST
+/upstreams/{id}/retire` (admin) marks one `Retired`. Register and retire
+each emit a signed chain **v3 lifecycle row** (`upstream.registered` /
+`upstream.retired`) through the same outbox as agent lifecycle, so the
+registry's own history is tamper-evident. `UNIQUE(url)` keeps one
+attested identity per upstream URL. The registry broadcasts over the
+`clavenar_upstreams` NATS-KV bucket (keyed `sha256(url)`), which the
+proxy mirrors exactly as it mirrors the revocation denylist — seeded at
+boot, watched for updates, `degraded()` until the first sync.
+
+Against that mirror the proxy does two things. On every forward-
+attempted verdict row it stamps the matched upstream's id onto the
+ledger's non-hashable `upstream_id` column, so a regulator can answer
+"which attested upstream served agent X" from the forensic store alone.
+On the `initialize` handshake it runs two detection-only checks: a
+non-empty registry that does **not** carry the configured
+`CLAVENAR_UPSTREAM_URL` emits `upstream_not_registered` (the proxy is
+pointed at an unattested upstream), and an upstream whose self-declared
+MCP `serverInfo` (`<name>@<version>`) diverges from the first-seen pin
+emits `upstream_identity_mutated` (a mid-session rug-pull). Both are
+forensic signals, never a gate; a degraded (unsynced) registry stays
+silent rather than flag on stale state, and a stack that registers no
+upstreams is inert (empty registry → no false `unregistered`). The
+`upstream_id` binding is additive and non-hashable — **no chain-version
+bump** — mirroring `credential_fingerprint`.
 
 **Degraded-mode rule.** Every security-relevant fallback either fails
 closed or degrades *loudly* — no silent fail-open. The catalog:
