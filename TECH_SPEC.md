@@ -4869,8 +4869,9 @@ swapped its whole tool mix — surfaces instead of being averaged away, and
 components to 0 and sets `insufficient`, so a fresh agent never reads as
 drifted. The console renders the recent profile (tool-mix donut + cadence
 line) plus a drift gauge + `behavior drifted` badge on the agent page.
-Read-only, derived on demand — no new chain rows, no new columns; the
-deviation is surfaced in the console, not written back to the chain.
+The read is derived on demand — no query-time chain rows, no new columns.
+An **opt-in drift watchdog** (below) is the only writer that turns a
+crossing of the threshold into a chain row.
 
 Alongside the scalar deviation, the same response carries a `diff` block —
 the plain-language window-over-window delta: `new_tools` (called in the
@@ -4891,7 +4892,29 @@ server-clamped to `[1, 1000]`. The window defaults to a true week-over-week
 agent_ids fleet-wide, so it stays off the public `:8083` listener. The
 console surfaces it at `/agents/behavioral-diff` (a drift-posture donut +
 ranked table, one click from any agent page), the fleet companion to the
-per-agent baseline panel.
+per-agent baseline panel — and a board-grade roll-up of the same
+Drifted / Within-baseline / Building split rides the main `/agents` page
+(an htmx-lazy partial, one fleet-diff call), one click from the ranked
+breakdown.
+
+The baseline above is read-derived; an **opt-in drift watchdog** turns it
+into a tamper-evident chain record. With
+`CLAVENAR_LEDGER_DRIFT_WATCHDOG_INTERVAL_SECS > 0` (SQLite-only, off by
+default) the ledger periodically sweeps every profiled agent, scores its
+recent window against its prior-window baseline with the identical
+deviation logic, and self-appends a `behavior_drifted` **v1 row**
+(`signal = behavior_drifted`, `intent_category = TemporalIntelligence`) for
+any agent at/above the `0.35` threshold. The deviation evidence — `overall`
++ the four components, recent/baseline totals, and the new/vanished tool
+lists — rides `policy_decision`, which is hashable, so the committed drift
+is tamper-evident. Windows are configurable
+(`CLAVENAR_LEDGER_DRIFT_{RECENT,BASELINE}_DAYS`, default `7` / `14`).
+Emission is deduped statelessly against the chain — one flag per recency
+window, so a continuously-drifted agent re-flags at most once per
+`recent_days`, never every sweep — and the row carries the
+`behavior_drifted` signal that traffic-recency reads exclude, so it never
+disturbs the silence watchdog's clock. Mirrors the `agent_silent` silence
+watchdog; never an enforcement path, audit-eventually-consistent.
 
 #### Model-upgrade canary (Temporal intelligence)
 
