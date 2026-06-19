@@ -4905,10 +4905,13 @@ default) the ledger periodically sweeps every profiled agent, scores its
 recent window against its prior-window baseline with the identical
 deviation logic, and self-appends a `behavior_drifted` **v1 row**
 (`signal = behavior_drifted`, `intent_category = TemporalIntelligence`) for
-any agent at/above the `0.35` threshold. The deviation evidence — `overall`
-+ the four components, recent/baseline totals, and the new/vanished tool
-lists — rides `policy_decision`, which is hashable, so the committed drift
-is tamper-evident. Windows are configurable
+any agent at/above the `0.35` threshold. The deviation evidence —
+`overall_bp` + the four component scores (integer **basis points**,
+value×10000, never raw `f64`: a float's JSON form is not stable across
+serde builds and would break the row's chain hash on a later verify),
+recent/baseline totals, and the new/vanished tool lists — rides
+`policy_decision`, which is hashable, so the committed drift is
+tamper-evident. Windows are configurable
 (`CLAVENAR_LEDGER_DRIFT_{RECENT,BASELINE}_DAYS`, default `7` / `14`).
 Emission is deduped statelessly against the chain — one flag per recency
 window, so a continuously-drifted agent re-flags at most once per
