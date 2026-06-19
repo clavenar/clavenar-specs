@@ -1513,6 +1513,7 @@ The catalog is the static source of truth in `clavenar-ledger/src/compliance.rs`
 | `NIST-AI-RMF-MEASURE-2.7` | NIST AI RMF | continuous inspection on a verified chain (Article-15 substrate) | chain verifies with verdict rows in the window |
 | `NIST-AI-RMF-MANAGE-4.1` | NIST AI RMF | risk-response actions: denials + human evaluations + privilege reductions | ≥1 response action recorded (`partial` when traffic exists but no response) |
 | `NIST-AI-RMF-GOVERN-1.2` | NIST AI RMF | attested human-oversight decisions (Article-14 substrate) | every human oversight decision rode an attested channel |
+| `NIST-GenAI-Profile-Content-Provenance` | NIST GenAI Profile | per-primitive provenance commitments on a verified chain: rows hashing the request payload (`payload_sha256`), committing the Brain's deterministic verdict inputs (`brain_evidence_sha256`), and ed25519-signed | chain verifies and ≥1 provenance commitment present (`partial` when traffic exists but none carries a commitment). GenAI-Profile incident disclosure (MANAGE 4.3) rides the shipped Art-73 authority-notification pipeline + the MANAGE-4.1/4.3 risk-response control |
 
 ### 3. Wire surface
 
