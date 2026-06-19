@@ -4217,6 +4217,14 @@ the same `detectors` shape from its embedded heuristic Brain (two lanes:
 `injection` + `intent`); it never emits a `degraded` key (no degradable
 LLM lanes).
 
+All five agent-wrapper SDKs (TypeScript, Python, Go, Java, .NET) parse
+`detail` onto their typed `Denied` error and expose a **dev-mode** option
+(`devMode` / `dev_mode` / `DevMode`) that renders it to stderr as a
+readable panel (detector table + degraded lanes + reasons + correlation
+id) on a denied call — off by default, dev/staging only. A `renderDenyPanel`
+helper is exported for custom output. The Rust control-plane `clavenar-sdk`
+is out of scope (it isn't an agent tool-call wrapper).
+
 **Honest constraint:** a detailed denial is an attacker oracle — it
 reveals which detector caught a probe and how close a near-miss was. So
 the knob is **off by default** and intended for dev/staging; in the
