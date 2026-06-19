@@ -817,6 +817,7 @@ This document is the narrative. The shipped runtime lives in sibling repos.
 | 4     | `clavenar-ledger`        | 8083  | SHA-256 hash-chained, SQLite-backed forensic store; NATS subscriber; `/verify` API; Iceberg cold tier; regulatory export      |
 | —     | `clavenar-hil`           | 8084  | Pending → Approved / Denied / Expired state machine for Yellow-tier requests; WebAuthn approver auth                           |
 | —     | `clavenar-identity`      | 8086  | SPIFFE SVID issuance, OIDC delegation grants, action signing, A2A actor tokens, cross-tenant federation, agent registry (WAO) |
+| —     | `clavenar-console`       | 8085  | Operator UI (axum + Askama); WebAuthn / OIDC / SAML / basic-admin auth ladder; `/demo` curated scenarios; stats dashboards    |
 
 For per-feature claims with copy-paste verification commands and expected output,
 see [`./FEATURES.md`](./FEATURES.md). For design records, the threat model, and

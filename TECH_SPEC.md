@@ -1689,13 +1689,12 @@ nothing even inside Turnstile's own validity window.
 `clavenar-demo-mint` (Rust service, port 9200, behind Caddy at `/mint`) holds:
 
 - `CLAVENAR_DEMO_MINT_TURNSTILE_SECRET` — Cloudflare Turnstile siteverify secret.
-- `CLAVENAR_DEMO_MINT_HS256_SECRET` — HS256 signing key, shared with `clavenar-console`, `clavenar-ledger`, and `clavenar-hil` for validation via the compose YAML anchor `*demo-session-hs256`. Rotated quarterly.
+- `CLAVENAR_DEMO_MINT_HS256` — HS256 signing key, shared with `clavenar-console`, `clavenar-ledger`, and `clavenar-hil` for validation via the compose YAML anchor `*demo-session-hs256`. Rotated quarterly.
 
 Mint shape:
 
 ```
-POST /mint
-  body: { "cf-turnstile-response": "..." } (form-encoded from the clavenar.com/#contact form)
+GET /mint?cf-turnstile-response=<token>   (token from the clavenar.com/#contact Turnstile widget)
   →
   1. siteverify Turnstile (reject on fail)
   2. correlation_prefix = "demo-" + 8 hex chars
@@ -4142,7 +4141,7 @@ Every non-2xx the data plane returns to a caller — `clavenar-proxy`'s
 one JSON envelope (`Content-Type: application/json`). It tells the caller
 which stage rejected the request, why, and which `correlation_id` to
 quote when pulling the audit row. The full edition and Lite share the
-shape; the SDKs (`clavenar-sdk`, `@clavenar/agent-sdk`, `clavenar-python-sdk`,
+shape; the SDKs (`clavenar-sdk`, `@clavenar/agent-sdk`, `clavenar-agent-sdk`,
 `clavenar-go-sdk`, `com.clavenar:agent-sdk`, `Clavenar.AgentSdk`)
 parse it into their typed `Veto` / `ClavenarDenied` surfaces.
 
