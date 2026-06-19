@@ -5000,8 +5000,22 @@ An opt-in watchdog
 `agent_silent` v1 row for each newly-silent agent, deduped **statelessly
 against the chain**: a row is emitted only when the agent's most recent
 `agent_silent` flag predates its reference timestamp, so one silence
-episode flags once and a resumed-then-silent agent flags again. The
-console renders the watchdog as a `/agents/liveness` board — silent
+episode flags once and a resumed-then-silent agent flags again.
+
+An **expected-silent allowlist** suppresses re-flagging for agents an
+operator has explicitly marked as legitimately quiet — old or
+known-unmanaged credentials. `GET/POST /silence-allowlist` and
+`DELETE /silence-allowlist/{agent_id}` (internal mTLS, SQLite-only)
+manage it; both the watchdog sweep and the `/analysis/silent-agents`
+read skip allowlisted agents. It is operational config, never chain
+state — entries are not hashed and deleting one cannot affect `/verify`.
+This is the **shadow-scanner cross-link**: `clavenarctl
+agents import-from-scanner --silence-allowlist` turns a scanner report
+into allowlist seed entries (`{agent_id, reason, source}`), so a
+credential the scanner already surfaced doesn't also spam the silence
+board.
+
+The console renders the watchdog as a `/agents/liveness` board — silent
 agents ranked, each with a one-click **suspend** (admin only; reuses the
 identity lifecycle `POST /agents/{id}/suspend`, reversible via
 unsuspend). The suspend control is hidden on the auth-disabled public
