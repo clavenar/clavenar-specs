@@ -587,10 +587,16 @@ extends into the three operational pillars of the agentic enterprise: **cost**,
 
 ### 11.1 Agentic FinOps — the waste-zero layer
 
-- **Token-velocity throttling.** Track real-time spend per agent ID; at 80% of
-  daily budget, downgrade to a cheaper model or pause for review.
-- **Attribution & tagging.** Every tool call tagged by department, project, agent —
-  the CFO sees which teams drive ROI and which burn tokens on loops.
+- **Token-velocity throttling.** Real-time spend is tracked per agent ID (the
+  ledger's `cost_micros` column, aggregated by `GET /finops/spend` and the
+  console FinOps dashboard), and `governance.rego` denies once an agent crosses
+  its configured `budget_micros` cap — pausing it for review. Auto-downgrading
+  to a *cheaper model* at a budget threshold is the model-brokerage tier, which
+  is roadmap. *(See [§15](#15-roadmap--next-horizon).)*
+- **Attribution.** Every priced inspection is attributed by agent and tenant,
+  so an operator sees which agents drive spend and which burn tokens on loops.
+  *(Department / project cost tagging is out of scope — all figures are
+  PriceTable estimates, never billed cost.)*
 - **Recursive-loop detection.** Identify semantic stuttering and kill the process.
 
 ### 11.2 Dynamic model routing — the broker
@@ -770,8 +776,6 @@ through **NIST AI 100-1** and **DORA**.
   side-effect-free.
 - **Horizontal history store** — a Redis-backed `HistoryStore` so two proxy
   instances share `last_tool`.
-- **Cost-aware circuit breakers** (`clavenar-policy-engine`) — attribute rough
-  token cost per call and deny before a budget overrun lands upstream.
 - **Centralized signed policy bundles** — pull from an OCI registry / S3 with
   signed manifests instead of the single-host SQLite store.
 - **Local open-weights model fallback** — the Llama-class graceful-degradation path
