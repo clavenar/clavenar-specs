@@ -4365,10 +4365,18 @@ agent acts on the catalog. Detect-only by default;
 catalog (`502`) entirely. The scan reuses the injection lane's mock +
 needle-heuristic fallback, so a Brain outage degrades loudly rather than
 blinding the check. Both pin and scan ship in both editions. Upstream *server identity* is
-now attested by the **upstream-provenance registry** (below); the
-chain-anchored, identity-signed *tool-definition snapshot* remains
-in-process per replica. This flips upstream tool-definition compromise
-from out-of-scope to detected.
+now attested by the **upstream-provenance registry** (below). The
+tool-definition pin is also **identity-signed and chain-anchored**: the
+proxy reports each pin to identity's `POST /tool-definitions/pin` (internal
+mTLS) on first sight and on drift, and identity signs it into a v3
+`tool_definition.pinned` / `tool_definition.drifted` chain row (the same
+outbox emission path as the upstream registry; actor `system:proxy`). The
+report is fire-and-forget — it never blocks or fails the agent's
+`tools/list`, and a report failure leaves the in-process pin holding
+(degraded, `clavenar_proxy_tool_pin_report_failed_total`). The pin still
+enforces in-process per replica; the chain row makes the snapshot
+tamper-evident and survives a restart. This flips upstream tool-definition
+compromise from out-of-scope to detected.
 
 The compose **upstream-stub** demos the catch end-to-end:
 `CLAVENAR_UPSTREAM_STUB_RUG_PULL_MODE=poisoned` makes it advertise a tool
