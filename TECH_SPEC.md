@@ -5024,10 +5024,16 @@ demo console so a visitor can't take a fleet agent down.
 This flips proxy-bypass from undetected to **detected at runtime**,
 mirroring the supply-chain `tool_schema_poisoned` flip: shadow-scanner
 is static credential discovery, while this watches the running fleet for
-the credential-active-but-traffic-gone signal it can't see. It does not
-prove *where* the bypassed traffic went — provider-side correlation
-needs an external audit-log integration — only that an enrolled
-credential has gone dark.
+the credential-active-but-traffic-gone signal it can't see. Where the
+silence watchdog proves a credential went *dark*, **provider audit-log
+correlation** proves traffic went *around* the proxy:
+`clavenarctl import-provider-audit` diffs a normalized provider usage
+export (`[{agent_id, usage_count}]`, produced by a per-vendor adapter
+from CloudTrail / a usage API / a billing export) against on-chain
+verdict counts in the same window — an agent present at the provider but
+absent or undercounted on the chain is bypass evidence. The correlation
+is provider-agnostic (reads the chain over the public `/audit` surface);
+the per-vendor export adapter is the integration boundary.
 
 Where the watchdog detects *absence*, the **credential fingerprint**
 (§"Payload commitment") attributes *presence*: every verdict row and the
