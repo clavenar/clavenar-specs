@@ -4713,6 +4713,22 @@ gauge. Each Yellow-tier HIL pending also carries the Brain's per-request
 `projected_cost_micros`, surfaced to the approver as a *projected* $
 beside the blast radius.
 
+The `/stats/cost-latency` dashboard adds two estimate-grade FinOps
+panels alongside the provider-spend breakdown. **Cache economics** reads
+the Brain's `clavenar_brain_cache_lookups_total{layer,outcome}` for L1
+(SHA-256 exact) / L2 (cosine) hit-rates and
+`clavenar_brain_cache_savings_estimated_usd_micros_total` — a counter
+the Brain emits per priced call as `cache_read_tokens × (input_rate −
+cache_read_rate)`, i.e. the spend *avoided* by serving prompt-cache
+reads instead of fresh input. **Inspection spend by tenant** is a
+count-weighted estimate: total Brain inspection spend split by each
+tenant's request-volume share over the window, where tenancy reuses the
+demo-prefix gate (the v3 `tenant` column when present, else the 8-hex
+correlation-id demo prefix). Both are estimates for trend-spotting; the
+attributed per-row sum lives on `/stats/finops`. On the ops side a
+monitor-only `BrainInspectionBudgetSoftCap` alert warns when trailing-24h
+inspection spend crosses a soft daily budget — it never denies traffic.
+
 **Payload commitment rides separately, non-hashable.** The chain records
 the *verdict* but never the tool params that were judged. To make "what
 did the agent actually send" forensically provable without putting the
