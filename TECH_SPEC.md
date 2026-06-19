@@ -4370,6 +4370,14 @@ chain-anchored, identity-signed *tool-definition snapshot* remains
 in-process per replica. This flips upstream tool-definition compromise
 from out-of-scope to detected.
 
+The compose **upstream-stub** demos the catch end-to-end:
+`CLAVENAR_UPSTREAM_STUB_RUG_PULL_MODE=poisoned` makes it advertise a tool
+whose description carries an injection payload (flagged
+`tool_definition_injection` at the pin scan), and `=mutated` serves clean
+definitions on the first `tools/list` (so the proxy pins them) then drifts
+the description + schema on every list after (flagged
+`tool_schema_poisoned`). Off by default — a normal stack is unaffected.
+
 Brain wire shape — `POST /scan-definitions`. Request:
 
 ```json
