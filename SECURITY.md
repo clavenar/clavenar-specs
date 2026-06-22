@@ -21,7 +21,7 @@ in your initial email and we will arrange one.
 
 In scope:
 
-- All 17 repositories under `github.com/clavenar/clavenar-*`.
+- All 30 repositories under `github.com/clavenar/clavenar-*`.
 - The shipped binaries, container images, helm chart, and SBOMs published
   under those repositories' GitHub releases.
 - The hash chain integrity properties documented in
