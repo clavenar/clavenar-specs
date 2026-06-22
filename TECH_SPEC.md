@@ -219,13 +219,10 @@ After the security verdict resolves and `forward_upstream` runs (or is denied), 
 
 ```rust
 struct SignRequest {
-    agent_spiffe: String,
-    correlation_id: Uuid,
+    correlation_id: String,
     method: String,
-    request_payload_sha256: [u8; 32],   // do NOT send payload itself
-    verdict: Verdict,                    // Authorized | ReviewApproved | ReviewDenied | Violation
-    upstream_outcome: Option<UpstreamOutcome>,
     prev_hash: String,                   // tail hash of the ledger chain
+    payload_canonical_json: String,      // full canonical JSON, signed verbatim
 }
 ```
 
@@ -4166,15 +4163,15 @@ parse it into their typed `Veto` / `ClavenarDenied` surfaces.
 | `reasons` | Human-readable deny reasons — the Rego strings, Brain reasoning, or a single infra message. Omitted when empty. |
 | `review_reasons` | Yellow-tier reasons, when the rejection followed a held request. Omitted when empty. |
 | `intent_category` | Brain intent bucket, when a verdict was reached. Omitted otherwise. |
-| `correlation_id` | Always present on rejections; also on the `X-Clavenar-Correlation-Id` header (the header is authoritative). |
+| `correlation_id` | Always present on rejections, in the JSON body (the body is authoritative — the proxy does not emit a correlation-id response header). |
 | `retry_after_secs` | Seconds to wait before retrying, on `rate_limited`. Omitted otherwise. |
 | `detail` | Per-detector verdict breakdown — **present only under the verbose-verdict opt-in** (below). Omitted in the default posture. |
 
 HTTP status is unchanged by this contract (403 for denies/holds, 429 for
 rate limits, 503 for HIL/identity unavailable, 400 for malformed). The
-body shape is additive: consumers that only read the status code or the
-correlation header are unaffected, and SDKs that predate the envelope
-fall back to treating the raw body as opaque text.
+body shape is additive: consumers that only read the status code are
+unaffected, and SDKs that predate the envelope fall back to treating
+the raw body as opaque text.
 
 ### Verbose verdicts — the developer's denial loop
 

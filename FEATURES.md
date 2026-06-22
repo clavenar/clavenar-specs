@@ -6,7 +6,7 @@ A complete inventory of what's shipped today, with each feature explained on thr
 2. **Implementation** — where the code lives and the load-bearing structs / wire shapes.
 3. **Verify** — concrete steps to observe the feature working.
 
-This is a companion to `TECH_SPEC.md`. Where the spec is design-first, this file is implementation-first: every feature listed here corresponds to working code on `main` in one or more of the 17 repos. Re-verify with `git log --oneline -10` per repo before relying on any specific file reference — code moves faster than docs.
+This is a companion to `TECH_SPEC.md`. Where the spec is design-first, this file is implementation-first: every feature listed here corresponds to working code on `main` in one or more of the 30 repos. Re-verify with `git log --oneline -10` per repo before relying on any specific file reference — code moves faster than docs.
 
 Boot environment assumed for all "Verify" recipes:
 
@@ -1701,7 +1701,7 @@ gh run download <run-id> -R <org>/clavenar-proxy
 
 **Concept.** Disclosure policy. `SECURITY.md` at every repo root tells security researchers where to send vulnerability reports and what response time to expect. `security.txt` at `clavenar-website/.well-known/` is the RFC 9116 surface — automated scanners and bug-bounty platforms check that path.
 
-**Implementation.** `SECURITY.md` (17 repos). `clavenar-website/public/.well-known/security.txt`. Both reference the same email contact and PGP key.
+**Implementation.** `SECURITY.md` (30 repos). `clavenar-website/public/.well-known/security.txt`. Both reference the same email contact and PGP key.
 
 **Verify.**
 
