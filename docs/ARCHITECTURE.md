@@ -59,10 +59,13 @@ flowchart LR
 
 ## 2. Container View
 
-The four-layer hot path is `proxy → brain + policy + ledger` in parallel
-across the NATS bus. Everything else is an orchestrator hanging off the
-side: HIL gates Yellow-tier traffic, identity roots the trust chain,
-sandbox annotates HIL pendings, deep-review samples forensic rows.
+The four-layer hot path is serial: the proxy awaits Brain `/inspect`,
+derives `intent_score` from that verdict, then calls Policy `/evaluate`
+(`proxy → brain → policy`). The ledger row is written downstream over
+the NATS forensic bus once the verdict resolves. Everything else is an
+orchestrator hanging off the side: HIL gates Yellow-tier traffic,
+identity roots the trust chain, sandbox annotates HIL pendings,
+deep-review samples forensic rows.
 
 ```mermaid
 flowchart TD
@@ -103,7 +106,8 @@ flowchart TD
 
   Agent -->|mTLS MCP| Proxy
   Proxy -->|HTTP POST /inspect| Brain
-  Proxy -->|HTTP POST /evaluate| Policy
+  Brain -->|intent_score verdict| Proxy
+  Proxy -->|HTTP POST /evaluate — carries intent_score| Policy
   Proxy -->|HTTP POST /pending — Yellow tier| HIL
   Proxy -->|HTTP /sign + /actor-token| Identity
   Proxy -->|annotate blast-radius| Sandbox
