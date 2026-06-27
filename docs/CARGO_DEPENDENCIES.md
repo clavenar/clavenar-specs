@@ -21,7 +21,7 @@ needs to move, edit this doc first, then mirror into every consumer
 in the same change set.
 
 This is the same convention `deny.toml` already uses (see
-`clavenar-specs/deny.toml` — synced verbatim across 19 Rust repos).
+`clavenar-specs/deny.toml` — synced verbatim across 20 Rust repos).
 
 ### Canonical pins
 
