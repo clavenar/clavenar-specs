@@ -8,7 +8,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 
 - [Identity service](#identity-service) — SVID issuance, OIDC delegation, action signing, attestation, federation
 - [Agent onboarding (WAO)](#agent-onboarding-wao) — registration, capability envelope, lifecycle, chain v3
-- [Tenancy scope](#tenancy-scope) — what is tenant-isolated today vs. deployment-wide in v1
+- [Tenancy scope](#tenancy-scope) — demo + operator tenant isolation: what's live, what's capability-only, what's still deployment-wide
 - [Console config page](#console-config-page) — `/config` diagnostic surface
 - [Operator authentication](#operator-authentication) — console + HIL human auth, RBAC, cross-channel identity
 - [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
@@ -848,7 +848,7 @@ The shared types are duplicated on each side of the wire (no shared crate, per r
 ## Tenancy scope
 
 
-Cross-cutting clarification — applies to every module. Clavenar v1 ships a **single-tenant-per-deployment posture with a tenant-scoped trust root**. Operators should not conflate "the SVID carries a tenant segment" with "the system enforces tenant isolation end-to-end."
+Cross-cutting clarification — applies to every module. Clavenar v1 shipped a **single-tenant-per-deployment posture with a tenant-scoped trust root**; the multi-tenant **operator arm** (identity → console → ledger → policy/HIL → Brain → billing → offboarding) then landed across Phases 1–7 and is deployed. Honest status: the operator arm is **capability-complete and isolation-verified by tests, but not yet exercised by a live customer tenant** — prod runs only a test OIDC tenant, the per-tenant quota gate ships **dark** (off by default, §8), and tenant offboarding is **inert until invoked** (§9). A deployment that serves a single tenant sees no behavior change. The **demo-session** axis (§7) is the one operator-facing tenant boundary that is live and continuously exercised.
 
 ### 1. What is tenant-scoped today
 
@@ -856,33 +856,37 @@ Cross-cutting clarification — applies to every module. Clavenar v1 ships a **s
 - **SVID URIs.** Every instance certificate carries `spiffe://<td>/tenant/<tid>/agent/<name>/instance/<uuid>` ([Identity service §3](#identity-service)). The tenant segment is signed into the cert by Vault Transit and is durable for the cert's lifetime — the SVID URI is the immutable artifact this whole section is shaped around.
 - **v3 lifecycle chain rows** (`clavenar-ledger`). Agent register / rotate / revoke / suspend / decommission events live in chain v3 with a `tenant` column; `read_lifecycle_for_agent` gates `WHERE tenant=? AND agent_id=?` (index `idx_entries_tenant_agent`). This is the one ledger surface that is tenant-isolated end-to-end.
 
-### 2. What carries `tenant` as a field but does not filter on it
+### 2. Operator-tenant scoping (Phases 1–5, shipped — capability-complete, not yet live-exercised)
 
-- **v1/v2 verdict rows** (`clavenar-ledger`). `entries.tenant` exists as a column on all rows but no read function references it. The `/audit/{agent_id}` JSON receipt, `/audit/paged`, the console's `/audit` page fan-out, `/audit/replay/corpus`, and the distinct-agents list are global across tenants.
-- **Self-Learn mining corpus** ([Console policy management](#console-policy-management)). `read_replay_corpus` has no tenant predicate; the miner sees every tenant's traffic in a shared pool.
-- **Policy Lab replay-batch.** Same SQL, same gap.
+The year-2 operator-tenant arm landed: the demo-prefix machinery of §7 was re-keyed onto the authenticated **operator tenant** — the OIDC `tenant` claim at the console edge and the SVID `tenant/<t>` segment at the data plane. Every surface below is isolation-tested, but absent a live customer tenant it runs today only against a test OIDC tenant; a single-tenant deployment is unaffected (the no-tenant `System` path behaves exactly as v1 did).
 
-### 3. What has no tenant axis at all
+- **Identity (P1).** `OidcRegistry` refuses boot if two tenants (or a tenant and the fallback) share an issuer — the implicit issuer→tenant binding is only sound when an issuer maps to one tenant. A token whose issuer doesn't match the body tenant returns `403 tenant_mismatch` (wiring the previously-dead `AuthError::TenantMismatch`) on `/agents` and `/grant`; forged / expired still 401. `/sign` is SPIFFE-allowlisted, not OIDC, so it is correctly outside this gate.
+- **Console (P2).** A per-request `TenantScope { Demo(prefix) | Operator(tenant) | System }` extractor resolves the tenant once (demo cookie wins → operator session tenant → System). The operator tenant is read from the OIDC token at login via `CLAVENAR_CONSOLE_OIDC_TENANT_CLAIM` (default `org_id`) into `SessionData.tenant`; the agents surfaces scope to it and a cross-tenant read 404s (never confirms a foreign row exists). Non-OIDC / claimless modes stay `System` (single-tenant preserved).
+- **Ledger verdict reads (P3).** v1/v2/v4 verdict reads (`read_entries_for_agent` + paged/before/after/since, `/count`, by-correlation, distinct-agents) take an optional `?tenant=` on the internal-mTLS router and append `AND tenant=?` (plain equality, index-friendly). A partial index `idx_entries_tenant_agent_verdict (tenant, agent_id) WHERE chain_version <> 3` backs it. Legacy NULL-tenant verdict rows were backfilled to `single-tenant-legacy` (v3 excluded; the v1/v2/v4 hashables never include `tenant`, so the backfill is `/verify`-safe — confirmed at prod scale). Demo and operator are mutually-exclusive arms: `?tenant=` is ignored when a demo-session token is present.
+- **Policy + HIL (P4).** The policy-engine tenant column (built generic in Phase 0) now also accepts operator labels: operator tenants fork-on-write and are never TTL-swept (only demo tenants are). HIL gained `pending_requests.tenant` (+ index, idempotent migration) and a `/decide` **operator gate** — a caller claiming a tenant may only decide that tenant's pendings (403 otherwise), mirroring the demo-prefix gate; list reads filter `AND tenant=?`. The console's `scoped_policies` / `scoped_hil` thread the operator tenant through.
+- **Brain (P5).** `tenant` is in the `/inspect` request shape. Classifiers and the indirect-injection detector stay shared, but the persona-drift baseline, the on-disk persona (`personas/{tenant}/{agent}.md` shadows a shared base), and the L1/L2 verdict cache key off `(tenant, agent)` — and the proxy's per-agent history store is tenant-scoped via `scoped_agent_key` — so no signal or cached verdict crosses tenants.
 
-- **Policy ruleset** (`clavenar-policy-engine`). The `policies` and `policy_versions` tables have no `tenant` column. One engine; one active ruleset; applied to every agent regardless of tenant claim. Activating, deactivating, or editing a policy is deployment-wide.
-- **HIL pending queue** (`clavenar-hil`). `pending_requests` has no `tenant` column; one global approval queue. A human approver cannot tell which tenant a pending belongs to except by inspecting the `agent_id` prefix convention.
-- **Brain `/inspect`** (`clavenar-brain`). *(Closed in Phase 5.)* Tenant is now in the request shape (`tenant`). Classifiers and the indirect-injection detector stay shared, but the persona-drift baseline, the on-disk persona (`personas/{tenant}/{agent}.md` shadows a shared base), and the L1/L2 verdict cache key off `(tenant, agent)` so no signal or cached verdict crosses tenants.
-- **Console UI.** `CLAVENAR_CONSOLE_AGENTS_TENANT` is process-wide (default `acme`). No tenant switcher; every page reads the global state above.
+**Honest status.** Prod runs one *test* OIDC tenant (`acme`, issuer `https://idp.test/`); the prod console is `auth: disabled` (synthetic admin) and dev is `basic-admin`, so no real operator tenant has driven these paths. Isolation correctness is established by unit / integration tests, not by live multi-customer traffic.
+
+### 3. What still does not filter on operator tenant
+
+- **Self-Learn mining corpus / Policy Lab replay** (`read_replay_corpus`, [Console policy management](#console-policy-management)). Still has no operator-tenant predicate — the miner and the replay-batch see a shared pool. (The demo-prefix arm scopes the demo's own corpus; the operator arm is the residual.)
+- **Per-tenant HIL approver routing.** One approval surface; per-tenant Slack / Teams routing, and operator-scoping of HIL get-by-id / stats / stream, are not yet wired.
+- **SAML tenant extraction.** Only the OIDC claim path resolves an operator tenant; a SAML deployment yields no tenant.
+- **Per-tenant Brain replicas / deep-review budget.** Brain *state* is tenant-keyed (§2), but model replicas and a per-tenant deep-review model / budget (the optional "Phase 5.1") are not split.
 
 ### 4. Why this shape
 
-The SVID is durable infrastructure. Once issued and signed by Vault Transit, the URI cannot be rewritten without re-issuance. Adding the `tenant/<tid>` segment at v1 costs near zero; adding it on day 200 means re-rolling every running agent and handling the gap period where some workloads carry tenant-aware URIs and some do not. The OIDC tenant gate at enrollment is a real security boundary today — it prevents tenant-A credentials from minting a tenant-B SVID at the trust root — even though downstream services do not filter on tenant. The work is therefore not nominal even before multi-tenant SaaS ships.
+The SVID is durable infrastructure. Once issued and signed by Vault Transit, the URI cannot be rewritten without re-issuance — so the `tenant/<tid>` segment was paid for at v1 (near-zero then; a full agent re-roll later) and the operator arm of §2 simply reads the segment that was already there. The OIDC tenant gate at enrollment was a real security boundary even before downstream filtering existed — it prevents tenant-A credentials from minting a tenant-B SVID at the trust root. The downstream scoping (§2) reuses the demo-prefix persistence-filter pattern of §7 re-keyed onto that durable tenant identity, rather than introducing a parallel mechanism.
 
-Downstream tenant-scoping (v1/v2 verdict reads, policy ruleset, HIL queue, mining corpus — Brain context is now scoped, Phase 5) is the year-2 multi-tenant workstream. The Agent Onboarding section already calls the broader piece out of scope ([§15 "Tenant lifecycle"](#agent-onboarding-wao)); this section is the stocktaking complement that an operator can read in one sitting.
+### 5. Implication for deployments
 
-### 5. Implication for v1 deployments
-
-One Clavenar deployment serves one operational tenant. Cross-tenant federation happens at the SPIFFE bundle layer (`/.well-known/spiffe-bundle`, see [Identity service](#identity-service) "Cross-tenant federation"), not by sharing a console process between two tenant orgs. Operators who need data-plane isolation today should deploy two stacks — separate compose, separate ledger volume, separate identity CA — and federate via the bundle endpoint. Year-2 SaaS-style multi-tenant support, where one deployment serves N tenant orgs with isolated audit / policy / HIL state, is deferred.
+A deployment serving one operational tenant is unaffected — `System` scope is the no-tenant path and behaves exactly as v1 did. Serving **N operator tenants from one deployment** is now possible but not turnkey: it requires onboarding a real OIDC tenant (a distinct issuer per tenant, §2 P1), switching on the quota gate with per-tenant budgets if metering is wanted (§8, off by default), and accepting the §3 residuals. The most conservative isolation remains two stacks — separate compose, ledger volume, identity CA — federated via the SPIFFE bundle (`/.well-known/spiffe-bundle`, see [Identity service](#identity-service) "Cross-tenant federation").
 
 ### 6. What this section is not
 
-- It does not commit to a roadmap date for closing the gaps in §2 / §3. Year-2 means "after v1 settles," not a quarter.
-- It does not propose API shapes for tenant-aware reads. When the year-2 workstream picks up, the migration design lands as a fresh section, not as edits here.
+- It does not claim production multi-customer readiness. §2 is capability plus test-verified isolation; the §3 residuals and the never-live-exercised caveat are load-bearing.
+- It does not propose API shapes for the §3 residuals. When the mining-corpus / SAML / per-tenant-routing work picks up, each lands as its own design, not as edits here.
 - It is not authoritative for `clavenar-charts`. The Helm chart's multi-replica posture has separate caveats called out per-service in `values.yaml`; this section covers wire / data isolation only.
 
 ### 7. Demo-session prefix scoping (shipped)
@@ -913,8 +917,9 @@ front of every correlation-id UUID by `clavenar-proxy`). Enforced end-to-end:
   filter).
 
 This is keyed on the **demo prefix**, not the OIDC `tenant` claim — the broader
-operator-tenant scoping of §2 / §3 remains the year-2 workstream, which will
-re-key the same machinery onto the authenticated tenant.
+operator-tenant scoping landed by re-keying this same machinery onto the
+authenticated tenant (§2). The demo axis remains the one tenant boundary that is
+live and continuously exercised.
 
 ### 8. Per-tenant spend budgets & quota (Phase 6)
 
