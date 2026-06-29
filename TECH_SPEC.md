@@ -955,6 +955,44 @@ never the demo prefix (demo rows scope by correlation-id, §7).
 Budget changes are attributed via the `tenant_budgets` row (`updated_by`); folding
 them into the chain-v3 lifecycle (today agent-shaped) is a separable follow-up.
 
+### 9. Tenant offboarding (Phase 7)
+
+The teardown end of the tenant lifecycle: making a whole operator tenant cease to
+function and hiding its data, without breaking the append-only hash chain. Logical
+hiding, **not cryptographic erasure** — the rows stay physically in the chain (so
+`/verify` still walks an unbroken `prev_hash` linkage); true GDPR erasure remains an
+out-of-band export/redact/re-import.
+
+- **Ledger.** A non-hashed `deleted_at` column on `entries` (same posture as the
+  `tenant` backfill — in no `HashableEntryV<N>`, so setting it moves no
+  `entry_hash`). A new store method `tombstone_tenant` runs
+  `UPDATE entries SET deleted_at=? WHERE tenant=? AND deleted_at IS NULL`
+  (idempotent, backend-portable). Every **user-facing read** (audit / analysis /
+  billing / regulatory) gains `AND deleted_at IS NULL`; the **`/verify` walk and the
+  cold-tier export/anchor reads do not** — tombstoned rows must stay visible to the
+  chain walk or the linkage breaks. New internal-mTLS route
+  `POST /admin/tenants/{tenant}/tombstone` (the console calls it; returns the rows
+  tombstoned).
+- **Identity.** A new `tenant:offboard` capability (above the per-agent
+  `agents:admin`) gates `POST /tenants/{tenant}/offboard` (internal mTLS + OIDC).
+  It decommissions every live agent — each emitting its `agent.decommissioned`
+  chain event **and** broadcasting to the revocation KV so in-flight SVIDs are
+  refused at once (a plain decommission does not broadcast) — retires the tenant's
+  upstreams, clears its `tenant_budgets` row, and emits a one-row
+  `tenant.offboarded` v3 chain marker (`agent_id = "tenant:<t>"`). `confirm` in the
+  body must equal the tenant (server-side echo of the console guard).
+- **Why two services.** Identity has no ledger write path (it only publishes
+  lifecycle events over NATS), so it cannot tombstone the audit rows itself. The
+  **console orchestrates** — the only component holding both the identity and
+  ledger clients: it calls identity offboard (hard-fails the action on error, so
+  nothing is tombstoned if teardown failed), then the ledger tombstone
+  (best-effort + idempotent — the tenant is already non-functional, and re-running
+  the offboard completes a missed tombstone).
+- **Console.** An admin-only "danger zone" on `/agents` (hidden from demo and
+  non-admin sessions; the confirm/action endpoints re-enforce). The confirm dialog
+  carries a **type-the-tenant-name** guard; the tenant is session-derived, never a
+  client arg.
+
 ---
 
 ## Console config page
