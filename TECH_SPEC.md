@@ -885,6 +885,37 @@ One Clavenar deployment serves one operational tenant. Cross-tenant federation h
 - It does not propose API shapes for tenant-aware reads. When the year-2 workstream picks up, the migration design lands as a fresh section, not as edits here.
 - It is not authoritative for `clavenar-charts`. The Helm chart's multi-replica posture has separate caveats called out per-service in `values.yaml`; this section covers wire / data isolation only.
 
+### 7. Demo-session prefix scoping (shipped)
+
+One axis of §2 / §3 is now closed for the **public demo** specifically. A demo
+session is a tenant keyed by an 8-hex `prefix` carried in the HS256-signed
+`clavenar_demo_session` JWT (minted by `clavenar-demo-mint`, spliced into the
+front of every correlation-id UUID by `clavenar-proxy`). Enforced end-to-end:
+
+- **Ledger.** Demo-scoped audit reads return only rows whose correlation-id
+  first group matches the prefix, **OR** `source='simulator'` (the intended
+  ambient backdrop) — exact first-group match via
+  `clavenar_shared::demo_prefix::prefix_matches_first_group`, never
+  `starts_with`. Per-row reads (`/audit/{agent_id}`, `/count`, `/lifecycle`,
+  analysis) are mTLS-internal; only the aggregate `/verify` is browser-reachable.
+- **HIL.** A `DemoScope` middleware scopes every read endpoint at the
+  persistence layer (`correlation_id LIKE '<prefix>-%'`); single-row reads 404 /
+  by-correlation 403 cross-prefix; the approve queue is own-prefix-only (no
+  `source` column). A present-but-invalid demo cookie is 401, never an operator.
+- **Policy engine.** `policies` carry a nullable `tenant`; `tenant IS NULL` is
+  the global base (incl. the protected floor, which a tenant cannot weaken), a
+  `tenant=<prefix>` row shadows base by name. `/evaluate` selects the per-tenant
+  ruleset from `PolicyInput.tenant`; sessions are provisioned a copy at start and
+  swept on TTL.
+- **Console.** Demo sessions are deny-by-default (a fail-closed route gate);
+  every reachable read surface scopes to `demo_agent_id(prefix)` + the
+  `prefix-or-simulator` row rule (roster cut before fan-out, not just a row
+  filter).
+
+This is keyed on the **demo prefix**, not the OIDC `tenant` claim — the broader
+operator-tenant scoping of §2 / §3 remains the year-2 workstream, which will
+re-key the same machinery onto the authenticated tenant.
+
 ---
 
 ## Console config page
