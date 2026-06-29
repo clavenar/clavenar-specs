@@ -108,7 +108,7 @@ spiffe://<trust-domain>/tenant/<tid>/agent/<agent-name>/instance/<uuidv7>
 ```
 
 - `tenant/<tid>` — billing/isolation boundary; matches the existing `agent_id` prefix convention used by the simulator.
-- `agent/<agent-name>` — stable logical identity (e.g. `support-bot-3`). This is what policy rules and Brain's persona-drift baseline key off.
+- `agent/<agent-name>` — stable logical identity (e.g. `support-bot-3`). This is what policy rules key off. Brain's persona-drift baseline and verdict cache key off `(tenant, agent-name)` (Phase 5) — the name alone is not tenant-unique, so two operator tenants can enroll the same one.
 - `instance/<uuidv7>` — per-process; rotates on restart. Lets us revoke a single misbehaving replica without grounding the fleet.
 
 The existing `MtlsIdentity.cn` becomes a *projection* of this SPIFFE ID for backwards compatibility — the proxy parses the SAN URI and falls back to CN only for legacy clients during a deprecation window.
@@ -294,7 +294,7 @@ Shared types are duplicated on each side of the wire. The fields below need to l
 
 | Edge | Field added | Repos to grep |
 |---|---|---|
-| Proxy → Brain | `agent_spiffe: String` | `clavenar-proxy/src/fork.rs`, `clavenar-brain/src/lib.rs` |
+| Proxy → Brain | `tenant: Option<String>` (Phase 5 — demo prefix or SVID `tenant/<t>`; scopes Brain's per-agent persona/drift/verdict state) | `clavenar-proxy/src/fork.rs`, `clavenar-brain/src/wire.rs` |
 | Proxy → Policy | `agent_spiffe: String`, `attestation: Option<AttestationClaims>` | `clavenar-proxy/src/fork.rs`, `clavenar-policy-engine/src/lib.rs` |
 | Proxy → HIL | `agent_spiffe: String`, `delegation_jti: String` | `clavenar-proxy/src/sandbox_handoff.rs` (CreatePending site), `clavenar-hil/src/api.rs` |
 | Proxy → Ledger (NATS) | `agent_spiffe`, `signature`, `key_id` (chain v2) | `clavenar-proxy`, `clavenar-ledger/src/chain.rs` |
@@ -866,14 +866,14 @@ Cross-cutting clarification — applies to every module. Clavenar v1 ships a **s
 
 - **Policy ruleset** (`clavenar-policy-engine`). The `policies` and `policy_versions` tables have no `tenant` column. One engine; one active ruleset; applied to every agent regardless of tenant claim. Activating, deactivating, or editing a policy is deployment-wide.
 - **HIL pending queue** (`clavenar-hil`). `pending_requests` has no `tenant` column; one global approval queue. A human approver cannot tell which tenant a pending belongs to except by inspecting the `agent_id` prefix convention.
-- **Brain `/inspect`** (`clavenar-brain`). Tenant is not in the request shape; classifiers, persona drift models, and indirect-injection detectors are identical for every caller.
+- **Brain `/inspect`** (`clavenar-brain`). *(Closed in Phase 5.)* Tenant is now in the request shape (`tenant`). Classifiers and the indirect-injection detector stay shared, but the persona-drift baseline, the on-disk persona (`personas/{tenant}/{agent}.md` shadows a shared base), and the L1/L2 verdict cache key off `(tenant, agent)` so no signal or cached verdict crosses tenants.
 - **Console UI.** `CLAVENAR_CONSOLE_AGENTS_TENANT` is process-wide (default `acme`). No tenant switcher; every page reads the global state above.
 
 ### 4. Why this shape
 
 The SVID is durable infrastructure. Once issued and signed by Vault Transit, the URI cannot be rewritten without re-issuance. Adding the `tenant/<tid>` segment at v1 costs near zero; adding it on day 200 means re-rolling every running agent and handling the gap period where some workloads carry tenant-aware URIs and some do not. The OIDC tenant gate at enrollment is a real security boundary today — it prevents tenant-A credentials from minting a tenant-B SVID at the trust root — even though downstream services do not filter on tenant. The work is therefore not nominal even before multi-tenant SaaS ships.
 
-Downstream tenant-scoping (v1/v2 verdict reads, policy ruleset, HIL queue, mining corpus, Brain context) is the year-2 multi-tenant workstream. The Agent Onboarding section already calls the broader piece out of scope ([§15 "Tenant lifecycle"](#agent-onboarding-wao)); this section is the stocktaking complement that an operator can read in one sitting.
+Downstream tenant-scoping (v1/v2 verdict reads, policy ruleset, HIL queue, mining corpus — Brain context is now scoped, Phase 5) is the year-2 multi-tenant workstream. The Agent Onboarding section already calls the broader piece out of scope ([§15 "Tenant lifecycle"](#agent-onboarding-wao)); this section is the stocktaking complement that an operator can read in one sitting.
 
 ### 5. Implication for v1 deployments
 
