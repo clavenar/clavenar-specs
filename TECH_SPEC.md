@@ -916,6 +916,45 @@ This is keyed on the **demo prefix**, not the OIDC `tenant` claim — the broade
 operator-tenant scoping of §2 / §3 remains the year-2 workstream, which will
 re-key the same machinery onto the authenticated tenant.
 
+### 8. Per-tenant spend budgets & quota (Phase 6)
+
+FinOps enforcement gains a tenant axis. Attributed spend (`cost_micros`, the
+Brain's per-request estimate, summed on the ledger) can now be rolled up,
+budgeted, and enforced **per operator tenant** — the SVID `tenant/<t>` segment,
+never the demo prefix (demo rows scope by correlation-id, §7).
+
+- **Ledger.** `GET /finops/spend` takes an optional `?tenant=<t>` (the operator
+  arm, validated with `is_valid_operator_tenant`): `Some` rolls up only that
+  tenant's rows via `AND tenant=?`; omitted keeps the deployment-wide rollup.
+  Internal mTLS, as before.
+- **Identity.** A new `tenant_budgets` table (`PRIMARY KEY(tenant)`) holds a
+  per-tenant monthly micro-USD ceiling. `GET /tenants/{tenant}/budget` is
+  allowlist-only (the proxy reads it over mTLS; absent budget ⇒ no enforcement);
+  `POST /tenants/{tenant}/budget` layers the OIDC `agents:admin` capability for
+  an operator-admin mutation and records `updated_by`/`updated_at`. Budget is
+  **per tenant, not per agent** — enforcement keys on the SVID tenant, so a
+  per-agent column would smear one value across a tenant's agents. (The existing
+  per-agent cap — `CLAVENAR_AGENT_BUDGET_MICROS`, the policy-engine cost breaker
+  — is a complementary finer-grained layer, unchanged.)
+- **Proxy.** A pre-pipeline quota gate (`CLAVENAR_PROXY_QUOTA_GATE_ENABLED`, off
+  by default) runs right after the rate limiter, before Brain/Policy: it reads
+  the tenant's budget (identity) and month-to-date spend (ledger), caches both
+  per tenant (~5 min, month-rollover invalidated), and rejects an over-budget
+  tenant with **HTTP 429 `quota_exceeded`** plus a `quota_exceeded` forensic row
+  — so an over-budget tenant burns no inspection cost. Posture: **strict**
+  (reaching the budget pauses new work, `spend >= budget`) but **fail-open** on a
+  backend read error (a transient ledger/identity blip must not deny a tenant's
+  whole stream; the ledger stays authoritative after the fact). Multi-replica is
+  best-effort (each replica caches independently) — set budgets with a buffer.
+  Demo / system / legacy callers carry no operator tenant and are never gated.
+- **Console.** `/stats/finops` scopes the rollup to the operator's session
+  tenant and renders a per-tenant budget card (spend vs budget, utilization
+  gauge); `GET /billing/export?month=` streams the tenant's monthly spend as
+  CSV. Tenant is session-derived, never a client `?tenant=` arg.
+
+Budget changes are attributed via the `tenant_budgets` row (`updated_by`); folding
+them into the chain-v3 lifecycle (today agent-shaped) is a separable follow-up.
+
 ---
 
 ## Console config page
@@ -4188,9 +4227,9 @@ parse it into their typed `Veto` / `ClavenarDenied` surfaces.
 
 | Field | Notes |
 |---|---|
-| `verdict` | `denied` · `review_denied` · `review_expired` · `rate_limited` · `error` (infra/pipeline failure). |
+| `verdict` | `denied` · `review_denied` · `review_expired` · `rate_limited` · `quota_exceeded` · `error` (infra/pipeline failure). |
 | `layer` | Stage that produced the rejection: `brain` · `policy` · `hil` · `egress` · `identity` · `upstream` · `gateway` · `proxy`. |
-| `error` | Stable machine code (`security_violation`, `egress_blocked`, `review_denied`, `grant_expired`, `grant_not_yet_valid`, `grant_outside_schedule`, `grant_usage_exhausted`, `a2a_redeem_failed`, `rate_limited`, `pipeline_unavailable`, …). |
+| `error` | Stable machine code (`security_violation`, `egress_blocked`, `review_denied`, `grant_expired`, `grant_not_yet_valid`, `grant_outside_schedule`, `grant_usage_exhausted`, `a2a_redeem_failed`, `rate_limited`, `quota_exceeded`, `pipeline_unavailable`, …). `quota_exceeded` (HTTP 429, `layer: proxy`) is the per-tenant monthly-spend gate — see [Tenancy scope §8](#tenancy-scope). |
 | `reasons` | Human-readable deny reasons — the Rego strings, Brain reasoning, or a single infra message. Omitted when empty. |
 | `review_reasons` | Yellow-tier reasons, when the rejection followed a held request. Omitted when empty. |
 | `intent_category` | Brain intent bucket, when a verdict was reached. Omitted otherwise. |
