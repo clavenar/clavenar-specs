@@ -145,8 +145,8 @@ flowchart TD
 
 ## 3. Deployment Topology
 
-Single VPS runs both `prod` (`warden-prod` compose project, standard
-ports) and `dev` (`warden-dev`, +10000 offset). One host-Caddy fans
+Single VPS runs both `prod` (`clavenar-prod` compose project, standard
+ports) and `dev` (`clavenar-dev`, +10000 offset). One host-Caddy fans
 out to each env's upstream containers by hostname.
 
 ```mermaid
@@ -159,7 +159,7 @@ flowchart LR
     direction TB
     HostCaddy[Caddy — 80 + 443 — auto-LE]
 
-    subgraph Prod[warden-prod project — standard ports]
+    subgraph Prod[clavenar-prod project — standard ports]
       direction TB
       P_proxy[proxy 8443]
       P_brain[brain 8081]
@@ -178,7 +178,7 @@ flowchart LR
       P_vols[(ledger-data + hil-data + identity-data + secrets + caddy-data)]
     end
 
-    subgraph Dev[warden-dev project — plus10000 ports]
+    subgraph Dev[clavenar-dev project — plus10000 ports]
       direction TB
       D_proxy[proxy 19443]
       D_brain[brain 18081]
@@ -211,7 +211,7 @@ flowchart LR
   HostCaddy -->|console-demo.…| P_console
   HostCaddy -->|console-demo.… /verify + /audit| P_ledger
   HostCaddy -->|console-demo.… /mint| P_demomint
-  HostCaddy -->|warden-dev.… — tls internal| D_website
+  HostCaddy -->|clavenar-dev.… — tls internal| D_website
   HostCaddy -->|console-dev.… — tls internal| D_console
 ```
 

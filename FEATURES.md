@@ -1834,7 +1834,7 @@ The async heavy-LLM auditor (`clavenar-deep-review`) layered on top of the four-
 ./repos/clavenar-e2e/dev/run.sh
 
 # Drive any agent → see deep-review rows land in /audit
-docker logs warden-dev-deep-review-1 | grep -E 'deep_review_(finding|failed|skipped)'
+docker logs clavenar-dev-deep-review-1 | grep -E 'deep_review_(finding|failed|skipped)'
 ```
 
 ### 15.2 Per-event pipeline (sample → permit → budget → mask → prompt → review → emit)
