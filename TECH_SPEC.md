@@ -4879,6 +4879,23 @@ original request (from the agent's own logs or the masked archive below)
 recomputes the hash to prove the verdict judged exactly that input.
 Promoted into a hashable shape only at a deliberate chain-version bump.
 
+**Tool name — which tool the verdict gated.** A tool call's JSON-RPC
+`method` is the envelope (`call_tool`); the concrete tool the agent
+invoked lives at `params.name` (e.g. `marketing.bulk_email`). So the
+ledger `method` column reads `call_tool` for every tool call — the
+simulator, real MCP agents, and `/demo` fires alike. To let `/audit`
+answer "which tool did agent X call" without decoding the raw params (or
+reversing the `tool_params_sha256`), the proxy also stamps
+`tool_name = params.name` on the forensic event; it persists on the
+ledger's non-hashable `tool_name` column (same posture as
+`tool_params_sha256` / `upstream_id` — no chain-version bump; setting it
+cannot move any `entry_hash`). `None` on non-`call_tool` methods and on
+rows from publishers that pre-date the column. The console renders it as
+the row's **tool** chip on `/audit` (and the same projection powers the
+`tool` chip on `/hil` from the pending's `request_payload.params.name`,
+and the `tool` field HIL adds to the `POST /decision-link/verify` pending
+summary for the `/decide/redeem` page).
+
 **Credential fingerprint — which credential generation made the call.**
 The proxy computes `credential_fingerprint = sha256(leaf_cert_DER)` over
 the presented mTLS client certificate and stamps it on every verdict row
