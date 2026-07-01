@@ -4885,11 +4885,17 @@ invoked lives at `params.name` (e.g. `marketing.bulk_email`). So the
 ledger `method` column reads `call_tool` for every tool call — the
 simulator, real MCP agents, and `/demo` fires alike. To let `/audit`
 answer "which tool did agent X call" without decoding the raw params (or
-reversing the `tool_params_sha256`), the proxy also stamps
-`tool_name = params.name` on the forensic event; it persists on the
-ledger's non-hashable `tool_name` column (same posture as
-`tool_params_sha256` / `upstream_id` — no chain-version bump; setting it
-cannot move any `entry_hash`). `None` on non-`call_tool` methods and on
+reversing the `tool_params_sha256`), `tool_name = params.name` is stamped
+on the forensic event. A single `call_tool` request emits several ledger
+rows — one per layer that touched it — so **every** forensic emitter that
+sees the request stamps it, not just one, or the sibling rows read as a
+bare `call_tool` on `/audit`: the proxy on its signed result/verdict rows
+(from the MCP `params`), the policy engine on its Layer-3 `PolicyDecision`
+row (from `PolicyInput.tool_type`), and clavenar-hil on its `HIL`
+state-transition row (from the pending's `request_payload.params.name`).
+It persists on the ledger's non-hashable `tool_name` column (same posture
+as `tool_params_sha256` / `upstream_id` — no chain-version bump; setting
+it cannot move any `entry_hash`). `None` on non-`call_tool` methods and on
 rows from publishers that pre-date the column. The console renders it as
 the row's **tool** chip on `/audit` (and the same projection powers the
 `tool` chip on `/hil` from the pending's `request_payload.params.name`,
