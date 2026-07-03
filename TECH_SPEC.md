@@ -492,6 +492,8 @@ All endpoints below take `Authorization: Bearer <oidc_id_token>`. `clavenar-iden
 | `POST` | `/agents/{id}/attestation-kinds` | dispatched per direction | `agent.attestation_kinds_changed` |
 | `POST` | `/agents/{id}/owner-team` | `agents:admin` | `agent.owner_team_transferred` |
 | `POST` | `/agents/{id}/description` | owner-team or `agents:admin` | `agent.description_changed` |
+| `POST` | `/agents/{id}/containment/clear` | `agents:admin` | `agent.containment_cleared` |
+| `GET` | `/agents/{id}/containment` | any tenant member | — |
 
 Asymmetric authority is the principle: narrowing the envelope (less capability) is owner-team self-service; widening (more capability) requires a different human with `agents:admin`. The original registering admin's signature covered the original envelope; widening is a *new* authorization event and must be a *new* authorization signature.
 
@@ -614,6 +616,7 @@ payload_sha256 = sha256( canonical_json(payload) )
 |---|---|
 | `agent.registered` | `{ scope_envelope, yellow_envelope, attestation_kinds_accepted, owner_team, description }` |
 | `agent.suspended` / `agent.unsuspended` / `agent.decommissioned` | `{ state_before, state_after, reason }` |
+| `agent.containment_cleared` | `{ reason, cleared_flag: { expires_at, correlation_id } }` — force-HIL flag removal ([Forensic-tier deep review §11](#forensic-tier-deep-review)) |
 | `agent.envelope_narrowed` / `agent.envelope_widened` | `{ scope_envelope_before, scope_envelope_after, yellow_envelope_before, yellow_envelope_after }` (all four always present) |
 | `agent.attestation_kinds_changed` | `{ attestation_kinds_before, attestation_kinds_after }` |
 | `agent.owner_team_transferred` | `{ owner_team_before, owner_team_after }` |
@@ -1761,6 +1764,8 @@ Visitor lands on `/audit`, scoped by token to:
 - *Plus* `source = 'simulator'` rows from the always-on simulator (ambient feel; visitor's actions accent-highlighted).
 
 A new `/demo/fire` page renders the chaos-catalog scenarios as tiles. Click → demo console's backend handler validates the session token, calls `clavenar_chaos_catalog::fire(scenario_id, agent_id, correlation_prefix, proxy_url)`, redirects to `/audit?correlation_id=…&highlight=…` with the new rows scrolled into view.
+
+The `auditor-fights-back` scenario additionally exercises closed-loop containment end-to-end (the visitor's own agent gets frozen by a deep-review Red finding and released from the console); its supporting machinery — the ledger demo echo and demo-agent registration at session exchange — is specified in [Forensic-tier deep review §11.7](#forensic-tier-deep-review).
 
 HIL approve/deny works on the visitor's own pendings (per-prefix filter enforces). Simulator's auto-decide path skips agent IDs starting with `demo-` (via `--hil-skip-agent-id-prefix demo-` / `SIM_HIL_SKIP_AGENT_ID_PREFIX=demo-`) so visitors aren't raced.
 
@@ -2952,7 +2957,7 @@ Install is **fail-closed**: an unsigned pack, a signature mismatch, a file-hash 
 
 Companion to [Layer 2 — clavenar-brain](#layer-2--clavenar-brain) (sub-second classifier on the proxy hot path) and [Layer 4 — clavenar-ledger](#layer-4--clavenar-ledger) (the forensic store). Where brain's value proposition is sub-second verdicts from a pluggable inspector LLM (Claude Haiku 4.5 by default), `clavenar-deep-review` is the complementary forensic tier — asynchronous, slow, expensive, and substantially smarter. Runs Opus 4.7 (MVP single-provider) against a sampled slice of the audit stream to catch what the fast classifier missed and deepen verdicts on what it flagged.
 
-**This service does not gate live traffic.** HIL is the inline blocking surface; deep-review is retrospective by design. A vendor outage, a quota burst, or a slow review must never back up the audit stream and starve brain → ledger writes. Every failure mode soft-fails per event with a queryable sentinel.
+**This service does not gate live traffic inline.** HIL is the inline blocking surface; the review itself is retrospective by design. A vendor outage, a quota burst, or a slow review must never back up the audit stream and starve brain → ledger writes. Every failure mode soft-fails per event with a queryable sentinel. What deep-review *can* do since [§11](#11-closed-loop-containment) is act on **subsequent** traffic: a Red finding triggers tiered containment (identity suspend / force-HIL flag) through the same enforcement rails the operator uses — asynchronous actuation, never an in-path veto.
 
 **Module status:** **shipped 2026-05-13** at `clavenar-internal-specs/VERSION` 0.6.0. Lives in `clavenar-deep-review` (new repo, NATS consumer + LLM provider trait + per-agent history ring buffer + budget + retry + alert sink), wired into `clavenar-e2e/{prod,dev}/docker-compose.yml` as a service in the `stack` profile, and into `clavenar-charts/charts/clavenar/` as `services.deepReview` (shipped 2026-05-14 at version 0.7.0; chart covers the full eight-service stack). **Adjacent surfaces deferred:** published baseline-accuracy benchmark against real Opus.
 
@@ -2986,11 +2991,11 @@ The fast classifier remains in place — it's still the only thing fast enough t
 - Per-tenant cost attribution — multi-tenant budgeting needs a deployment-level tenancy model clavenar doesn't have yet.
 - Adaptive sampling (auto-tune sample rate against remaining budget) — manual knobs for v1; auto-tune is polish.
 - Dead-letter queue for failed reviews — retry + soft-fail covers transient failures; add once telemetry shows sustained outages.
-- Auto-quarantine via identity service on Red findings — structurally unsafe with async detection; reconsider only if false-positive rate is essentially zero.
-- Pre-emptive HIL on agent's next request post-Red — cross-component state, TTL questions, race conditions; deferred with a proper design.
 - Persona-aware prompting (feed `clavenar-brain/personas/` into the prompt) — worth measuring against v1 baseline first.
 - JetStream-durable consumer — MVP uses core NATS to match existing `nats:2` container (no `-js` flag); upgrading is an e2e infra change.
 - Path-dep on `clavenar-brain/src/pii.rs` — MVP ships a small in-tree regex masker (`clavenar-deep-review/src/pii.rs`); merging masker codebases is a v1.x+1 swap-in.
+
+Two former non-goals — *auto-quarantine via identity on Red findings* and *pre-emptive HIL on the agent's next request post-Red* — graduated out of this list: [§11 Closed-loop containment](#11-closed-loop-containment) is the "proper design" the original deferral demanded (tiered response, shadow-mode default, idempotent command path, exempt prefixes).
 
 ### 3. Architecture
 
@@ -3046,6 +3051,7 @@ History capacity defaults: last 20 events by `agent_id`, capped at 50 by `correl
 | `deep_review_finding` | `{verdict, confidence, reasoning, brain_delta, reviewing_model, review_latency_ms, reviewed_at, original_method, original_correlation_id}` |
 | `deep_review_failed` | `{reason, reviewing_model, original_method, original_correlation_id}` |
 | `deep_review_skipped` | `{reason, original_method, original_correlation_id}` |
+| `deep_review_containment` | `{kind: "deep_review_containment", tier, mode, action, shadowed_action?, exempted, confidence, threshold, verdict, brain_delta, reviewing_model, command_published}` — see [§11](#11-closed-loop-containment) |
 
 - `verdict` ∈ `"Green" | "Yellow" | "Red"`.
 - `brain_delta` ∈ `"Agreed" | "Escalated" | "Downgraded"`.
@@ -3074,6 +3080,11 @@ All knobs are env-driven. Defaults in parens.
 | `CLAVENAR_DEEP_REVIEW_NATS_URL` | `nats://localhost:4222` | NATS connect string. Same URL the proxy/brain/ledger consumers use |
 | `CLAVENAR_DEEP_REVIEW_FORENSIC_SUBJECT` | `clavenar.forensic` | Subscribe subject for inbound forensic rows |
 | `CLAVENAR_DEEP_REVIEW_FINDINGS_SUBJECT` | `clavenar.forensic` | Publish subject for emitted `deep_review_*` rows. Defaults to the same subject so the ledger picks them up via its existing consumer; split only when an operator runs deep-review against a dedicated audit stream |
+| `CLAVENAR_DEEP_REVIEW_CONTAINMENT` | `shadow` | Closed-loop containment mode: `off` \| `shadow` \| `enforce` ([§11](#11-closed-loop-containment)). Unknown value degrades to `off` with a loud warn |
+| `CLAVENAR_DEEP_REVIEW_CONTAIN_CONFIDENCE` | `0.90` | Hard-tier confidence floor (clamped to `[0,1]`) |
+| `CLAVENAR_DEEP_REVIEW_CONTAIN_EXEMPT_PREFIXES` | (none) | Comma-separated `agent_id` prefixes that never receive the hard tier (soft tier still applies) |
+| `CLAVENAR_DEEP_REVIEW_CONTAINMENT_SUBJECT` | `clavenar.containment.request` | JetStream subject containment commands are published to |
+| `CLAVENAR_DEEP_REVIEW_SAMPLE_RATE_DEMO` | `1.0` | Sample rate for `demo-`-prefixed agents, overriding the green/flagged split — demo containment must fire deterministically, and Escalated findings start as brain-Green events that would otherwise sample at 1% |
 
 Retry algorithm: full-jitter exponential backoff at `1s / 4s / 16s`. Each delay is sampled uniformly from `[0, base]` per the AWS Architecture Blog full-jitter prescription. Total wall-clock is enforced via `retry_budget` even if individual sleeps complete fast — a slow vendor call that returns one second before the budget expires is not retried.
 
@@ -3113,6 +3124,7 @@ The masker is deliberately small. A future v1.x+1 task is to swap it for the mor
 - `/audit/agents/{id}/narrative` deep-review summary strip — last-7d findings count, brain_delta donut, top disagreement category, link to filtered `/deep-review`. Same v0.6.1 cut.
 - Click-through from any finding row into the unified request timeline so brain verdict + deep-review finding + any HIL events are visible in chain order. (Drill-down lands in the existing `/audit/correlation/{id}` view, which is chain-version-agnostic.)
 - Demo-prefix gate mirrors `/audit`: visitor sessions only see their own `correlation_id LIKE <demo-prefix>%` rows.
+- Containment surfaces ([§11](#11-closed-loop-containment)): `/deep-review` filters on `deep_review_containment` rows with tier/mode/action chips; agent detail shows quarantine + force-HIL badges with Release / Clear-flag actions; each hard-tier enforce suspend auto-opens an incident case in the existing `/incidents` view.
 
 **Deferred (callout — see roadmap §"v1.x+1"):**
 
@@ -3140,7 +3152,92 @@ The architectural decisions resolved by `/grill-me`:
 5. Brain verdict stripped from prompt; `brain_delta` computed server-side (not "feed brain's verdict in for the model to react to" — that's a confirmation engine).
 6. Per-event soft-fail with three sentinel types (not at-least-once durable redelivery, not best-effort silent drop).
 7. In-tree regex PII masker at MVP (not path-dep on brain's masker — deferred swap with documented rationale).
-8. Page on Red + high-confidence only, rate-limited per agent; no auto-block (async detection + auto-block is a self-DoS waiting to happen).
+8. Page on Red + high-confidence only, rate-limited per agent; no auto-block (async detection + auto-block is a self-DoS waiting to happen). *Superseded in part by [§11](#11-closed-loop-containment): containment is still not an in-path block, and the self-DoS concern is answered by the shadow-mode default, the Escalated-only hard-tier bar, and exempt prefixes.*
+
+
+### 11. Closed-loop containment
+
+A Red finding stops being a dead-end log line: deep-review triggers **tiered automated containment** of the offending agent through the same enforcement rails the operator's manual incident-containment flow already uses (identity suspend lifecycle → `clavenar_revocation` NATS-KV → proxy gate). Deep-review decides; **identity executes** — it remains the only component that changes trust state.
+
+#### 11.1 Tiers
+
+| Tier | Trigger | Effect |
+|---|---|---|
+| **Hard** | `verdict == Red && confidence >= CONTAIN_CONFIDENCE && brain_delta == Escalated` and the agent is not exempt-prefixed | Agent suspended via identity (`agent.suspended` chain-v3 row, revocation KV entry — the proxy rejects the agent's next request) |
+| **Soft** | any other Red | `force_hil` flag: **every** request from the agent routes to human review for a window (default 30 min) |
+
+`Escalated` is the load-bearing condition: brain authorized the action and it *executed* before the heavy model caught it — the exact failure containment exists for. An `Agreed` Red was already denied in-line; the agent is hostile but nothing ran, so forced human review suffices.
+
+#### 11.2 Rollout modes
+
+`CLAVENAR_DEEP_REVIEW_CONTAINMENT = off | shadow | enforce`, binary default **shadow**:
+
+- `off` — decide() never runs; no commands, no sentinels.
+- `shadow` — the soft tier enforces (blast radius: one extra human review); the hard tier **degrades to the soft flag** and stamps `shadowed_action: "suspend"` on its sentinel. Operators graduate to `enforce` on measured false-positive data, answering the original deferral objection ("reconsider only if false-positive rate is essentially zero") empirically rather than on paper.
+- `enforce` — both tiers act.
+
+#### 11.3 Containment command (JetStream)
+
+Stream `clavenar-containment`, subject `clavenar.containment.request` (`max_age` 24 h, `duplicate_window` 10 min). Both identity (boot) and deep-review (first publish) `get_or_create` the stream with this pinned config. The publisher sets a `Nats-Msg-Id` header (`containment.<correlation_id|agent_id>.<action>.<reviewed_at unix>`) for broker-side dedupe; identity-side idempotency covers redelivery beyond the window (suspend no-ops on an already-Suspended agent and emits no duplicate chain row; `force_hil` skips when an unexpired entry carries the same `correlation_id`, so redelivery never extends a window).
+
+```jsonc
+{
+  "schema": "containment.request.v1",
+  "action": "suspend" | "force_hil",     // identity executes this verbatim
+  "tier": "hard" | "soft",               // audit metadata
+  "mode": "shadow" | "enforce",          // audit metadata
+  "agent_id": "cs-bot-1",
+  "agent_spiffe": "spiffe://…",          // optional; preferred resolution key
+  "correlation_id": "…",                 // optional; idempotency + case linkage
+  "reason": "deep-review Red finding: …",// first 200 chars of finding reasoning
+  "finding": { "verdict": "Red", "confidence": 0.95, "brain_delta": "Escalated",
+               "reviewing_model": "…", "reviewed_at": "<RFC 3339>" },
+  "issued_at": "<RFC 3339>"
+}
+```
+
+Identity's durable consumer (`identity-containment`) resolves the agent itself: `agent_spiffe` → exact `(tenant, agent_name)`; else a global unique-CN lookup. **Unknown or ambiguous CNs are terminal skips** (ack + warn + best-effort `containment_unresolved` forensic row) — identity never guesses a tenant for a suspend and never retry-loops an unresolvable command.
+
+Emission ordering is pinned: **finding → command → sentinel**. Evidence lands before action; a crash can produce a Red finding with no containment sentinel (auditable gap, runbook-covered) but never a containment without its finding.
+
+#### 11.4 `force_hil` state (NATS-KV) and enforcement path
+
+Identity writes `force_hil.<tenant>.<agent_name>` (same key `sanitize()` as `agent.*`) into the existing `clavenar_revocation` bucket:
+
+```json
+{ "expires_at": "<RFC 3339>", "reason": "…", "correlation_id": "…",
+  "applied_at": "<RFC 3339>", "actor": "deep-review" }
+```
+
+A past `expires_at` means the flag is absent — readers filter on it (the bucket has no `max_age`); identity deletes expired keys lazily and the clear endpoint deletes eagerly. The window length is identity-side: `CLAVENAR_IDENTITY_FORCE_HIL_TTL_SECS` (default `1800`).
+
+Enforcement rides existing machinery end-to-end: the proxy's revocation mirror already dispatches KV keys by prefix, so it caches `force_hil.*` entries alongside suspensions and stamps a new `force_hil: bool` onto the `PolicyInput` it sends the policy engine; a **protected-floor** Rego rule (uninstallable by tenants) turns the flag into a `review` verdict, which routes through the ordinary Yellow → HIL path. Verdict precedence is unchanged: the flag only escalates would-be-allows to review — denies stay denies. A degraded revocation mirror fails **open** for the flag (consistent with the existing revocation-gate posture; the degradation is separately audited).
+
+HIL approvals do **not** clear the flag — an attacker can sandwich one benign action before the real one; the pressure holds for the full window. Operators clear early via identity:
+
+- `POST /agents/{id}/containment/clear?tenant=…` (internal mTLS router, `agents:admin`) — deletes the flag, emits a chain-v3 `agent.containment_cleared` lifecycle row.
+- `GET /agents/{id}/containment?tenant=…` — expiry-filtered flag read (powers console badges).
+
+#### 11.5 Approved-pending race
+
+A request already parked awaiting a HIL decision when the suspend lands must not execute on approval. The proxy re-checks its suspension mirror **after** a HIL `Approved` verdict, before dispatching upstream; a hit rejects with the standard `agent_revoked` shape and a `review_approved_but_suspended` forensic row. The re-check is skipped when the mirror is degraded (fail-open consistency).
+
+#### 11.6 Audit + incident case
+
+Every containment decision lands as a `deep_review_containment` sentinel (§4 table) — including shadow-mode would-have-suspended rows (`shadowed_action`) and exemption suppressions (`exempted: true`). The identity-side suspend independently emits the `agent.suspended` chain-v3 row with synthetic actor `deep-review`/`internal`. On a `tier=="hard" && mode=="enforce" && action=="suspend"` sentinel, the ledger's forensic consumer best-effort auto-opens an incident case ("Containment: <agent_id> (deep-review Red)", deduped by correlation-id among non-closed cases) with a `contained` timeline event — the operator gets the release-and-postmortem workflow for free. Shadow mode never opens cases.
+
+#### 11.7 Demo scenario
+
+The curated `/demo` scenario (`auditor-fights-back`) exercises the loop end-to-end for a visitor: a green-tier fire that brain authorizes, Opus flags Red (Escalated), containment freezes the visitor's own demo agent, and the visitor releases it from the console. Two supporting pieces:
+
+- **Ledger demo echo.** Curated green fires write their forensic row via HTTP `POST /log` (`source: "demo"`) and never transit NATS, so deep-review would never see them. After a successful HTTP append of a `source == "demo"` row, the ledger republishes it to `clavenar.forensic`; its own forensic consumer acks-and-skips `source == "demo"` messages so the row is never double-appended. `source: "demo"` on the NATS subject is hereby reserved for this echo semantics.
+- **Demo agent registration.** Demo agents are registered in identity at session exchange (tenant = the demo prefix, best-effort, idempotent) so a hard-tier suspend can resolve them and the visitor can release their own agent. Demo write access is self-scoped: release/clear on exactly the visitor's own `(prefix, demo_agent_id)` record, resolved-then-compared server-side.
+
+Deployments exempt the simulator's persona prefixes (`CONTAIN_EXEMPT_PREFIXES`) — suspensions persist across weekly demo resets (the identity volume is preserved), so an unexempted `bad-actor-bot` would permanently erode the demo backdrop.
+
+#### 11.8 Trust-boundary change
+
+Deep-review previously could only forge `deep_review_*` rows; with containment it holds an actuation path. Mitigations, in depth: the NATS mTLS perimeter gates who can publish commands at all; identity is the sole executor and applies its own resolution + state machine (a command cannot mint, widen, or decommission — only suspend/flag); the hard tier requires the strictest verdict shape; shadow is the binary default; exempt prefixes bound the blast radius; clear/release are admin-gated; and every action is chain-audited from three angles (sentinel, lifecycle row, case). See the [threat model](#threat-model) for the updated elevation-of-privilege entry.
 
 ---
 
@@ -5355,10 +5452,21 @@ bypasses the vendor entirely and is used by e2e + CI.
 #### Elevation of privilege
 
 Deep-review issues **no inline blocking actions** — no proxy-side
-veto, no auto-quarantine via identity, no pre-emptive HIL injection.
-A compromised deep-review can only forge `deep_review_*` rows; the
-brain → proxy → policy → ledger pipeline is unaffected by its
-verdicts. Defense-in-depth.
+veto on the request in flight. Since closed-loop containment
+([Forensic-tier deep review §11](#forensic-tier-deep-review)) it does
+hold an **asynchronous actuation path**: a compromised deep-review
+could publish containment commands that suspend agents or force them
+into human review — a denial-of-service lever, not a privilege grant
+(a command can only *narrow* what an agent may do; it cannot mint,
+widen, or decommission). Mitigations, in depth: the NATS mTLS
+perimeter gates command publish; **identity is the sole executor**
+and applies its own agent resolution + lifecycle state machine; the
+hard tier requires Red + confidence ≥ floor + `Escalated`; `shadow`
+is the binary default; exempt prefixes bound the blast radius;
+release/clear are admin-gated; and every action is audited from three
+angles (containment sentinel, `agent.suspended` chain-v3 row,
+auto-opened incident case). The brain → proxy → policy → ledger
+verdict pipeline remains unaffected by deep-review's outputs.
 
 ### clavenar-hil
 
