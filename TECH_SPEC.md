@@ -2121,11 +2121,17 @@ row is reshaped into:
 ```
 
 The reconstructed `input` carries `tool_type`, `intent_score`,
-`agent_kind`, `arguments`, `attestation`, `agent_history.last_tool`
-from `policy_decision.input_replay`; `agent_id`, `method`,
-`correlation_id`, `agent_spiffe`, and `current_time` from the row
-itself. `current_time` is the row's `timestamp` (NOT now) so
-date/hour-sensitive rules replay against the original wall-clock.
+`agent_kind`, `arguments`, `attestation`, and the stateful policy
+snapshot from `policy_decision.input_replay`: `agent_history`
+(`last_tool` + `recent_sequence`), `recent_request_count`,
+`velocity_degraded`, `force_hil`, `request_cost_micros`,
+`spend_window`, `cumulative_spend_micros`, and `budget_micros`.
+`agent_id`, `method`, `correlation_id`, `agent_spiffe`, and
+`current_time` come from the row itself. `current_time` is the row's
+`timestamp` (NOT now) so date/hour-sensitive rules replay against the
+original wall-clock. Older rows that predate the stateful snapshot
+default those added fields to empty history / zero / false, so mixed
+corpora remain usable.
 
 `policy_decision.input_replay` is additive: the existing console
 readers continue to read `policy_decision.allow / .reasons /
