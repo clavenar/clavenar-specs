@@ -3960,7 +3960,7 @@ in the last 1h" lands in session 2.
 | `clavenar-identity` unreachable on `/workload-svid` | Caller logs `warn`, retries with `1s/4s/16s` backoff; keeps current credential. After current credential expires: falls back to bootstrap cert. | Refresh is *additive*; the bootstrap path is always available. A long identity outage degrades to "running on bootstrap" — same posture as v1.x+2. |
 | `/workload-svid` returns 403 (`caller_not_allowed`) | Caller logs `error` once per backoff loop and continues to retry. Operator must extend `CLAVENAR_IDENTITY_WORKLOAD_ALLOWED_CALLERS` and roll identity. | Persistent 403 means the operator removed this service from the allowlist deliberately or accidentally — let the human notice; do not bake-in auto-decommission. |
 | Server-side SPIFFE SAN-URI mismatch (client-side check) | rustls closes the TLS connection before the HTTP layer sees the response. Caller surfaces as a `reqwest::Error` with `is_request()` true; the existing retry / circuit-breaker logic on each call site handles it. | Cryptographic check, not policy — no body to read. |
-| `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` unset | Client-side check disabled (warn-mode log on each call). Connection succeeds against any clavenar-CA cert at the configured DNS name. | Staged rollout: v1.x+2 posture preserved as default; operators flip the env when ready to enforce. |
+| `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` unset | Client-side check disabled. Connection succeeds against any clavenar-CA cert at the configured DNS name. | Empty allowlists preserve bootstrap-only compatibility for local/partial deployments, but are not a safe warn-first posture. Compose and Helm set the peer pins for shipped stacks. |
 | Helper start failure (env missing, cert unparseable) | Service refuses to boot with a precise error message naming the missing env or unparseable file. | Misconfiguration must be loud — silent fall-back to a partial trust posture is the failure mode this slice exists to prevent. |
 | Vault Transit unreachable mid-refresh | Identity returns `503 signing_unavailable`; caller treats as transient (retry loop). | Same posture as v1.x+2 — Vault is a hard dep for identity. |
 
@@ -3978,16 +3978,16 @@ Five sessions, each independently shippable:
 | # | Scope | Touches | Status |
 |---|---|---|---|
 | 1 | **This section** — pre-agree the wire shape, refresh state machine, and SDK helper API. No code. | `clavenar-specs/TECH_SPEC.md` (this section), `clavenar-specs/FEATURES.md` §14.20 | **Shipped** v0.8.5 |
-| 2 | **Helper crate + `/workload-svid` endpoint + identity self-refresh.** Whichever location §11 Q1 settles for the helper. New endpoint on `clavenar-identity` with auth via the existing `service/*` allowlist. Chain v3 `svid.workload_refreshed` event. Identity itself adopts the helper as the first caller (proves the no-cold-start path). | `clavenar-sdk` (or `clavenar-workload-identity`), `clavenar-identity`, `clavenar-ledger` (chain v3 event type), `clavenar-specs/FEATURES.md` | **Queued** |
-| 3 | **Roll helper through proxy + brain + policy-engine.** Three services already speak mTLS on every receive path (B7 sessions 3+4). One-line callsite change: pass `WorkloadIdentity::rustls_server_config()` instead of static `RustlsConfig::from_pem` to `axum_server::bind_rustls`. Outbound `reqwest::Client` similarly. | `clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine` | **Queued** |
-| 4 | **Roll helper through ledger + hil + console + simulator + deep-review + demo-mint.** Same pattern as session 3 across the remaining six services. Receive-side dual-listener pattern (ledger, hil, identity) keeps both ports; only the mTLS port consumes the helper's server config. | `clavenar-ledger`, `clavenar-hil`, `clavenar-console`, `clavenar-simulator`, `clavenar-deep-review`, `clavenar-demo-mint` | **Queued** |
-| 5 | **Server-side SPIFFE SAN-URI check.** Flip every outbound caller from "warn-mode" (warn-log on missing env) to "enforce" by setting `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` in compose + helm chart. Verify end-to-end: stolen brain cert presented at the policy-engine DNS name → reqwest closes the connection with `ApplicationVerificationFailure`. | `clavenar-e2e/{prod,dev}/docker-compose.yml`, `clavenar-charts/charts/clavenar/values.yaml`, `clavenar-charts/charts/clavenar/templates/_helpers.tpl` | **Queued** |
+| 2 | **Helper crate + `/workload-svid` endpoint + identity self-refresh.** Whichever location §11 Q1 settles for the helper. New endpoint on `clavenar-identity` with auth via the existing `service/*` allowlist. Chain v3 `svid.workload_refreshed` event. Identity itself adopts the helper as the first caller (proves the no-cold-start path). | `clavenar-workload-identity`, `clavenar-identity`, `clavenar-ledger` (chain v3 event type) | **Shipped** v0.9.1 |
+| 3 | **Roll helper through proxy + brain + policy-engine.** Three services already speak mTLS on every receive path (B7 sessions 3+4). One-line callsite change: pass `WorkloadIdentity::rustls_server_config()` instead of static `RustlsConfig::from_pem` to `axum_server::bind_rustls`. Outbound `reqwest::Client` similarly. | `clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine` | **Shipped** v0.9.2 |
+| 4 | **Roll helper through ledger + hil + console + simulator + deep-review + demo-mint.** Same pattern as session 3 across the remaining six services. Receive-side dual-listener pattern (ledger, hil, identity) keeps both ports; only the mTLS port consumes the helper's server config. | `clavenar-ledger`, `clavenar-hil`, `clavenar-console`, `clavenar-simulator`, `clavenar-deep-review`, `clavenar-demo-mint` | **Shipped** v0.9.5 |
+| 5 | **Outbound SPIFFE SAN-URI check.** Flip every outbound caller from compatibility mode to enforce-mode by setting `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` in compose + Helm chart. Verify end-to-end: stolen brain cert presented at the policy-engine DNS name → reqwest closes the connection with `ApplicationVerificationFailure`. | `clavenar-e2e/{prod,dev}/docker-compose.yml`, `clavenar-charts/charts/clavenar/values.yaml`, `clavenar-charts/charts/clavenar/templates/_helpers.tpl` | **Shipped** v0.9.6 |
 
-Sessions 2 and 5 are the only ones that materially change behavior;
-sessions 3 + 4 are mechanical callsite swaps once session 2 ships
-the helper. The slice ends with v1.x+2's bootstrap-only posture
-formally retired — the new posture is "workload SVIDs as primary
-credential, bootstrap as fallback only."
+Sessions 2 and 5 were the behavior-changing slices; sessions 3 + 4
+were mechanical callsite swaps once session 2 shipped the helper. The
+slice ended with v1.x+2's bootstrap-only posture formally retired in
+shipped compose and Helm stacks — the current posture is "workload SVIDs
+as primary credential, bootstrap as fallback only."
 
 ### 10. What this spec deliberately does not include
 
