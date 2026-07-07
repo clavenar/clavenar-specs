@@ -18,6 +18,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
 - [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
+- [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
 - [Fleet posture score](#fleet-posture-score) — single 0–100 landing-page health heuristic composed client-side from ledger rows + the assurance lane; no wire / chain change
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
@@ -54,6 +55,7 @@ authoritative wire-contract detail still lives in those sections.
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
+| 10c | [Deception layer](#deception-layer) | shipped | v1.78.0 | `clavenar-identity` (`decoys` table + `/decoys` API + `clavenar_decoys` KV + curated seed), `clavenar-proxy` (KV mirror, `tools/list` splice, deterministic deny gate, containment publish), `clavenar-ledger` (no change — v3 `decoy.registered`/`decoy.retired` rows) |
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
@@ -3244,6 +3246,64 @@ Deployments exempt the simulator's persona prefixes (`CONTAIN_EXEMPT_PREFIXES`) 
 #### 11.8 Trust-boundary change
 
 Deep-review previously could only forge `deep_review_*` rows; with containment it holds an actuation path. Mitigations, in depth: the NATS mTLS perimeter gates who can publish commands at all; identity is the sole executor and applies its own resolution + state machine (a command cannot mint, widen, or decommission — only suspend/flag); the hard tier requires the strictest verdict shape; shadow is the binary default; exempt prefixes bound the blast radius; clear/release are admin-gated; and every action is chain-audited from three angles (sentinel, lifecycle row, case). See the [threat model](#threat-model) for the updated elevation-of-privilege entry.
+
+---
+
+## Deception layer
+
+A **decoy** is a tool name that must never be legitimately called. The proxy advertises some as bait in `tools/list` and treats *any* `tools/call` naming one as a deterministic compromise signal — hard-denied and, in enforce mode, contained. Where deep review reasons probabilistically over traffic that already happened, the deception layer is a zero-false-positive tripwire: a legitimate agent has no reason to invoke `dump_secrets`, so a call to it is dispositive. Identity owns the registry; the proxy enforces; actuation rides the existing [closed-loop containment](#11-closed-loop-containment) rails.
+
+### 1. Two kinds, two tiers
+
+| Kind | Visibility | Default action on trip |
+|---|---|---|
+| **Advertised** | Spliced into upstream `tools/list` as bait — a plausible lure (`export_credentials_backup`, `delete_audit_log`, `export_all_records`) | `suspend` |
+| **Trap** | Never advertised — catches an agent guessing or being injected with a privileged name (`dump_secrets`, `disable_logging`, `bulk_download_pii`) | `force_hil` |
+
+The action is stored explicitly per row (`suspend` | `force_hil`), never derived — the proxy reads it verbatim from the KV mirror and publishes it as the containment `action`. The tier defaults above apply only when a `POST /decoys` omits `action`.
+
+### 2. Registry (identity)
+
+SQLite table `decoys` is the source of truth; `PRIMARY KEY (tenant, name)`. Tenant `*` rows are fleet-wide defaults; a same-name row for a specific tenant **shadows** the wildcard (the same resolution the proxy's deny gate applies). Retire deletes the row — no state column; history lives in the chain v3 lifecycle rows.
+
+- `GET /decoys?tenant=<t>` — effective set for a tenant (own rows + unshadowed `*` defaults). mTLS-allowlist only (the console reads it), like the budget GET.
+- `POST /decoys` — register. OIDC `agents:admin` (arming a tripwire that can suspend agents is an admin mutation). 201; `409` on `(tenant, name)` conflict; `400` on a non-object `schema_json` or unknown `action`. Emits a `decoy.registered` chain v3 row through the same durable outbox as agent lifecycle.
+- `DELETE /decoys/{name}?tenant=<t>` — retire. Admin-gated; deletes the row, drops the KV key, emits `decoy.retired`.
+
+On first boot (unless `CLAVENAR_IDENTITY_SEED_DECOYS=off`) identity seeds the curated `*` default set — three advertised lures + three trap names — so a wiped registry re-arms with zero setup. `seed_and_reconcile` then pushes every SQLite row into the KV bucket, healing broadcasts lost while NATS was down; KV orphans are left alone (an orphan keeps a decoy armed, which fails safe).
+
+### 3. Broadcast (`clavenar_decoys` NATS-KV)
+
+Identity puts on register / seed and deletes on retire; the proxy mirrors the bucket. KV key is `sha256(tenant \0 name)` hex — the NUL separator keeps `("a","bc")` and `("ab","c")` distinct, and hex is KV-safe where the `*` wildcard tenant is not. Both sides compute the key identically. The broadcast value is the lean subset the proxy needs (audit columns stay in SQLite):
+
+```jsonc
+{
+  "tenant": "*",
+  "name": "dump_secrets",
+  "advertised": false,
+  "action": "suspend" | "force_hil",
+  "schema_json": "{…}",   // optional; advertised bait's inputSchema
+  "description": "…"       // optional; the lure text
+}
+```
+
+### 4. Enforcement (proxy)
+
+The proxy mirrors the bucket into a key-addressed map with the same **degraded-until-synced** posture as the upstream-provenance and revocation mirrors: until the first seed lands (or after a lost watch), the deny gate falls silent and no bait is spliced — a stale mirror can neither deny a real tool nor advertise a retired lure. `clavenar_proxy_decoy_cache_degraded` gauges the outage.
+
+- **Splice.** On a `tools/list` control response, after the supply-chain pin has observed the *real* upstream catalog (bait must never be pinned as a genuine tool, or a later rug-pull diff would compare against it), the proxy appends the advertised set for the caller's tenant scope. A decoy whose name collides with a real upstream tool is skipped with a warning — the splice never shadows a real tool. Missing/unparsable `schema_json` splices an empty object schema.
+- **Deny.** Before the Brain+Policy fork (the verdict is deterministic, so a trip burns no pipeline work), the proxy resolves the call's tool name against the effective decoy set for the evaluation tenant (demo prefix if present, else the SVID operator tenant, matching `PolicyInput.tenant`). A hit hard-denies with a `403` whose body is **deliberately indistinguishable from an ordinary policy deny** (`security_violation` / `DangerousTool`) — revealing the trip would teach an attacker the bait list. The truth rides the forensic row: `rejection_signal = "decoy_tripped"`, plus a `clavenar_proxy_decoy_trips_total{action}` counter.
+- **Both ingress routes.** `/mcp` (`tools/call`) and `/tool/{name}` (REST — the decoy name is the path segment) both gate.
+
+The deny enforces in **both** ClavenarModes — observe mode's "never break legitimate traffic" contract holds because the named tool does not exist upstream and the call could never have succeeded. Only the *actuation* is enforce-gated: in observe mode the operator gets the `decoy_tripped` forensic row but no suspend/flag.
+
+### 5. Actuation
+
+On a trip in enforce mode the proxy publishes a `containment.request.v1` command (§[closed-loop containment](#11-closed-loop-containment)) with `action` copied from the decoy row and `actor: "system:proxy"` (identity stamps that on the resulting chain row instead of the deep-review default). Identity's durable consumer resolves the agent and executes verbatim — the proxy, as ever, never changes trust state itself. Best-effort: the deny already happened, and identity's boot reconcile heals a lost command's effect on the next trip.
+
+### 6. Trust-boundary note
+
+The proxy gains a second publisher role on the containment subject (deep-review was the first). The same mitigations bound it: the NATS mTLS perimeter gates who can publish at all; identity is the sole executor and can only suspend/flag; the curated seed and `POST /decoys` name validation keep decoy names off real upstreams (the deny gate is unconditional, so a collision would deny legitimate calls — hence the splice-time collision skip and the operator guidance never to register a real tool name).
 
 ---
 

@@ -1935,6 +1935,39 @@ curl -sf https://demo.clavenar.com/deep-review | grep -o 'Deep review'
 
 ---
 
+## 15. Deception layer (decoys)
+
+A decoy is a tool name that must never be legitimately called. The proxy advertises some as bait in `tools/list` and treats any `tools/call` naming one as a deterministic, zero-false-positive compromise signal — hard-denied and, in enforce mode, contained through the same rails as deep-review's closed loop. See `TECH_SPEC.md#deception-layer` for the full design.
+
+### 15.1 Identity registry + curated seed
+
+**Concept.** Identity owns the registry: a `decoys` SQLite table (`PRIMARY KEY (tenant, name)`, tenant `*` = fleet-wide default, a same-name tenant row shadows the wildcard), an admin-gated `/decoys` API (`GET` allowlist-only, `POST`/`DELETE` OIDC `agents:admin`), and a first-boot curated seed of three advertised lures + three trap names. Register/retire emit `decoy.registered`/`decoy.retired` chain v3 rows through the agent-lifecycle outbox.
+
+**Implementation.** `clavenar-identity/src/decoys.rs` (+ `db.rs` schema, `main.rs::seed_and_reconcile` on boot). `CLAVENAR_IDENTITY_SEED_DECOYS=off` disables the seed. SQLite is the source of truth; `seed_and_reconcile` pushes every row into the `clavenar_decoys` NATS-KV bucket the proxy watches, healing broadcasts lost while NATS was down.
+
+**Verify.**
+
+```bash
+# Six seeded fleet-wide rows (over the identity mTLS listener / console)
+curl -s "$IDENTITY/decoys?tenant=*" | jq 'length'   # 6
+nats kv ls clavenar_decoys | wc -l                   # 6
+```
+
+### 15.2 Proxy splice + deterministic deny + containment
+
+**Concept.** The proxy mirrors the KV bucket (degraded-until-synced, like the revocation/upstream mirrors: a stale mirror denies nothing and advertises nothing). On `tools/list` it splices advertised bait *after* the supply-chain pin has observed the real catalog (bait is never pinned; a name colliding with a real tool is skipped). On `tools/call` — before the brain/policy fork — a name matching the effective decoy set is hard-denied with a body indistinguishable from a policy deny; the truth rides the forensic row (`rejection_signal=decoy_tripped`). In enforce mode the proxy publishes a `containment.request.v1` with `actor: system:proxy`; identity executes the suspend / force-HIL.
+
+**Implementation.** `clavenar-proxy/src/decoy_registry.rs` (mirror + splice + containment publish), gate in `handler/gates.rs::enforce_decoy_or_reject`, wired into both `handler/mcp.rs` (`/mcp`) and `handler/tool.rs` (`/tool/{name}`). Metrics `clavenar_proxy_decoy_trips_total{action}` and `clavenar_proxy_decoy_cache_degraded`.
+
+**Verify.**
+
+```bash
+# Firing a trap decoy is denied and looks like a policy block (chaos catalog)
+clavenar-chaos-monkey --category deception   # decoy_trap_dump_secrets, decoy_lure_export_credentials
+```
+
+---
+
 ## Verification — end to end
 
 The single command that exercises ~80% of the features above:
