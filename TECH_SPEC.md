@@ -1008,9 +1008,9 @@ out-of-band export/redact/re-import.
 ## Console config page
 
 
-Companion to the [Agent onboarding](#agent-onboarding-wao) section only in form. Where that section is a multi-service initiative with a chain version bump, a new CLI binary, and five rollout slices, this section is the opposite end of the scale: one read-only HTML page at `/config` in `clavenar-console` that answers "what is this binary, what is it talking to, and is everything reachable?" — the implicit question every operator currently answers with `ps`, `printenv`, and `curl` against four URLs.
+Companion to the [Agent onboarding](#agent-onboarding-wao) section only in form. Where that section is a multi-service initiative with a chain version bump, a new CLI binary, and five rollout slices, this section is the opposite end of the scale: one read-only HTML page at `/config` in `clavenar-console` that answers "what is this binary, what is it talking to, and is everything reachable?" — the implicit question every operator currently answers with `ps`, `printenv`, and `curl` against each configured backend URL.
 
-**Module status:** shipped. Local to `clavenar-console`; one additive change to `clavenar-sdk` (three new public getters). No new service. No chain version change. No new endpoints on any backend. The only cross-repo dependency is bumping the `clavenar-sdk` version `clavenar-console` consumes.
+**Module status:** shipped; v2 expanded. Local to `clavenar-console`; no new service. No chain version change. No new backend endpoints. v2 adds policy-engine and brain probes, auth posture, feature wiring, operator-config summaries, a sample timestamp, manual refresh, and demo redaction for newly surfaced URLs.
 
 ### 1. What this closes
 
@@ -1019,7 +1019,7 @@ Today, an operator who SSH-tunnels into the console host and asks "is this thing
 1. `ps -ef | grep clavenar-console` — find the process.
 2. `cat /proc/$PID/environ | tr '\0' '\n'` — see what URLs and flags it booted with.
 3. `curl http://localhost:8083/health` — check the ledger.
-4. Repeat (3) for HIL, identity, simulator.
+4. Repeat (3) for HIL, identity, policy-engine, brain, simulator.
 5. Cross-reference the env against a runbook to know which knobs are even in scope.
 
 The operational consequences:
@@ -1027,11 +1027,12 @@ The operational consequences:
 | Gap | Today | After CONFIG |
 |---|---|---|
 | URL drift | "Is the console pointing at staging-ledger or prod-ledger?" needs shell access on the console host | One page renders the URL the SDK is actually pinging |
-| Wiring health | Need to remember each backend's port and curl them by hand | Four parallel probes, color-coded latency badges, truncated error reason on failure |
-| Optional service status | "Is the simulator wired up here?" requires the operator to know the env var name | Card explicitly shows "configured" / "not configured (set `CLAVENAR_CONSOLE_SIMULATOR_URL`)" |
+| Wiring health | Need to remember each backend's port and curl them by hand | Required + configured optional probes run in parallel, color-coded latency badges, truncated error reason on failure |
+| Optional service status | "Is the simulator / policy engine / brain wired up here?" requires the operator to know the env var name | Card explicitly shows configured URLs for operators or configured/not-configured labels for demo visitors |
 | Token rotation verification | "Did this binary pick up the new operator token after the env was updated?" cannot be answered without shell | sha256[..8] fingerprint of the bearer; matching fingerprints across operators prove same token, mismatched fingerprints prove the rotation hasn't reached every box |
 | Build provenance | `cargo install clavenar-console` produces a binary with no version readout in the UI | Page renders `v0.x.y (abc12345)` from `CARGO_PKG_VERSION` and a short git SHA captured at build time |
-| Auth posture readability | `cookie_secure` and `session_ttl_secs` live in env vars; verifying them against the deploy doc requires shell | One card |
+| Auth posture readability | auth mode, role, tenant, `cookie_secure`, session TTL, HIL bearer presence, and Slack/Teams self-link wiring live in env/session state | One redaction-safe card |
+| Feature/config drift | Metrics targets, tool costs, budgets, silos, demo-session wiring, and assurance/brain inspect posture live in env vars | Summary cards show counts, slugs, booleans, and safe effective values |
 
 The page is a diagnostic, not a control plane. Mutation is explicitly out of scope (§11).
 
@@ -1039,9 +1040,9 @@ The page is a diagnostic, not a control plane. Mutation is explicitly out of sco
 
 #### 2.1 Posture
 
-The console's existing read-only surface (`/audit`, `/velocity`, `/stats/*`, `/hil` listing, `/exports`, `/agents`, `/sim`) is **open** — auth gates only the `/hil/{id}/{approve,deny,modify}` POSTs. The README documents the deploy posture: bind to `127.0.0.1`, expose via SSH tunnel or reverse proxy. `/config` matches this posture.
+The console's read routes, including `/config`, require Viewer-or-better in WebAuthn / OIDC / SAML / basic-admin modes. Missing HTML sessions redirect to `/login`; disabled-mode development and CI runs resolve to a synthetic Admin session. Public-edge demo visitors carrying a valid demo-session cookie receive a redacted deployment view: configured/not-configured booleans only for sensitive wiring, no backend URLs, no token fingerprints, no bind address, no build SHA, and no `decided_by` fallback.
 
-The justification is operational. An auth-gated config page is *worse* during incidents because it hides the very wiring an operator needs to debug auth itself. If WebAuthn is broken, the page that says "your RP id is wrong" must not require WebAuthn.
+The justification is operational and screenshot-oriented. The page should be safe to paste into an incident ticket while still making auth and wiring posture visible to an authenticated operator.
 
 #### 2.2 Threats
 
@@ -1067,7 +1068,7 @@ Treat every render as if it will be screenshotted into Slack. The redaction guar
 
 ### 3. Page structure
 
-Cards (`rounded-xl bg-white ring-1 ring-slate-200 shadow-card p-5`), single-column stack, four sections in this order. Single-column matches the established density; multi-column would create "the right column got truncated" cases on narrow screens for no information gain.
+Cards (`rounded-xl bg-white ring-1 ring-slate-200 shadow-card p-5`), single-column stack, with a small live-region header showing the last sample timestamp and a manual Refresh button. Single-column matches the established density; multi-column would create "the right column got truncated" cases on narrow screens for no information gain.
 
 #### 3.1 Console
 
@@ -1089,20 +1090,28 @@ URL via `LedgerClient::base_url()` (already exists in `clavenar-sdk`) and `HilCl
 
 #### 3.3 Backends (optional)
 
-Two rows, identity and simulator. Each row probes if the client is `Some`; renders a `not configured (set CLAVENAR_CONSOLE_IDENTITY_URL / CLAVENAR_SIMULATOR_URL)` placeholder if `None`.
+Four rows: identity, policy engine, brain, and simulator. Each row probes if the client is `Some`; otherwise it renders a `not configured` placeholder and does not emit network traffic.
 
 The identity row also surfaces:
 
 - `agents_tenant` — the tenant scope baked in via `--agents-tenant`.
 - Operator token — `configured (sha256: ab12cd34)` or `unset`, sourced from `AgentsClient::bearer_fingerprint()`. The presence boolean and the fingerprint are the same readout (`Some(_)` vs `None`); no additional method needed.
 
+The brain row also surfaces `inspect_listener = configured/not configured`; the actual inspect URL is not rendered.
+
 #### 3.4 Auth
 
 | Field | Source |
 |---|---|
+| Auth mode | `AuthState.config.mode.as_str()` (`demo` for redacted demo sessions) |
+| Role | resolved `SessionData.role.as_str()` |
+| Tenant scope | `TenantScope` resolved from demo cookie or authenticated session |
 | Session TTL | `AuthState.config.session_ttl_secs` |
 | `cookie_secure` | `AuthState.config.cookie_secure` |
-| Currently logged in | Server-side: `extract_cookie(headers, SESSION_COOKIE)` → `AuthState.store.get(uuid).await` → `SessionData.name` or `(not logged in — open posture)` |
+| Currently logged in | Server-side session resolution; fallback text is `(no active session)` |
+| HIL bearer | `AuthState.config.hil_decide_token.is_some()` as a boolean only |
+| Slack self-link | `AuthState.config.slack.is_some()` |
+| Teams self-link | `AuthState.config.teams.is_some()` |
 
 The "currently logged in" line is server-rendered, **not** JS-driven via `/auth/me`. JS-filled slots come out empty in `curl`, `wget`, headless screenshot capture, and view-source; the page is a screenshot artifact and must be self-contained. The nav stays JS-driven (separate concern; would otherwise require threading a `nav_user` field through every template).
 
@@ -1110,10 +1119,28 @@ The Auth card does **not** surface the WebAuthn RP id — that's HIL's configura
 
 The card does **not** surface the active session count, the current session's `expires_at`, or the list of registered WebAuthn credentials. The first two are screenshot footguns (operational signal, hard to keep current with the lazy-expiry session map); the third lives in HIL's database and belongs on a separate "credentials" page if at all.
 
+#### 3.5 Feature wiring
+
+Rows:
+
+- Assurance daemon: configured/not configured.
+- Brain inspect listener: configured/not configured.
+- Demo session exchange: enabled/disabled.
+- Metrics targets: operator view renders `slug=url`; demo view renders only count + slugs.
+
+#### 3.6 Operator config
+
+Rows:
+
+- Default agents tenant (`CLAVENAR_CONSOLE_AGENTS_TENANT`), redacted to configured/not configured for demo sessions.
+- Tool cost entry count.
+- Agent budget cap in dollars + micro-USD.
+- Tool silo tier count.
+
 ### 4. Probe contract
 
 ```
-GET <base_url>/health         # ledger, HIL, simulator
+GET <base_url>/health         # ledger, HIL, policy-engine, brain, simulator
 GET <base_url>/healthz        # identity (only service that uses /healthz)
 ```
 
@@ -1148,7 +1175,7 @@ Module location: new `clavenar-console/src/probe.rs`. Single function:
 pub async fn probe(http: &Client, base: &Url, path: &str) -> Probe { ... }
 ```
 
-Handler invokes it four times under one `tokio::join!`. Probe construction is `client.base_url().join(path).expect("static path")` — the SDK clients validate base URLs at startup, so the `expect` is unreachable for any base URL that successfully constructed a client.
+Handler invokes it for required backends plus every configured optional backend under one `tokio::join!`. Probe construction is `client.base_url().join(path).expect("static path")` — the SDK clients validate base URLs at startup, so the `expect` is unreachable for any base URL that successfully constructed a client.
 
 ### 5. Plumbing & wire surface
 
@@ -1179,10 +1206,11 @@ No `POST`. No JSON-API counterpart. The page is server-rendered askama HTML, sam
 | `clavenar-console/src/state.rs` | New struct `ProcessConfig { bind: String, port: u16, version: &'static str, git_sha: Option<&'static str> }`. New field `pub process: ProcessConfig` on `AppState`. |
 | `clavenar-console/src/main.rs` | Build `ProcessConfig` from `Cli` before `AppState` construction. |
 | `clavenar-console/src/probe.rs` | New module. See §4. |
-| `clavenar-console/src/handlers.rs` | New `pub async fn config(...)` handler. Reads `AppState`, runs the four probes under `tokio::join!`, renders the template. |
+| `clavenar-console/src/handlers.rs` | `pub async fn config(...)` handler. Reads `AppState`, runs backend probes under `tokio::join!`, renders the template. |
 | `clavenar-console/src/lib.rs` | Wire the route: `.route("/config", get(handlers::config))`. |
-| `clavenar-console/templates/config.html` | New askama template. Four cards as in §3. |
+| `clavenar-console/templates/config.html` | Askama template. Cards as in §3, with htmx polling + manual refresh. |
 | `clavenar-console/templates/base.html` | Add the nav link. |
+| `clavenar-console/src/brain_client.rs` | Add `has_inspect_url()` boolean getter for redaction-safe `/config` posture. |
 
 The build script is allowed to fail silently. A release tarball without a `.git/` directory, or a build environment without `git` on PATH, must produce a working binary; `option_env!` returns `None` and the template renders the version without a SHA. **Build must not depend on git availability.**
 
@@ -1193,10 +1221,10 @@ The build script is allowed to fail silently. A release tarball without a `.git/
 | Backend unreachable (connect refused) | Red badge with `"connect refused: ..."` reason; rest of the page renders |
 | Backend slow (>1500ms) | Red badge with `"timeout after 1500ms"`; rest of the page renders |
 | Backend returns 500 | Red badge with `"500 Internal Server Error"`; rest of the page renders |
-| `CLAVENAR_CONSOLE_IDENTITY_URL` / `_SIMULATOR_URL` unset | Optional client is `None`; row renders "not configured" placeholder; no probe traffic to that URL |
+| Optional backend URL unset | Optional client is `None`; row renders "not configured" placeholder; no probe traffic to that URL |
 | Operator token unset | Identity row renders `unset` for the token field; identity probe still runs |
 | Build script unable to capture SHA | `option_env!` returns `None`; template renders `v0.x.y` without SHA |
-| Operator hits `/config` while not logged in | Page renders; Auth card shows `(not logged in — open posture)` |
+| Operator hits `/config` while not logged in | WebAuthn / OIDC / SAML / basic-admin modes redirect to `/login`; disabled mode resolves a synthetic Admin session |
 | `AuthState.store` lookup races with session expiry | `get` returns `None`; rendered as not-logged-in |
 | Probe URL fails to construct (malformed base) | Should be unreachable — `LedgerClient::new` etc. validate base URLs at startup. If it happens anyway, render red with `"url construction failed"`. |
 
@@ -1220,12 +1248,12 @@ In `clavenar-console/tests/integration.rs`, reusing the existing `spawn_ledger`,
 
 | Test | Asserts |
 |---|---|
-| `config_renders_all_cards_when_all_backends_healthy` | All four cards render; all four URLs visible in body; all four probes green |
-| `config_renders_optional_placeholders_when_clients_absent` | Identity URL and simulator URL absent → "not configured" placeholders; no probe traffic to those URLs |
+| `config_happy_path_renders_all_backend_probes_green` | Required + optional backend cards render; six configured backend URLs visible to operators; six probes green; feature/config cards render |
+| `config_optional_clients_absent_render_grey_placeholders` | Identity / policy / brain / simulator absent → "not configured" placeholders; no probe traffic to those URLs |
 | `config_renders_red_badge_when_backend_unreachable` | HIL stub closed (or 500s) → HIL row red with truncated error reason; ledger row still green; page still renders |
-| `config_renders_logged_in_operator_when_session_present` | Pre-seed `AuthState.store`, set `clavenar_console_session` cookie on request → body contains operator name |
-| `config_renders_not_logged_in_when_no_session` | No cookie → body contains "(not logged in — open posture)" |
+| `config_surfaces_logged_in_operator_when_session_cookie_present` | Pre-seed `AuthState.store`, set `clavenar_console_session` cookie on request → body contains operator name, auth mode, role, tenant scope; no cookie redirects to `/login` |
 | `config_redacts_operator_token` | **Load-bearing.** With `CLAVENAR_CONSOLE_OPERATOR_TOKEN=secret-jwt-blob.foo.bar` and a logged-in operator, body does NOT contain the raw token, does NOT contain the HIL session cookie value, DOES contain the 8-char fingerprint |
+| `config_demo_redacts_new_backend_and_metrics_urls` | Demo session body does not contain backend URLs, brain inspect URL, assurance URL, or raw metrics URLs; it shows configured/not-configured status instead |
 | `config_renders_mixed_health_classifications` | Green + amber + red coexist on one render |
 
 The redaction test cannot be skipped. It's the only mechanical guard against a future contributor adding `{{ operator_token }}` to a template.
@@ -1923,7 +1951,7 @@ The four operational tradeoffs that gated the green light, all confirmed at the 
 ## Console policy management
 
 
-Companion to [Console config page](#console-config-page) (read-only diagnostic) and the policy-engine description in `README.md` §6 ("Layer 3 — governance & policy-as-code"). Where the config page exposes deployment metadata and four-backend health probes, this section adds a *write* surface: viewing, editing, activating, deactivating, and deleting the `*.rego` and `*.json` files that `clavenar-policy-engine` loads.
+Companion to [Console config page](#console-config-page) (read-only diagnostic) and the policy-engine description in `README.md` §6 ("Layer 3 — governance & policy-as-code"). Where the config page exposes deployment metadata and backend health probes, this section adds a *write* surface: viewing, editing, activating, deactivating, and deleting the `*.rego` and `*.json` files that `clavenar-policy-engine` loads.
 
 **Module status:** **shipped.** Lives in `clavenar-policy-engine` (SQLite-backed policy store, write API, atomic engine rebuild, NATS-published outbox), `clavenar-console` (`/policies` surface + `Role::Admin`), `clavenar-sdk` (`PoliciesClient`), and `clavenar-ledger` (consumes new `policy.*` chain v3 event kinds — no schema bump, chain v3 is event-kind-polymorphic). End-to-end coverage in `clavenar-e2e/dev/run-policies.sh`.
 
