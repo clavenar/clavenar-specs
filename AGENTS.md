@@ -43,6 +43,8 @@ in prose must resolve to a `## ` heading in `TECH_SPEC.md`).
   the `§0` status table. If you rename a `## ` heading, fix every link to it.
 - Markdown voice is terse and technical; tables over prose where a table fits.
   Don't reformat untouched sections in an edit — keep diffs tight.
+- After adding or updating a feature, also update the relevant `MANUAL_TESTS*`
+  file(s) when needed.
 - Commit subjects must start with a lowercase letter.
 
 ## Pointers
