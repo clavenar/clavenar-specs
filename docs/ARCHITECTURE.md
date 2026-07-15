@@ -130,7 +130,7 @@ flowchart TD
   Browser -->|HTTPS| Caddy
   Caddy -->|reverse proxy| Console
   Caddy -->|reverse proxy| Website
-  Caddy -->|reverse proxy /verify + /audit| Ledger
+  Caddy -->|reverse proxy /verify only| Ledger
   Caddy -->|reverse proxy /mint| DemoMint
 
   Console -->|HTTP /audit + /verify| Ledger
@@ -146,18 +146,24 @@ flowchart TD
 ## 3. Deployment Topology
 
 Single VPS runs both `prod` (`clavenar-prod` compose project, standard
-ports) and `dev` (`clavenar-dev`, +10000 offset). One host-Caddy fans
-out to each env's upstream containers by hostname.
+ports) and `dev` (`clavenar-dev`, +10000 offset). The production website/Caddy
+service is the only browser edge; dev has no website vhost. During the operator
+bootstrap phase, only `GET`/`HEAD /` on `console.clavenar.com` redirects to
+`https://demo.clavenar.com/demo`, dropping any query. Every other request on
+that hostname returns 404. The native production `:8085` and dev `:18085`
+operator listeners are host-loopback-only and require mTLS through an SSH
+tunnel.
 
 ```mermaid
 flowchart LR
   Internet((Internet))
-  Browser[Visitor + operator browsers]
+  Browser[Visitor browser]
+  Operator[Operator browser]
   Agent[AI agent]
 
   subgraph Host[Demo VPS — Europe/Berlin]
     direction TB
-    HostCaddy[Caddy — 80 + 443 — auto-LE]
+    HostCaddy[prod website/Caddy — 80 + 443 — auto-LE]
 
     subgraph Prod[clavenar-prod project — standard ports]
       direction TB
@@ -166,10 +172,9 @@ flowchart LR
       P_policy[policy 8082]
       P_ledger[ledger 8083]
       P_hil[hil 8084]
-      P_console[console 8085]
+      P_console[console — loopback 8085 mTLS + internal 9085 demo]
       P_identity[identity 8086]
       P_demomint[demo-mint]
-      P_website[website Caddy 80 + 443]
       P_sim[simulator]
       P_stub[upstream-stub]
       P_dr[deep-review]
@@ -185,10 +190,8 @@ flowchart LR
       D_policy[policy 18082]
       D_ledger[ledger 18083]
       D_hil[hil 18084]
-      D_console[console 18085]
+      D_console[console — loopback 18085 mTLS + internal 9085 demo]
       D_identity[identity 18086]
-      D_demomint[demo-mint]
-      D_website[website Caddy 18080 + 18443]
       D_sim[simulator]
       D_stub[upstream-stub]
       D_dr[deep-review]
@@ -203,16 +206,14 @@ flowchart LR
 
   Browser -->|clavenar.com| HostCaddy
   Browser -->|demo.clavenar.com| HostCaddy
-  Browser -->|console.clavenar.com — operator only| HostCaddy
-  Browser -->|console.clavenar.com — operator only| HostCaddy
-  Agent -->|mTLS — 8443 or 19443| P_proxy
+  Browser -->|console.clavenar.com — GET or HEAD root only| HostCaddy
+  Operator -->|SSH tunnel + native mTLS — loopback 8085| P_console
+  Operator -->|SSH tunnel + native mTLS — loopback 18085| D_console
+  Agent -->|mTLS — 8443| P_proxy
 
-  HostCaddy -->|clavenar.…| P_website
-  HostCaddy -->|console-demo.…| P_console
-  HostCaddy -->|console-demo.… /verify + /audit| P_ledger
-  HostCaddy -->|console-demo.… /mint| P_demomint
-  HostCaddy -->|clavenar-dev.… — tls internal| D_website
-  HostCaddy -->|console-dev.… — tls internal| D_console
+  HostCaddy -->|demo.clavenar.com — curated 9085| P_console
+  HostCaddy -->|demo.clavenar.com /verify only| P_ledger
+  HostCaddy -->|demo.clavenar.com /mint| P_demomint
 ```
 
 ## 4. Demo-Prefix End-to-End
@@ -238,7 +239,7 @@ sequenceDiagram
   Visitor->>Mint: GET /mint?cf-turnstile-response=...
   Mint->>TS: server-side verify
   TS-->>Mint: OK
-  Mint-->>Visitor: 303 console-demo/#token=<HS256 JWT — prefix, sub, exp, iat>
+  Mint-->>Visitor: 303 demo.clavenar.com/#token=<HS256 JWT — prefix, sub, exp, iat>
   Note over Visitor,Console: Fragment never sent to server. Console JS reads it client-side.
   Visitor->>Console: POST /api/demo-session/exchange — body has JWT
   Console-->>Visitor: Set-Cookie clavenar_demo_session — HttpOnly Secure SameSite=Lax
