@@ -1032,7 +1032,30 @@ token projection. Decode bootstrap and simulator token headers: `alg` is
 Starting identity in strict mode with any HS256 tenant entry must fail before
 listen.
 
-### 5.11 SAML SP (feature-gated)
+### 5.11 Coordinated authentication generation rotation
+
+**Concept.** HIL sessions, the console-to-HIL decision bearer, demo sessions,
+and deployment-managed OIDC issuers form one authentication generation. An
+operator rotates them together using an explicit expected-current identifier;
+a stale command changes nothing, and a failed rollout never restores old
+authentication material.
+
+**Implementation.** Deployment tooling stages all replacement values before
+stopping consumers, assigns new OIDC key IDs, atomically installs the complete
+generation, recreates issuer-derived bootstrap tokens, and rolls every
+consumer. Only sanitized generation metadata persists. The Helm chart exposes
+the non-secret `authSecrets.rotationId`: the same identifier preserves
+chart-managed keys, while a new identifier rotates them and annotates every Pod
+template; external-secret deployments update the complete Secret before
+advancing the identifier.
+
+**Verify.** Accept genuinely valid HIL session, HIL decision, demo-session, and
+OIDC tokens immediately before rotation. After readiness, replay those exact
+bytes and require HTTP 401 for every class, then prove all replacement flows
+succeed. Repeat with the stale prior identifier and require failure before any
+workload or Secret mutation.
+
+### 5.12 SAML SP (feature-gated)
 
 **Concept.** OIDC covers the bulk of modern enterprise SSO (Okta, Azure AD, Google Workspace, OneLogin all speak it), but SAML-only IdPs — older Shibboleth, ADFS, some Ping Federate installs — still exist in regulated industries. The console ships a SAML SP behind the `saml` cargo feature so deployments needing it can build with SAML wired in, while default builds keep the static-cargo posture (samael pulls libxml2 + libxmlsec1 via FFI). The role-resolution layer reuses the same OIDC group-map (§5.5) — the SAML half is purely about the bind protocol.
 

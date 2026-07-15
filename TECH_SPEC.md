@@ -1417,6 +1417,26 @@ The trust path is **mode-dependent** because WebAuthn already has a stronger pri
 
 The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via clavenar-identity SVIDs (see [Internal service mTLS](#internal-service-mtls) — **shipped** across all six rollout sessions plus dynamic workload-SVID refresh) gates every internal hop today.
 
+Deployment authentication material has one explicit, non-secret generation
+identifier spanning the HIL session key, HIL decision bearer, demo-session key,
+and every deployment-managed OIDC issuer keypair. Rotation is a coordinated
+compare-and-swap: the operator supplies the expected current identifier,
+stages one complete replacement generation, stops or rolls every consumer,
+updates issuer JWKS and key IDs with the private keys, recreates bootstrap
+tokens, and advances the identifier only as a unit. A stale expected identifier
+fails before mutation. Once replacement begins, recovery moves forward and
+never reinstates superseded authentication material.
+
+The acceptance gate exercises genuinely valid tokens immediately before the
+change and preserves those exact bytes only in private ephemeral test storage.
+After readiness, each prior HIL session, HIL decision, demo-session, and OIDC
+token must return `401`, while each replacement flow succeeds. Versioned
+deployment tooling may record environment, prior/current identifiers, issuer
+key IDs, timestamps, schema, and outcome, but never token or private-key bytes.
+Kubernetes releases expose the same contract as `authSecrets.rotationId`: an
+unchanged value is a no-op; after the complete referenced Secret is updated,
+advancing it rolls every credential consumer.
+
 ### 7. Mechanical defaults
 
 - OIDC token validation: JWKS, 1-hour cache TTL, reactive refresh on signature failure.
@@ -1944,7 +1964,7 @@ The four operational tradeoffs that gated the green light, all confirmed at the 
 1. The week-2 kill-switch was real — receipts-only would have shipped if metrics had said so. Metrics cleared the threshold; the full handoff shipped.
 2. Single VPS, no HA, "best effort business hours" demo SLA is acceptable.
 3. `clavenar-chaos-catalog` extraction is in scope; chaos-monkey becomes a thin wrapper. **Held.**
-4. A shared HS256 JWT secret across the mint service + ledger + HIL is acceptable. **Held**, except custody moved from a tracked Compose anchor to externally provisioned, per-workload file projections. Coordinated rotation and explicit rejection of the prior key remain a separate operational control.
+4. A shared HS256 JWT secret across the mint service + ledger + HIL is acceptable. **Held**, except custody moved from a tracked Compose anchor to externally provisioned, per-workload file projections. Coordinated generation rotation and explicit rejection of the exact prior token now ship as the deployment lifecycle control described under operator authentication.
 
 ---
 
