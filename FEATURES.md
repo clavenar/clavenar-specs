@@ -953,9 +953,9 @@ curl http://localhost:8083/audit/correlation/<id> | jq '.[] | .approver_assertio
 
 ### 5.8 Console → HIL trust (mode-dependent)
 
-**Concept.** Two trust paths, depending on the console's auth mode. WebAuthn mode keeps HIL as the credential authority — it's already a stronger primitive and we don't tear it out. OIDC / basic-admin / disabled modes use a shared bearer token (`CLAVENAR_HIL_DECIDE_TOKEN`); the console verifies the operator, stamps `decided_by`, and presents the bearer to HIL on `/decide`. HIL accepts the request-body `decided_by` only when the bearer validates. The bearer is the interim posture; internal s2s mTLS via clavenar-identity SVIDs is the planned uniform replacement.
+**Concept.** Two trust paths, depending on the console's auth mode. WebAuthn mode keeps HIL as the credential authority — it's already a stronger primitive and we don't tear it out. Operator-mTLS, OIDC, basic-admin, and SAML modes use a shared bearer token (`CLAVENAR_HIL_DECIDE_TOKEN` or its exclusive `_FILE` source); the console verifies the operator, stamps `decided_by`, and presents the bearer to HIL on `/decide`. HIL accepts the request-body `decided_by` only when the bearer validates. The bearer is the interim posture; internal s2s mTLS via clavenar-identity SVIDs is the planned uniform replacement.
 
-**Implementation.** Console: `auth_handlers.rs` calls HIL with `Authorization: Bearer <DECIDE_TOKEN>` + `X-Clavenar-Decided-By: <principal>`. HIL: middleware verifies the bearer (constant-time compare); without it, falls back to `Authn::Disabled` legacy path. Console refuses to boot if the configured mode requires the token and it's missing.
+**Implementation.** Console: `auth_handlers.rs` calls HIL with `Authorization: Bearer <DECIDE_TOKEN>` + `X-Clavenar-Decided-By: <principal>`. HIL: middleware verifies the bearer (constant-time compare); without it, falls back to `Authn::Disabled` legacy path. Console refuses to boot if the configured mode requires the token and it's missing. Production enables strict external-secret mode: HIL/session, HIL/console decision bearer, and the shared demo-session key arrive through bounded regular files. Inline-plus-file ambiguity and weak/default values fail startup without disclosing values.
 
 **Verify.**
 
@@ -980,7 +980,29 @@ curl -X POST http://localhost:8084/pending/<id>/decide \
 
 **Verify.** Inspect cookie attributes after login; reload after 8 hours and observe re-prompt.
 
-### 5.10 SAML SP (feature-gated)
+### 5.10 Official-demo asymmetric issuer
+
+**Concept.** A verifier must not share an issuer's signing secret, and one
+issuer must not inherit another tenant's signing authority. The official demo
+uses separate per-environment RS256 keypairs for the Acme operator and simulator
+issuers. Bootstrap receives both private keys, the simulator receives only its
+own, and identity receives only the corresponding public JWKS documents.
+
+**Implementation.** Identity strict-asymmetric mode requires every configured
+tenant issuer to use RS256 JWKS, rejects HS256 or mixed configuration, requires
+unique non-empty `kid` values, and validates RSA key shape before binding a
+listener. The simulator signs with an externally mounted private-key file and
+explicit `kid`; the development-compatible HS256 path remains available only
+when strict mode is off and still rejects known, short, or repeated keys.
+
+**Verify.** Render the deployment and confirm identity has distinct JWKS mounts
+but no issuer private-key mount, while simulator has no Acme key or operator
+token projection. Decode bootstrap and simulator token headers: `alg` is
+`RS256`, each `kid` selects its tenant's JWKS, and the RSA moduli differ.
+Starting identity in strict mode with any HS256 tenant entry must fail before
+listen.
+
+### 5.11 SAML SP (feature-gated)
 
 **Concept.** OIDC covers the bulk of modern enterprise SSO (Okta, Azure AD, Google Workspace, OneLogin all speak it), but SAML-only IdPs — older Shibboleth, ADFS, some Ping Federate installs — still exist in regulated industries. The console ships a SAML SP behind the `saml` cargo feature so deployments needing it can build with SAML wired in, while default builds keep the static-cargo posture (samael pulls libxml2 + libxmlsec1 via FFI). The role-resolution layer reuses the same OIDC group-map (§5.5) — the SAML half is purely about the bind protocol.
 

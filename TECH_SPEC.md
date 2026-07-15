@@ -328,7 +328,7 @@ The §11.3 valuation claim (⭐⭐⭐⭐⭐, "zero-trust score" metric) and the 
 
 - **`clavenar-e2e`** gains: SVID issuance happy path; revocation kills next request within 1s; signed-row chain verification against a regulator-style export.
 - **`clavenar-chaos-monkey`** gains: `stolen_svid_replay`, `unattested_binary`, `expired_grant`, `cross_tenant_unfederated`. All four must produce specific, predicted verdicts.
-- **`clavenar-simulator`** has a `--delegation-mix` flag (env `SIM_DELEGATION_MIX`) — comma-separated pool of human `act.sub` values; each fire picks one at random and attaches a **real clavenar-identity-signed** `X-Clavenar-Grant`. The simulator self-mints an HS256 id_token (shared OIDC key) and exchanges it at identity's `/grant` for a signed grant per principal, minted against a dedicated `sim-grant-broker` agent it enrolls at boot; a background task keeps the per-principal pool warm. The proxy verifies the grant's Ed25519 signature against identity's JWKS (`CLAVENAR_PROXY_GRANT_JWKS_URL`), so an unsigned grant would reject `grant_invalid`; when identity is unreachable the simulator attaches no header (CN-only) rather than an invalid one. The console audit page renders the "Delegation: <human> via <agent>" badge with realistic variety.
+- **`clavenar-simulator`** has a `--delegation-mix` flag (env `SIM_DELEGATION_MIX`) — comma-separated pool of human `act.sub` values; each fire picks one at random and attaches a **real clavenar-identity-signed** `X-Clavenar-Grant`. The official-demo simulator self-mints an RS256 id_token with an externally mounted private key and `kid`, while identity receives only the matching public JWKS; it exchanges that token at identity's `/grant` for a signed grant per principal, minted against a dedicated `sim-grant-broker` agent it enrolls at boot. Strict asymmetric mode rejects HS256 or mixed verifier configuration. A background task keeps the per-principal pool warm. The proxy verifies the grant's Ed25519 signature against identity's JWKS (`CLAVENAR_PROXY_GRANT_JWKS_URL`), so an unsigned grant would reject `grant_invalid`; when identity is unreachable the simulator attaches no header (CN-only) rather than an invalid one. The console audit page renders the "Delegation: <human> via <agent>" badge with realistic variety.
 
 ### 11. What this spec deliberately does not include
 
@@ -1413,7 +1413,7 @@ Existing WebAuthn rows in the chain don't get the field retroactively; only rows
 The trust path is **mode-dependent** because WebAuthn already has a stronger primitive and we don't tear it out:
 
 - **WebAuthn mode (today, unchanged):** HIL is the credential authority. The console proxies WebAuthn ceremonies and shuttles HIL's session cookie back to the browser; subsequent `/decide` calls attach the HIL cookie and HIL stamps `decided_by` from the verified principal.
-- **OIDC / basic-admin / disabled:** HIL has no credential to verify, so console and HIL share a bearer secret (`CLAVENAR_HIL_DECIDE_TOKEN`). Console verifies OIDC (or basic-admin), stamps `decided_by`, and presents the bearer on `/decide`. HIL trusts the request-body `decided_by` *only when* a valid bearer is present; without the bearer, the existing `Authn::Disabled` fallback applies. Console refuses to boot if the configured mode requires the token and it is missing; HIL defaults to per-request validation (401 on a token-less decide) but operators can opt into the same boot-time guard by setting `CLAVENAR_HIL_REQUIRE_DECIDE_TOKEN=true` — HIL then refuses to start unless `CLAVENAR_HIL_DECIDE_TOKEN` is also set. The opt-in keeps backward compatibility while letting bearer-only deployments fail loudly on first start.
+- **Operator-mTLS / OIDC / basic-admin / SAML:** HIL has no console-session credential to verify, so console and HIL share a bearer secret (`CLAVENAR_HIL_DECIDE_TOKEN` or the mutually exclusive `CLAVENAR_HIL_DECIDE_TOKEN_FILE`). Console verifies the operator, stamps `decided_by`, and presents the bearer on `/decide`. HIL trusts the request-body `decided_by` *only when* a valid bearer is present; its separate auth-disabled compatibility path remains limited to explicitly configured development bridges. Console refuses to boot if the configured mode requires the token and it is missing; HIL defaults to per-request validation (401 on a token-less decide) but operators can opt into the same boot-time guard by setting `CLAVENAR_HIL_REQUIRE_DECIDE_TOKEN=true`. Production additionally sets each service's `REQUIRE_EXTERNAL_SECRETS` guard: HIL then requires its session, decision, and demo-session keys from regular bounded files even when HIL auth is disabled, while console requires its decision/demo files. Inline-plus-file ambiguity, short/known placeholder values, and structurally weak repeated values fail startup without logging their contents.
 
 The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via clavenar-identity SVIDs (see [Internal service mTLS](#internal-service-mtls) — **shipped** across all six rollout sessions plus dynamic workload-SVID refresh) gates every internal hop today.
 
@@ -1821,7 +1821,7 @@ Subdomains served by Caddy on the same host:
 - `demo.clavenar.com` — operator surface (console + demo-mint behind same domain).
 - `console.clavenar.com` — dev mirror (operator-only, `tls internal`).
 
-VPS firewall: Cloudflare IP ranges only on the public surfaces. The mint endpoint runs in-stack rather than at the CDN edge — chosen for consistency with the rest of the Rust stack, ability to emit ledger events from the mint event (the original CF-Worker plan couldn't write to NATS without a tunnel back through the VPS anyway), and simpler key rotation (one HS256 secret pinned in the compose YAML anchor `*demo-session-hs256` rather than split between Vault and Workers).
+VPS firewall: Cloudflare IP ranges only on the public surfaces. The mint endpoint runs in-stack rather than at the CDN edge — chosen for consistency with the rest of the Rust stack and ability to emit ledger events from the mint event (the original CF-Worker plan couldn't write to NATS without a tunnel back through the VPS anyway). One externally provisioned HS256 file is projected independently to the mint and three validators; no key value is embedded in Compose or a container environment.
 
 ### 5. Security model
 
@@ -1834,7 +1834,7 @@ nothing even inside Turnstile's own validity window.
 `clavenar-demo-mint` (Rust service, port 9200, behind Caddy at `/mint`) holds:
 
 - `CLAVENAR_DEMO_MINT_TURNSTILE_SECRET` — Cloudflare Turnstile siteverify secret.
-- `CLAVENAR_DEMO_MINT_HS256` — HS256 signing key, shared with `clavenar-console`, `clavenar-ledger`, and `clavenar-hil` for validation via the compose YAML anchor `*demo-session-hs256`. Rotated quarterly.
+- `CLAVENAR_DEMO_SESSION_HS256_FILE` — file containing the HS256 signing key, shared with `clavenar-console`, `clavenar-ledger`, and `clavenar-hil` through workload-specific secret projections. The corresponding inline variables remain development compatibility only; production strict-source guards reject them, weak/default values, and ambiguous dual sources.
 
 Mint shape:
 
@@ -1944,7 +1944,7 @@ The four operational tradeoffs that gated the green light, all confirmed at the 
 1. The week-2 kill-switch was real — receipts-only would have shipped if metrics had said so. Metrics cleared the threshold; the full handoff shipped.
 2. Single VPS, no HA, "best effort business hours" demo SLA is acceptable.
 3. `clavenar-chaos-catalog` extraction is in scope; chaos-monkey becomes a thin wrapper. **Held.**
-4. Shared HS256 JWT secret across the mint service + ledger + HIL is acceptable, rotated quarterly. **Held**, except substrate flipped from CF Worker to in-stack Rust mid-build (see §3.2 — the secret-rotation story didn't change).
+4. A shared HS256 JWT secret across the mint service + ledger + HIL is acceptable. **Held**, except custody moved from a tracked Compose anchor to externally provisioned, per-workload file projections. Coordinated rotation and explicit rejection of the prior key remain a separate operational control.
 
 ---
 
