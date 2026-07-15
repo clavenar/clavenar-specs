@@ -56,7 +56,7 @@ authoritative wire-contract detail still lives in those sections.
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
 | 10c | [Deception layer](#deception-layer) | shipped | v1.78.0 | `clavenar-identity` (`decoys` table + `/decoys` API + `clavenar_decoys` KV + curated seed), `clavenar-proxy` (KV mirror, `tools/list` splice, deterministic deny gate, containment publish), `clavenar-ledger` (no change — v3 `decoy.registered`/`decoy.retired` rows) |
-| 11 | [Internal service mTLS](#internal-service-mtls) | shipped (apps v0.8.3 → NATS v0.8.4 → six sessions through 2026-05-14) | v0.8.3, v0.8.4 | every backend (`clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-console`, `clavenar-simulator`) — every internal application hop is now mTLS-gated; NATS transport pinned TLS+mTLS in v0.8.4 |
+| 11 | [Internal service mTLS](#internal-service-mtls) | shipped through apps v0.8.3 and NATS v0.8.4; named website edge is the v1.99.0 release target | v0.8.3, v0.8.4; target v1.99.0 | every backend plus the website edge — every internal application hop is mTLS-gated; any CA-valid client certificate may reach merged `/verify`, while the exact website SPIFFE identity alone enables forwarded-source trust; NATS transport is TLS+mTLS |
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
@@ -3548,7 +3548,7 @@ policy / hil / identity`, `deep-review ↔ NATS`). Captures the
 substrate decision so the wire contract is pre-agreed when the
 implementation lands.
 
-**Module status:** **designed 2026-05-14; open questions resolved 2026-05-14** (see §10); **session 2 shipped 2026-05-14** (substrate provisioned: `gen_certs.sh` per-service certs + chart `tlsBundle` projection + identity allowlist extension); **session 3 shipped 2026-05-14** (brain pilot: `clavenar-brain` binds rustls + SPIFFE allowlist on `/inspect`; `clavenar-proxy` presents `service-proxy.{crt,key}` on the brain hop; verified end-to-end in dev with 3-way allowlist tests); **session 4 shipped 2026-05-14** (`clavenar-policy-engine` binds rustls + SPIFFE allowlist on `/evaluate` and `/policies/*`; `clavenar-proxy`'s `CLAVENAR_POLICY_URL` flips to `https://` and reuses the session-3 reqwest identity; helm chart `clavenar.backendEnvs` auto-injects the engine's TLS envs and probe/metrics helpers now prefer `healthPort` under mTLS); **session 5 shipped 2026-05-14** (ledger gains the dual-listener pattern: plain HTTP on `:8083` for browser/Caddy + health, stripped of internal routes; mTLS on `:8183` with SPIFFE-gated `/log` + `/audit/correlation/*` + `/stream/audit` + `/export*` + `/agents`; console grows `outbound_tls.rs` and a single `service-console` cert authenticates every backend hop; identity allowlist on policy-engine extended to include console; HIL + identity receive CODE shipped but deployment deferred to session 6 due to simulator's plain-HTTP outbound dependency); **session 6 shipped 2026-05-14** (simulator + proxy gain outbound mTLS for the identity + HIL hops; HIL flips to single-mode mTLS on `:8084` with health on `:9084`; identity adopts the dual-listener pattern on `:8086`/`:8186`; every internal application hop is now mTLS-gated). The original perimeter posture — proxy, console,
+**Module status:** **designed 2026-05-14; open questions resolved 2026-05-14** (see §10); **session 2 shipped 2026-05-14** (substrate provisioned: `gen_certs.sh` per-service certs + chart `tlsBundle` projection + identity allowlist extension); **session 3 shipped 2026-05-14** (brain pilot: `clavenar-brain` binds rustls + SPIFFE allowlist on `/inspect`; `clavenar-proxy` presents `service-proxy.{crt,key}` on the brain hop; verified end-to-end in dev with 3-way allowlist tests); **session 4 shipped 2026-05-14** (`clavenar-policy-engine` binds rustls + SPIFFE allowlist on `/evaluate` and `/policies/*`; `clavenar-proxy`'s `CLAVENAR_POLICY_URL` flips to `https://` and reuses the session-3 reqwest identity; helm chart `clavenar.backendEnvs` auto-injects the engine's TLS envs and probe/metrics helpers now prefer `healthPort` under mTLS); **session 5 shipped 2026-05-14** (ledger gains the dual-listener pattern: plain HTTP on `:8083` for browser/Caddy + health at shipment, stripped of internal routes; mTLS on `:8183` with SPIFFE-gated `/log` + `/audit/correlation/*` + `/stream/audit` + `/export*` + `/agents`; the v1.99.0 named-edge target moves Caddy `/verify` to `:8183`; console grows `outbound_tls.rs` and a single `service-console` cert authenticates every backend hop; identity allowlist on policy-engine extended to include console; HIL + identity receive CODE shipped but deployment deferred to session 6 due to simulator's plain-HTTP outbound dependency); **session 6 shipped 2026-05-14** (simulator + proxy gain outbound mTLS for the identity + HIL hops; HIL flips to single-mode mTLS on `:8084` with health on `:9084`; identity adopts the dual-listener pattern on `:8086`/`:8186`; every internal application hop is now mTLS-gated). The original perimeter posture — proxy, console,
 and deep-review trusting the docker network or k8s
 `NetworkPolicy` for caller authenticity, threat-model tagged under
 each layer's STRIDE "Tampering" axis — is the gap this section
@@ -3556,6 +3556,15 @@ agreed to close. After session 6 the application hops are
 mTLS-gated end-to-end; the NATS transport (B7.5) shipped in v0.8.4
 alongside the application hops — every internal leg in the stack is
 now mTLS-authenticated, no plain-text fallback remains.
+
+**Named website-edge hardening (v1.99.0 release target; pending acceptance).**
+Production Caddy authenticates to Ledger `:8183` with a CA-valid
+`service/website` certificate, replaces untrusted forwarding input, and may
+reach the merged `/verify` route. Any CA-valid client certificate may reach
+that merged route; the exact website SPIFFE identity governs only whether
+Ledger trusts the replaced forwarding value. That identity is deliberately
+absent from Ledger's internal caller-prefix policy, so trusted forwarding never
+grants `/log`, audit, stream, export, or agent-enumeration authority.
 
 ### 1. Hops in scope
 
@@ -3566,6 +3575,7 @@ now mTLS-authenticated, no plain-text fallback remains.
 | proxy → hil `/pending` | per-pending | high — operator queue manipulation |
 | proxy → identity `/sign` | per-request | **highest — signing oracle** |
 | console → ledger / hil / policy-engine / identity | per-page | medium — read + mutate surface |
+| website edge → ledger `/verify` | visitor-triggered | high-cost aggregate read — forwarded limiter identity must be authenticated without granting internal routes |
 | deep-review → ledger (bundle fetch, if added) | per-finding | medium |
 | service → NATS pub/sub (`clavenar.audit`, `clavenar.forensic`) | continuous | **separate slice — see §8** |
 
@@ -3608,7 +3618,7 @@ for option (A), via §4.
 
 SPIFFE URI: `spiffe://clavenar.local/service/<name>` where `<name>` is
 the kebab-cased component (`proxy`, `brain`, `policy-engine`, `hil`,
-`identity`, `ledger`, `deep-review`, `console`). Identity reserves
+`identity`, `ledger`, `deep-review`, `console`, `website`). Identity reserves
 the `service/*` namespace alongside the existing `agent/*` and
 `proxy/*` namespaces; the registration mode (`enforce` /  `warn`)
 applies uniformly.
@@ -3640,6 +3650,34 @@ Client side (proxy, console, deep-review):
 is the SAN URI on the verified client cert. Adding a header would
 let an attacker who breaches one server forge it. (Equivalent posture
 to the existing proxy-mTLS gate on `/mcp`.)
+
+#### 3.1 Named trusted-forwarder contract
+
+Forwarding trust is an application identity, not an IP range or project-network
+membership. Official production and secure-development profiles set
+`CLAVENAR_LEDGER_REQUIRE_TRUSTED_PROXY=true` and the single exact
+`CLAVENAR_LEDGER_TRUSTED_PROXY_SPIFFE=spiffe://clavenar.local/service/website`.
+In that strict mode, a missing or invalid peer SPIFFE identity, an empty trusted
+identity, or a wildcard, prefix, list, or non-SPIFFE form fails before Ledger
+binds. Evaluation/default deployments may leave strict mode false and omit the
+trusted identity, which disables forwarded-source trust; configuring the
+trusted identity while strict mode is false is rejected. The trusted identity
+is evaluated only after client-certificate verification and is independent of
+`CLAVENAR_LEDGER_ALLOWED_CALLERS`.
+
+Production Caddy connects to `https://ledger:8183` with its website
+certificate, private key, and CA, verifies the Ledger server name, and
+**replaces** incoming
+`X-Forwarded-For` with the direct client address. It never appends visitor input.
+Ledger accepts one normalized forwarded address only from the exact website
+SVID. Direct/plain callers cannot select a limiter key: forwarded fields are
+ignored and all such full-chain walks share a conservative bucket. Full-chain
+walks permit 3 requests per trusted source per minute and 12 globally per
+minute, allow one walk in flight, and retain at most 64 active trusted-source
+windows. The merged `/verify` route accepts any CA-valid client certificate;
+the website SVID test fixture demonstrates that access, while `POST /log` and
+every internal route return 401 because that identity is intentionally absent
+from the internal caller-prefix policy.
 
 ### 4. Bootstrap
 
@@ -3722,6 +3760,22 @@ NetworkPolicy (`networkPolicy.enabled=true`) becomes
 layer that limits *which pods* can attempt a TLS handshake, on top
 of the cryptographic mTLS check.
 
+The chart's production profile makes the named-forwarder boundary explicit:
+Ledger receives the strict settings above, its application Service exposes
+`8183`, and its internal caller-prefix policy remains limited to the canonical
+profile-governed SPIFFE prefixes for proxy, console, deep-review, and the Helm
+simulator where enabled. Compose projects only `ca.crt` and
+`service-website.{crt,key}` into Caddy and places Caddy on a dedicated,
+Internet-capable `edge` network with only its required Ledger, console, and
+demo-mint upstreams; it cannot resolve or reach NATS on the default network.
+Helm requires the separately deployed website workload and exact Ledger ingress
+selector; the operator is responsible for projecting only the matching website
+certificate, private key, and CA into that external workload. Production-profile
+rendering fails when TLS projection, exact identity, Service target port, or
+NetworkPolicy peer/port is absent or widened. Development may omit the edge,
+but must retain an explicit secure Ledger policy rather than silently disabling
+strict validation.
+
 ### 8. Out of scope (this section)
 
 - **NATS pub/sub TLS.** ~~Substrate-level (`nats:2 --tls`), not
@@ -3748,7 +3802,7 @@ of the cryptographic mTLS check.
 
 ### 9. Implementation roadmap
 
-Six sessions, paced to keep blast radius small:
+Seven sessions, paced to keep blast radius small:
 
 | # | Scope | Touches | Status |
 |---|---|---|---|
@@ -3756,8 +3810,9 @@ Six sessions, paced to keep blast radius small:
 | 2 | Extend `gen_certs.sh` to mint per-service bootstrap certs. Helm chart `proxyTls.secretName` → `tlsBundle.secretName` with per-pod `items:` projection. Identity allowlist gains `spiffe://clavenar.local/service/`. | `clavenar-proxy/scripts/gen_certs.sh`, `clavenar-charts/`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.7.3 |
 | 3 | **Brain pilot** — `axum-server` + `rustls` TLS receive path on the application port; SPIFFE SAN allowlist verifier. Proxy gains client-cert outbound on `/inspect`. Plain-HTTP health port preserved for kubelet (Q4 decision). | `clavenar-brain`, `clavenar-proxy` | **Shipped** v0.8.0 |
 | 4 | **Policy-engine receive** — mirror brain pattern: rustls + SPIFFE allowlist on `:8082`, plain-HTTP `/health` + `/readyz` + `/metrics` on `:9082`. Proxy's existing outbound mTLS (reqwest identity from session 3) auto-covers the new hop via URL scheme flip; no proxy code change. Helm chart `clavenar.backendEnvs` auto-injects the engine's TLS envs when `tlsBundle.secretName` is set, and the probe + metrics helpers now prefer `healthPort` so kubelet probes land on the plain port under TLS. Hil + ledger + console outbound are deferred to session 5 because hil/ledger both ship browser-facing routes on the same listener (WebAuthn approver UI, demo-session-scoped `/audit` reads); coupling them with the console outbound rollout keeps the dual-mode listener question in one place. Deep-review needs no receive-side mTLS — it consumes NATS only, has no inter-service inbound HTTP. | `clavenar-policy-engine`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.1 |
-| 5 | **Ledger receive + console outbound.** Ledger gains the dual-listener pattern: plain HTTP on `:8083` (Caddy + browser `/verify` + `/audit/{agent_id}*` + kubelet probes + Prometheus) **strips** the internal write/read subset; mTLS on `:8183` serves the full router with SPIFFE-allowlist middleware on `/log`, `/audit/correlation/*`, `/stream/audit`, `/export*`, `/agents`. Console grows an `outbound_tls` module mirroring `clavenar-proxy/src/fork.rs::OutboundTls`; a single `service-console` cert authenticates every backend hop via reqwest `Identity::from_pem`, injected into `LedgerClient`/`HilClient`/`AgentsClient`/`PoliciesClient`/`SimClient` through their existing `with_http_client`. `CLAVENAR_CONSOLE_LEDGER_URL` flips to `https://...:8183`; `CLAVENAR_CONSOLE_POLICY_ENGINE_URL` flips scheme (latent session-4 bug — policy-engine has been TLS on `:8082` since v0.8.1, the plain-HTTP URL was reaching the wrong listener). Identity allowlist extended to include `service/console`. HIL + identity receive-side mTLS **CODE shipped** (`mtls.rs`, `tls.rs`, `build_app_split`, dual-listener `main.rs` on all three) but **deployment deferred to session 6** — simulator's auto-decider sidecar calls HIL/identity over plain HTTP and updating its outbound TLS path is out of scope here. | `clavenar-ledger`, `clavenar-console`, `clavenar-hil`, `clavenar-identity`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.2 |
+| 5 | **Ledger receive + console outbound (historical shipment shape).** Ledger gains the dual-listener pattern: plain HTTP on `:8083` (then used by Caddy/browser aggregate reads, kubelet probes, and Prometheus) **strips** the internal write/read subset; mTLS on `:8183` serves the full router with SPIFFE-allowlist middleware on `/log`, `/audit/correlation/*`, `/stream/audit`, `/export*`, `/agents`. Session 7 supersedes the Caddy part by moving edge `/verify` to `:8183`. Console grows an `outbound_tls` module mirroring `clavenar-proxy/src/fork.rs::OutboundTls`; a single `service-console` cert authenticates every backend hop via reqwest `Identity::from_pem`, injected into `LedgerClient`/`HilClient`/`AgentsClient`/`PoliciesClient`/`SimClient` through their existing `with_http_client`. `CLAVENAR_CONSOLE_LEDGER_URL` flips to `https://...:8183`; `CLAVENAR_CONSOLE_POLICY_ENGINE_URL` flips scheme (latent session-4 bug — policy-engine has been TLS on `:8082` since v0.8.1, the plain-HTTP URL was reaching the wrong listener). Identity allowlist extended to include `service/console`. HIL + identity receive-side mTLS **CODE shipped** (`mtls.rs`, `tls.rs`, `build_app_split`, dual-listener `main.rs` on all three) but **deployment deferred to session 6** — simulator's auto-decider sidecar calls HIL/identity over plain HTTP and updating its outbound TLS path is out of scope here. | `clavenar-ledger`, `clavenar-console`, `clavenar-hil`, `clavenar-identity`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.2 |
 | 6 | **HIL + identity receive deployment.** `gen_certs.sh` SERVICES list grows `simulator`; the script now mints `service-simulator.{crt,key}` alongside every other workload. `clavenar-simulator` grows `outbound_tls.rs` mirroring console, plus a shared `reqwest::Client` threaded into `SvidMinter`, `enroll_personas`, and `try_spawn_hil_sidecar` so all three s2s callsites pool one TLS connection per destination. `clavenar-proxy` follows: `OutboundTls` gets `Clone`, a new `fork::build_outbound_client(timeout, OutboundTls)` helper is shared by `SigningClient`, `A2aClient`, and the HIL poll path so identity and HIL hops authenticate as `service-proxy`. Compose flips `CLAVENAR_HIL_URL` (proxy, console, simulator), `CLAVENAR_IDENTITY_URL`/`CLAVENAR_SIM_SVID_URL`/`CLAVENAR_SIM_ENROLL_IDENTITY_URL` (all callers) to `https://`; HIL gates port `:8084` behind rustls with health on `:9084`; identity adopts the ledger dual-listener pattern (plain `:8086` strips internal routes, mTLS `:8186` carries full surface). Helm `clavenar.backendEnvs` auto-injects every flip when `tlsBundle.secretName` is set; `services.hil.healthPort`/`services.identity.mtlsPort` expose the new ports. | `clavenar-proxy/scripts/gen_certs.sh`, `clavenar-simulator`, `clavenar-proxy`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml`, `clavenar-specs/TECH_SPEC.md` | **Shipped** v0.8.3 |
+| 7 | **Named website edge.** Cert transport matrix adds `service-website`; production Caddy replaces forwarding input and authenticates to Ledger `:8183`; Ledger validates one exact trusted-forwarder SPIFFE independently from its canonical internal caller prefixes, while merged `/verify` accepts any CA-valid client certificate. Compose projects only the website certificate, private key, and CA and isolates Caddy on the dedicated `edge` network; Helm validates the exact external website selector and Ledger mTLS-only ingress while the operator owns that external workload's certificate projection. Canonical smoke proves certificate-free isolation, edge-to-NATS isolation, `/verify` success plus `/log` 401 for website, bounded and spoof-resistant rate limiting, strict startup negatives, and an independent exact-origin release boundary. | `clavenar-ledger`, `clavenar-proxy/scripts/gen_certs.sh`, `clavenar-e2e`, `clavenar-charts`, `clavenar-specs` | **Release target; pending acceptance** v1.99.0 |
 
 The dynamic SVID workload-cert refresh path (option A's full form)
 is **v1.x+3** — a follow-up that swaps bootstrap-cert reads for

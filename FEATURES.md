@@ -149,7 +149,20 @@ The chaos-monkey ordering rule: `velocity_breaker` runs last because the policy 
 
 **Concept.** Append-only forensic store. Every security verdict, every HIL transition, every agent lifecycle event becomes a row in a SHA-256 hash-chained SQLite database. The chain is the regulator-grade evidence: tamper with any historical row and every later row's hash mismatches.
 
-**Implementation.** `clavenar-ledger:8083`. Hash formula:
+**Implementation.** `clavenar-ledger` uses a split router: plain `:8083` for
+aggregate/diagnostic reads and mTLS `:8183` for the full application surface.
+Internal routes admit only canonical, profile-governed workload SPIFFE prefixes;
+the Compose profile uses proxy, console, and deep-review, while Helm additionally
+admits its simulator workload. The merged mTLS `/verify` route accepts any
+CA-valid client certificate. Separately, only exact
+`spiffe://clavenar.local/service/website` enables trusted forwarding: Caddy
+replaces (never appends) untrusted `X-Forwarded-For`, while direct/plain callers'
+forwarding fields are ignored and share one conservative full-walk limiter
+bucket. Full walks allow 3 requests per trusted source per minute, 12 globally
+per minute, one walk in flight, and at most 64 active trusted-source windows.
+Trusted forwarding does not grant internal authority: the website-certificate
+fixture proves `/verify` succeeds, but website `POST /log` returns 401 without
+mutation. Hash formula:
 
 ```
 genesis        = 64 × "0"
@@ -1591,7 +1604,7 @@ E2E_KEEP_LOGS=1 ./repos/clavenar-e2e/dev/run.sh         # debug
 
 **Concept.** The console-with-data demo. Boots everything in containers + the simulator + upstream-stub; surfaces a populated console for screenshots, evaluator walkthroughs, and operator practice. Identity boots in `enforce` registration mode end-to-end so the demo matches the production default.
 
-**Implementation.** `repos/clavenar-e2e/prod/docker-compose.yml --profile stack`. First cold build is ~15 min (release profile, no shared cargo target across the six service Dockerfiles). Subsequent runs are image-cached. `run-stack-smoke.sh` is the lighter health check; `run-stack-e2e.sh` is the full assertion suite (see §11.8).
+**Implementation.** `repos/clavenar-e2e/prod/docker-compose.yml --profile stack`. First cold build is ~15 min (release profile, no shared cargo target across 12 distinct build contexts). Subsequent runs are image-cached. The production profile gives Caddy only the website certificate, private key, and CA, targets Ledger mTLS `:8183`, and requires one exact named trusted forwarder for forwarded-source trust while merged `/verify` accepts any CA-valid certificate. Caddy runs only on a dedicated Internet-capable `edge` network with its required Ledger, console, and demo-mint upstreams; it cannot resolve NATS on the default network. The website identity stays outside Ledger's canonical internal caller prefixes. The Kubernetes profile fixes the Ledger Service port and exact website→Ledger NetworkPolicy; the operator remains responsible for projecting the separately deployed website's matching certificate, private key, and CA. A missing or widened chart-controlled boundary fails render. `run-stack-smoke.sh` is the lighter health/boundary check; `run-stack-e2e.sh` is the full assertion suite (see §11.8).
 
 **Verify.**
 
@@ -1704,6 +1717,33 @@ CLAVENAR_DEV_CERTS=1 cargo run --bin clavenar-proxy
 cargo run -p clavenar-brain --bin clavenar-brain-bench -- --baseline benchmark/baseline.json
 # Mock-mode scoreboard with deterministic floor enforced
 ```
+
+### 11.12 Trusted-forwarder and exact-origin boundary probes
+
+**Concept.** Treat a forwarding header as authenticated application data and
+prove both the in-network privilege boundary and the outside-host firewall/NAT
+boundary for each exact release.
+
+**Implementation.** Canonical prod/dev stack smoke invokes
+`check-ledger-trusted-proxy-boundaries.sh` before any other full-chain walk. A
+fresh read-only, capability-free container with no mounts, certs, secrets, or
+host environment proves the certificate-free route matrix and direct spoof
+resistance. A separate least-privilege website-cert fixture on production's
+actual `edge` network proves any CA-valid certificate can reach mTLS `/verify`,
+while the exact website SPIFFE identity alone controls forwarded-source trust;
+`/log` returns 401 without mutation and NATS cannot be resolved from that edge.
+Production then proves Caddy header replacement (`200/200/200/429`), the
+3/source/minute behavior, one full-chain walk in flight, the 12/global/minute
+boundary, and strict startup negatives. Ledger source tests and the governed
+listener inventories separately enforce the 64-window ceiling. The secret-free
+manual `external-boundary.yml` workflow repeats the public-port,
+internal-port, no-cert 8443, exact-version/route, and forwarding proof from a
+GitHub-hosted runner pinned to the origin IPv4. Public HTTPS probes verify the
+origin certificate and reject malformed or non-canonical semantic versions;
+host infrastructure such as SSH is declared and reported separately.
+
+**Verify.** Run the canonical stack smoke, then dispatch the independent
+workflow with the exact deployed origin and semver.
 
 ---
 
