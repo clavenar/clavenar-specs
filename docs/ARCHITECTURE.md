@@ -105,9 +105,11 @@ flowchart TD
   end
 
   Agent -->|mTLS MCP| Proxy
-  Proxy -->|HTTP POST /inspect| Brain
+  Proxy -->|mTLS POST /inspect| Brain
   Brain -->|intent_score verdict| Proxy
-  Proxy -->|HTTP POST /evaluate — carries intent_score| Policy
+  Proxy -->|mTLS POST /evaluate — carries intent_score| Policy
+  Policy -->|mTLS POST /explain-pattern — exact policy-engine SVID| Brain
+  Console -->|mTLS narrate-decision + model-snapshot — exact console SVID| Brain
   Proxy -->|HTTP POST /pending — Yellow tier| HIL
   Proxy -->|HTTP /sign + /actor-token| Identity
   Proxy -->|annotate blast-radius| Sandbox

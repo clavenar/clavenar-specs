@@ -84,10 +84,27 @@ The proxy returns 403, and the upstream stub log shows zero invocations for that
 
 **Implementation.** `clavenar-brain:8081`. Wire surface: `POST /inspect`, body `BrainRequest { agent_id, correlation_id, jsonrpc fields... }`, response `{ authorized, intent_category, reason }`. Mock mode triggered by `CLAVENAR_BRAIN_MOCK_MODE=true` (or the legacy `ANTHROPIC_API_KEY=mock-key` sentinel) — used by e2e to avoid burning provider tokens; falls back to regex injection detection + bigram embedding similarity. Per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`) + Voyage embedding fallback prevent latency cascades.
 
+The same mTLS application port carries three auxiliary reads/operations with
+exact caller identities: policy-engine alone may `POST /explain-pattern`, and
+console alone may `POST /narrate-decision` or `GET /model-snapshot`. The
+general inspect/scan SPIFFE prefix list cannot grant these capabilities. The
+plain `:9081` listener contains only `/`, `/health`, `/readyz`, and `/metrics`;
+TLS-disabled compatibility mode combines the routers on loopback only. Explain
+and narrate strict profiles explicitly pin the canonical policy-engine and
+console caller URI settings and fail startup on omissions, prefixes, or lists.
+The two operations share a configurable 16 KiB body cap, enforce route-specific field
+caps, admit at default fixed-minute rates of 20 and 60, reserve against one
+shared default 5,000,000-micro-USD fixed-hour provider budget, and wrap the
+whole provider future in a 5-second deadline. Body/field failures return
+`413`/`400`, admission failures `429`, and provider/deadline failures `503`.
+Both callers treat every failure as loss of optional enrichment: the miner
+keeps its template and the console leaves the non-evidentiary annotation or
+live canary anchor absent.
+
 **Verify.**
 
 ```bash
-# Direct probe (with the runner's bundled e2e setup)
+# Direct probe in the loopback-only plain compatibility mode
 curl -X POST http://localhost:8081/inspect \
   -H 'content-type: application/json' \
   -d '{"agent_id":"test","correlation_id":"...","method":"tools/call","params":{...}}'

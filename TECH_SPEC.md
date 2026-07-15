@@ -2317,7 +2317,24 @@ Candidates whose `catalog_regressions > 0` are dropped before
 ranking. The remaining list is sorted descending by `score`, with
 stable tie-break on `rule_name`.
 
-**`POST /explain-pattern` (brain, plain-HTTP health port)**
+**Brain auxiliary application boundary.** In TLS deployments,
+`/explain-pattern`, `/narrate-decision`, and `/model-snapshot` are served on
+Brain's mTLS application listener (`:8081`), not its health listener. Caller
+authorization is exact per route: `/explain-pattern` accepts only
+`spiffe://clavenar.local/service/policy-engine`; `/narrate-decision` and
+`/model-snapshot` accept only `spiffe://clavenar.local/service/console`.
+Configured SPIFFE prefixes for Brain's inspect/scan surface cannot authorize
+these routes. The plain `:9081` listener contains only `/`, `/health`,
+`/readyz`, and `/metrics`. With TLS disabled, the combined compatibility
+listener has no certificate authorization but is forced to a loopback bind
+(`127.0.0.1:8081` by default); it is not a network deployment mode.
+Strict profiles must state both canonical identities explicitly as
+`CLAVENAR_BRAIN_EXPLAIN_CALLER_SPIFFE=spiffe://clavenar.local/service/policy-engine`
+and `CLAVENAR_BRAIN_NARRATE_CALLER_SPIFFE=spiffe://clavenar.local/service/console`.
+Missing, empty, prefix-shaped, list-shaped, or alternate-scheme values fail
+before either listener binds.
+
+**`POST /explain-pattern` (brain mTLS application port)**
 
 ```json
 {
@@ -2345,13 +2362,18 @@ request from aggregated metrics only, and the prompt itself refuses
 to use any raw request data if it ever leaks through. A `tests/`
 assertion pins both halves of the contract.
 
-The endpoint lives on the brain's plain-HTTP health listener (port
-9081 by default) so the policy-engine miner can call it without
-mTLS. The wire shape contains no PII, the health port is internal-
-only by network topology, and the only caller is the admin-gated
-miner — at most 20 calls per mine run. Brain unconfigured or
-unreachable → miner falls back to template explanations and stamps
-each candidate with `brain_enriched: false`.
+Admission is bounded before provider dispatch. The JSON body is capped at
+16 KiB by default (configurable, with a 1 MiB hard maximum); `kind` is 1–64
+characters, `tool_type` is 1–128 characters, and the serialized `threshold`
+value is at most 4 KiB. Invalid fields return `400` and an oversized body
+returns `413`. The success shape above is unchanged.
+
+The policy-engine uses its current workload SVID for each HTTPS request and
+never downgrades an HTTPS URL to plaintext. It bounds the complete exchange to
+2 seconds and reads at most 64 KiB of response data. Missing identity,
+transport failure, timeout, oversized/invalid response, or any non-2xx status
+leaves the deterministic template explanation in place and stamps the
+candidate `brain_enriched: false`.
 
 **Accept flow (no new endpoint).** Operator clicks Accept on a
 candidate card → console POSTs the candidate's `rego_body` to the
@@ -2367,7 +2389,7 @@ drafts skip the candidate-engine build step entirely — the body
 still passes `validate()`, but compose-time composition against the
 active bundle is deferred until activation.
 
-**Decision narratives — `POST /narrate-decision` (brain, plain-HTTP health port)**
+**Decision narratives — `POST /narrate-decision` (brain mTLS application port)**
 
 After a human decides a HIL pending, the console POSTs the decision
 context to brain's `/narrate-decision` and writes the returned summary
@@ -2388,13 +2410,37 @@ Response on 200: `{ "incident_summary": "Denied: …" }` (≤ 240 chars).
 only (verdict, the operator's reason, the risk summary, sandbox
 severity/operation-class/targets) — never the raw payload, agent ID,
 correlation ID, or tool arguments. `NarrateDecisionRequest`
-(`clavenar-brain/src/wire.rs`) is the boundary, the handler caps the
-free-text fields, the prompt refuses leaked data, and a `tests/`
+(`clavenar-brain/src/wire.rs`) is the boundary. `verdict` is exactly
+`approve`, `deny`, or `modify`; the non-empty `risk_summary` is capped at 500
+characters; `decision_reason` at 300; sandbox severity and operation class at
+64 each; and the request carries at most 12 sandbox targets of 256 characters
+each. The shared JSON-body cap applies before these field checks. Invalid
+fields return `400`, an oversized body returns `413`, and the success shape
+above remains unchanged. The prompt refuses leaked data and a `tests/`
 assertion pins both halves. The rail has two console consumers — the
 per-decision `incident_summary` annotation and the incident post-mortem
 draft (§7.8), the latter feeding it case-level aggregates only — and
-each pins the no-identifier contract on its own side. Same plain-HTTP health port (9081) and
-internal-by-topology posture as `/explain-pattern`.
+each pins the no-identifier contract on its own side.
+
+**Provider admission controls.** Explain and narrate have independent
+process-local fixed-minute limits (defaults: 20 and 60 accepted requests,
+respectively) and share a fixed-hour provider-spend budget (default
+5,000,000 micro-USD). Before a live provider call, Brain atomically reserves a
+conservative upper bound derived from the configured provider/model price,
+the capped input plus system prompt, and the route's maximum output tokens.
+A successful call reconciles the reservation to reported usage; timeout or
+ambiguous failure retains the full reservation because provider work may have
+been billed. Exhausting either the route rate or shared spend budget returns
+`429`. The entire provider future, including non-HTTP implementations, has a
+5-second default deadline and a 30-second configuration maximum; provider
+error, timeout, or invalid output returns `503`. Production profiles require
+all five numeric controls to be set explicitly at startup. The relevant
+settings are `CLAVENAR_BRAIN_EXPLAIN_RATE_LIMIT_PER_MINUTE`,
+`CLAVENAR_BRAIN_NARRATE_RATE_LIMIT_PER_MINUTE`,
+`CLAVENAR_BRAIN_AUX_SPEND_BUDGET_MICRO_USD_PER_HOUR`,
+`CLAVENAR_BRAIN_AUX_TIMEOUT_MILLIS`, and
+`CLAVENAR_BRAIN_AUX_BODY_LIMIT_BYTES`, gated by
+`CLAVENAR_BRAIN_REQUIRE_AUX_CONTROLS`.
 
 **Non-evidentiary annotation.** `incident_summary` is an annotation,
 never evidence: it is excluded from the chain-hashable HIL forensic
@@ -2402,7 +2448,12 @@ event and from `/verify` — the deterministic `decision_reason` stays the
 compliance record. Generation is best-effort and console-orchestrated
 off the decide hot path (a fire-and-forget task after the decision
 commits); brain unset/down/slow simply leaves it unset, and
-`CLAVENAR_CONSOLE_BRAIN_URL` gates the whole feature. The narrative is
+`CLAVENAR_CONSOLE_BRAIN_URL` gates the whole feature. In TLS deployments this
+is the mTLS application base (normally `https://brain:8081`); the console
+loads its current workload SVID per call and refuses a plaintext URL when
+workload identity is enabled. The console bounds the request to 5 seconds and
+reads at most 64 KiB of response data; it treats every non-2xx or
+transport/decode failure as "no annotation." The narrative is
 surfaced, with an explicit "annotation, not evidence" disclaimer, on the
 console audit-detail page; HIL exposes the decided pending for that join
 via `GET /pending/by-correlation/{correlation_id}` (most-recent decided
@@ -5315,14 +5366,16 @@ are not part of this view — the chain carries no per-row inspection duration
 chain-derived canary covers deny-rate, intent distribution, signal mix, and
 model identity.
 
-`GET /model-snapshot` (brain, plain-HTTP health port) reports the Brain's
+`GET /model-snapshot` (brain mTLS application port) reports the Brain's
 currently-configured model identity — `brain_version`, `mock_mode`, the
 six-detector `provider:model` map (the same map a v4 verdict commits in its
 evidence), `embedding_model`, and `injection_heuristic_level`. No secrets,
-no PII; it shares the plain-health-port posture of `/explain-pattern` and
-`/narrate-decision` (reachable over the compose network without an outbound
-client cert), so the console can render the canary's live "what am I running
-now" baseline beside the chain-derived windows.
+no PII. It accepts only the exact
+`spiffe://clavenar.local/service/console` caller on `:8081`; the general Brain
+allowlist does not broaden access. The console uses its current workload SVID
+and a 5-second request deadline. Any non-2xx, transport, timeout, or decode
+failure omits the best-effort live anchor while leaving the chain-derived
+canary intact. The plain `:9081` health listener does not mount this route.
 
 #### Silence watchdog (Shadow Agent Radar)
 
