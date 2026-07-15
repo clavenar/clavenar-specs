@@ -1819,7 +1819,7 @@ Subdomains served by Caddy on the same host:
 
 - `clavenar.com` — marketing site (static).
 - `demo.clavenar.com` — curated demo surface (console + demo-mint behind same domain).
-- `console.clavenar.com` — temporary compatibility landing: only `GET`/`HEAD /` redirects to `https://demo.clavenar.com/demo`, with any query dropped; all other requests return 404. It never proxies the native operator listener, which remains loopback-only and reachable through an SSH tunnel with native mTLS.
+- `console.clavenar.com` — reserved DEV/operator hostname, served as a static 404 during the native-mTLS bootstrap phase. It never proxies the operator listener, which remains loopback-only and reachable through an SSH tunnel with native mTLS.
 
 VPS firewall: Cloudflare IP ranges only on the public surfaces. The mint endpoint runs in-stack rather than at the CDN edge — chosen for consistency with the rest of the Rust stack and ability to emit ledger events from the mint event (the original CF-Worker plan couldn't write to NATS without a tunnel back through the VPS anyway). One externally provisioned HS256 file is projected independently to the mint and three validators; no key value is embedded in Compose or a container environment.
 

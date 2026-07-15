@@ -147,12 +147,10 @@ flowchart TD
 
 Single VPS runs both `prod` (`clavenar-prod` compose project, standard
 ports) and `dev` (`clavenar-dev`, +10000 offset). The production website/Caddy
-service is the only browser edge; dev has no website vhost. During the operator
-bootstrap phase, only `GET`/`HEAD /` on `console.clavenar.com` redirects to
-`https://demo.clavenar.com/demo`, dropping any query. Every other request on
-that hostname returns 404. The native production `:8085` and dev `:18085`
-operator listeners are host-loopback-only and require mTLS through an SSH
-tunnel.
+service is the only browser edge; dev has no website vhost. The reserved
+DEV/operator hostname `console.clavenar.com` is a static 404 during the
+bootstrap phase. The native production `:8085` and dev `:18085` operator
+listeners are host-loopback-only and require mTLS through an SSH tunnel.
 
 ```mermaid
 flowchart LR
@@ -206,7 +204,7 @@ flowchart LR
 
   Browser -->|clavenar.com| HostCaddy
   Browser -->|demo.clavenar.com| HostCaddy
-  Browser -->|console.clavenar.com — GET or HEAD root only| HostCaddy
+  Browser -->|console.clavenar.com — static 404| HostCaddy
   Operator -->|SSH tunnel + native mTLS — loopback 8085| P_console
   Operator -->|SSH tunnel + native mTLS — loopback 18085| D_console
   Agent -->|mTLS — 8443| P_proxy
