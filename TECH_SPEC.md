@@ -130,6 +130,22 @@ Agent instance SVID (≤1h TTL, hardware-attested)
 Actor token (audience-bound, ≤60s TTL, single-use)
 ```
 
+Actor tokens use RFC 7515 compact JWS. The protected header is exactly the
+strict JSON object `{ "alg": "EdDSA", "kid": "<bundle-key-id>", "typ":
+"JWT" }`; Ed25519 signs the ASCII `base64url(protected).base64url(claims)`
+input. Claims are the strict object `{ iss, sub, aud, scope, iat, exp, jti }`:
+the first three and `jti` are bounded non-empty strings, `scope` is a
+non-empty unique string array, and `iat`/`exp` are integers with a positive
+signed lifetime of at most 60 seconds.
+
+Redemption selects the expected issuer trust domain from the typed request
+binding, requires a fresh peer bundle, resolves one exact `kid` in that bundle,
+and verifies an Ed25519 SPKI key before trusting claims. It then requires exact
+issuer, subject, audience, scope, lifetime, and bounded-clock-skew matches.
+Malformed structures, unsupported algorithms/types, unknown or duplicate keys,
+bad signatures, and invalid claims fail before single-use replay state changes.
+Legacy tokens that signed only the decoded claims bytes are rejected.
+
 The delegation grant is the missing piece in today's architecture. It carries:
 
 ```json
@@ -167,6 +183,7 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 | `POST` | `/svid` | Issue an instance SVID against an attestation document | Attestation evidence (§6) |
 | `POST` | `/grant` | Exchange OIDC `id_token` + agent SVID → delegation grant | OIDC `id_token` + SVID mTLS |
 | `POST` | `/actor-token` | Mint an audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed request binding |
+| `POST` | `/actor-token/redeem` | Verify and consume one audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed expected binding |
 | `POST` | `/sign` | Clavenar-side signing of a finalized verdict (§5) | Exact Proxy mTLS endpoint capability + typed request binding |
 | `POST` | `/revoke` | Revoke an instance SVID or a delegation grant (`{"kind":"svid","svid_id":...}` / `{"kind":"grant","jti":...}`, optional `reason`). Sets `revoked_at` + emits `svid.revoked` / `grant.revoked` chain v3 event. | Admin capability (`agents:admin`) — spec previously named "Operator WebAuthn" but identity terminates on OIDC + caps; admin is the cap-equivalent kill switch (matches `decommission`). |
 | `GET`  | `/jwks.json` | Public keys for grant/actor-token verification | Public |
@@ -179,6 +196,7 @@ SQLite, mirroring the ledger's "boring + auditable" stance:
 - `svids` (id, spiffe_id, attestation_id, not_before, not_after, revoked_at)
 - `grants` (jti, agent_spiffe, human_sub, scope_json, yellow_scope_json, exp, revoked_at, max_uses, not_before, not_after, recurrence_json)
 - `attestations` (id, kind {tpm-quote, sev-snp, sgx-dcap, gcp-tpm, aws-nitro, k8s-projected}, evidence_blob, verified_at, policy_version)
+- `actor_token_jtis` (jti, issuer, audience, redeemed_at, expires_at)
 
 No JSON in queryable columns where it can be a column — we want SQL-grep-able audits.
 
