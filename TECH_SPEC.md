@@ -140,7 +140,8 @@ signed lifetime of at most 60 seconds.
 
 Redemption selects the expected issuer trust domain from the typed request
 binding, requires a fresh peer bundle, resolves one exact `kid` in that bundle,
-and verifies an Ed25519 SPKI key before trusting claims. It then requires exact
+and verifies the established Ed25519 public-key forms (Vault Transit's raw
+32-byte base64 or file-signer's PEM SPKI) before trusting claims. It then requires exact
 issuer, subject, audience, scope, lifetime, and bounded-clock-skew matches.
 Malformed structures, unsupported algorithms/types, unknown or duplicate keys,
 bad signatures, and invalid claims fail before single-use replay state changes.
