@@ -341,17 +341,18 @@ cargo test --manifest-path repos/clavenar-policy-engine/Cargo.toml policy_templa
 
 **Concept.** Distribute governance across deployments as **signed, versioned Rego packs**, installable only after a **mandatory local backtest** proves the pack doesn't regress known-attack coverage. The starter pack (§1.14) seeds one stack; Policy Exchange is the cross-deployment unit — sign a pack once, and any operator's `install` is fail-closed on both signature and backtest before a rule lands.
 
-**Implementation.** A pack is a directory of `*.rego` plus `pack.json` (manifest committing to each file's sha256) + `pack.sig` (detached ed25519 over `sha256(canonical pack.json, signature blanked)`) — the regulatory-export manifest protocol verbatim. `clavenarctl policy exchange sign <dir>` hashes the files, builds the manifest (`clavenar-sdk::PackManifest`), and signs the digest via clavenar-identity `POST /sign/blob` (audience `policy-pack`, through the new `clavenar-sdk::PackSigner`). `clavenarctl policy exchange install <dir>` is fail-closed: it (1) re-hashes each file vs the manifest, (2) verifies the signature against the issuer JWKS (`--jwks-url`) or a pinned SPKI PEM (`--pubkey`) via `clavenar-sdk::verify_pack`, (3) **backtests** every candidate against the Rego-decidable chaos catalog (`clavenar-chaos-catalog::catalog_policy_inputs`) through `evaluate-batch`, refusing any policy that fails to compile or weakens a verdict (`DenyToAllow` / `YellowToAllow`), and (4) lands each policy with `[pack <name>@<ver> key=<kid>]` recorded in the version reason. Name collisions refuse (no in-place replace in v1). No policy-engine or identity code change — gate and signing reuse existing endpoints.
+**Implementation.** A pack is a directory of `*.rego` plus `pack.json` (manifest committing to each file's sha256) + `pack.sig` (detached ed25519 over `sha256(canonical pack.json, signature blanked)`). `clavenarctl policy exchange install <dir>` remains fail-closed: it re-hashes files, verifies the signature, backtests the Rego-decidable chaos catalog, and records pack provenance on install. The original CLI `sign` path reused Identity `/sign/blob` with `policy-pack`; the endpoint-capability baseline intentionally retires that production path because `/sign/blob` is now Ledger-only and regulatory-purpose-bound. Pack issuance therefore requires a separately authorized offline/operator signer until a distinct publication capability ships.
 
 **Verify.**
 
 ```bash
-clavenarctl policy exchange sign ./acme-pack \
-  --identity-url http://localhost:8086 --caller-spiffe spiffe://clavenar.local/ctl
+# Verify/backtest/install a pack issued by an authorized offline publisher.
 clavenarctl policy exchange install ./acme-pack \
   --jwks-url http://localhost:8086/jwks.json --reason "Q3 finance controls" \
   --actor-sub ops@acme.com --actor-idp okta
 #   …signature OK; backtest N attacks, 0 regressions; installed money_moves
+# Legacy direct Identity signing now fails closed: policy-pack purpose is not
+# admitted by the Ledger-only /sign/blob capability.
 ```
 
 ### 1.16 Fleet-wide kill-chain breaker
@@ -483,7 +484,7 @@ Out-of-envelope scope returns 403 with `{"error":"scope_outside_envelope","offen
 
 **Concept.** After the security verdict resolves, the proxy asks `clavenar-identity` to sign it. The signature is the legal proof that "Clavenar, at this timestamp, with this verdict, processed this request from this agent." The chain row carries `signature + key_id` alongside the verdict; a regulator with `manifest.sig` + the issuer JWKS can independently verify every row.
 
-**Implementation.** `POST /sign` on identity, body `{ correlation_id, method, prev_hash, payload_canonical_json }`, header `X-Caller-Spiffe` matched against `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS`. Returns `{ signature, key_id, signed_at }`. Two backends behind the same `Sign` trait: **Vault Transit** (default — private key stays in Vault, `vaultrs` client makes the `transit/sign` call) and **`Ed25519FileSigner`** (OSS / clavenar-lite — loads PKCS#8 PEM from `CLAVENAR_IDENTITY_SIGNING_KEY_PATH`, signs with `ed25519-dalek` directly). JWKS at `/jwks.json` exposes only public material either way. Signing budget: p95 < 5ms.
+**Implementation.** `POST /sign` on identity accepts `{ binding: { target_spiffe, tenant, audience, purpose, operation, lifetime_seconds }, correlation_id, method, prev_hash, payload_canonical_json }`. The exact verified Proxy certificate supplies `identity.sign.action`; no caller header or legacy signing allowlist grants authority. Identity requires the binding to name the local agent, ledger audience, `forensic-action` purpose, exact method, and ≤60-second lifetime, then parses the canonical payload and compares `agent_id`, `agent_spiffe`, `method`, and `correlation_id` before signing. Returns `{ signature, key_id, signed_at }`. Vault Transit and `Ed25519FileSigner` remain wire-compatible backends; JWKS exposes only public material.
 
 **Verify.**
 
@@ -499,9 +500,9 @@ Then export the chain and verify a row's signature with `openssl` + `sha256sum` 
 
 ### 3.4 Detached blob signing (`POST /sign/blob`)
 
-**Concept.** Sibling to `/sign`, used by `clavenar-ledger` for regulatory-export manifests. Signs a digest (not a structured payload), audience-tagged so a sig minted for one auditor can't be repurposed.
+**Concept.** Sibling to `/sign`, used only by `clavenar-ledger` for regulatory-export manifests. Signs a digest (not a structured payload) under an exact tenant, audience, purpose, operation, and lifetime binding.
 
-**Implementation.** `POST /sign/blob` on identity, body `{ digest_hex, audience }`, response `{ signature, key_id, algorithm: "ed25519", digest_alg: "sha256", signed_at }`. Same `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS` allowlist as `/sign`. Wired into ledger via `clavenar-ledger::identity_client::{ManifestSigner, HttpManifestSigner}`.
+**Implementation.** `POST /sign/blob` accepts `{ binding: { tenant, audience, purpose, operation, lifetime_seconds }, digest_sha256 }`, response `{ signature, key_id, algorithm: "ed25519", signed_at }`. Only the exact verified Ledger certificate receives `identity.sign.blob`; the binding requires the local ledger audience, `regulatory-export-manifest`, `ledger.export.regulatory`, and ≤300 seconds. Policy-pack and other purposes are rejected. Wired into ledger via `clavenar-ledger::identity_client::{ManifestSigner, HttpManifestSigner}` with no caller-assertion header.
 
 **Verify.**
 
@@ -515,7 +516,7 @@ cat manifest.sig    # 128 hex chars + LF
 
 **Concept.** Two Clavenar tenants need to A2A without sharing a CA. Tenant A publishes its trust bundle at a well-known URL; Tenant B's identity service polls that URL on a schedule. Cross-tenant actor tokens redeem against a freshness-gated peer-bundle store — if Tenant B's last-seen bundle for Tenant A is stale, A2A fails with `peer_bundle_stale:<td>` rather than silently accepting potentially-revoked keys.
 
-**Implementation.** `GET /.well-known/spiffe-bundle` (public). Federation poller in `clavenar-identity` configured via `CLAVENAR_FEDERATION_PEERS`. `POST /actor-token` mints; `POST /actor-token/redeem` consults the peer-bundle freshness gate, returning `peer_bundle_unknown:<td>`, `peer_bundle_stale:<td>`, or `jti_already_used` (single-use enforcement).
+**Implementation.** `GET /.well-known/spiffe-bundle` (public). Federation poller in `clavenar-identity` configured via `CLAVENAR_FEDERATION_PEERS`. The exact verified Proxy certificate supplies separate `identity.actor-token.issue` and `.redeem` capabilities. Both requests carry target/tenant/audience/`a2a-mcp-forward`/operation/lifetime bindings; redemption compares expected subject, audience, scope, and token lifetime before peer-bundle and replay state. Failures include `peer_bundle_unknown:<td>`, `peer_bundle_stale:<td>`, or `jti_already_used`.
 
 **Verify.**
 
@@ -530,7 +531,7 @@ cat manifest.sig    # 128 hex chars + LF
 
 **Concept.** When agent A calls agent B (cross-Clavenar, possibly cross-tenant), B's proxy needs to know that A is authorized for this specific call. A delegation grant says "A can call X" but doesn't bind to a specific outbound call. The actor token is the missing piece: A's outbound request triggers the proxy to mint a single-use, audience-bound token; B's proxy verifies the token via the federation bundle before accepting.
 
-**Implementation.** Proxy outbound: agent sets `x-clavenar-audience: <target>` header; proxy calls identity `/actor-token` with `{ agent_spiffe, audience, scope, ttl_seconds }`, attaches result as `x-clavenar-actor-token` on the upstream call. Inbound: peer proxy sees `x-clavenar-actor-token`, calls identity `/actor-token/redeem`, accepts on success. JTIs are single-use — replay returns `409 jti_already_used`.
+**Implementation.** Proxy outbound: agent sets `x-clavenar-audience: <target>`; proxy calls `/actor-token` with `{ binding: { target_spiffe, tenant, audience, purpose, operation, lifetime_seconds }, scope: [operation] }` and attaches the token. Inbound: the peer proxy calls `/actor-token/redeem` with the token plus its exact expected binding. JTIs are single-use — replay returns `409 jti_already_used`.
 
 **Verify.**
 
@@ -1222,7 +1223,7 @@ jq . manifest.json
 
 **Concept.** Embedded signatures are byte-fragile — any whitespace difference between writer and verifier breaks them. Detached signatures keep the manifest byte-stable across implementations. The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so the auditor blanks the `signature` field, re-serializes pretty-printed, sha256s, and runs `ed25519_verify`. Tampering with `technical_documentation` or `parquet_pointers` (which the manifest carries hashes of) breaks both the signature verification and a cheap recompute.
 
-**Implementation.** `clavenar-ledger::identity_client::HttpManifestSigner` calls `clavenar-identity` `POST /sign/blob` with the canonical-manifest digest. Response signature appended as `manifest.sig` (128 hex chars + LF). Wired via `CLAVENAR_IDENTITY_URL` + `CLAVENAR_LEDGER_SPIFFE`. Fail-closed: signing errors → 503 `signing_unavailable` (the ledger never emits an unsigned bundle).
+**Implementation.** `clavenar-ledger::identity_client::HttpManifestSigner` calls `clavenar-identity` `POST /sign/blob` with the canonical-manifest digest and exact export-scope tenant, local ledger audience, regulatory purpose/operation, and 300-second binding. Caller authority comes only from the verified Ledger mTLS certificate. Response signature is appended as `manifest.sig` (128 hex chars + LF). Fail-closed: signing errors → 503 `signing_unavailable`.
 
 **Verify.**
 
@@ -1889,7 +1890,7 @@ curl -X POST http://localhost:8081/inspect -H 'content-type: application/json' \
 
 **Concept.** The proxy calls identity for action signatures and for A2A actor token mint/redeem.
 
-**Wire.** `POST /sign` body `{ correlation_id, method, prev_hash, payload_canonical_json }`, header `X-Caller-Spiffe`. `POST /actor-token` body `{ agent_spiffe, audience, scope, ttl_seconds }`. `POST /actor-token/redeem` body `{ token }`. All three gated on `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS`.
+**Wire.** `POST /sign` carries a typed target/tenant/ledger-audience/purpose/operation/lifetime binding plus the action envelope. `POST /actor-token` carries the same typed dimensions for a local agent and peer audience plus one exact scope. `POST /actor-token/redeem` carries the token plus the receiving proxy's expected remote subject and local audience binding. Stable endpoint capabilities come only from exact verified workload certificates; no caller assertion header or `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS` decision participates.
 
 **Verify.** See §3.3, §3.6.
 

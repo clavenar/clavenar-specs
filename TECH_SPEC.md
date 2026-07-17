@@ -51,7 +51,7 @@ authoritative wire-contract detail still lives in those sections.
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
-| 9a | [Policy exchange](#policy-exchange) | shipped | v1.3.0 | `clavenar-sdk` (pack manifest + `PackSigner`), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange {sign,install}`); reuses `/sign/blob` + `evaluate-batch` |
+| 9a | [Policy exchange](#policy-exchange) | install/verify shipped; production issuance redesign required | v1.3.0 | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -166,8 +166,8 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 |---|---|---|---|
 | `POST` | `/svid` | Issue an instance SVID against an attestation document | Attestation evidence (§6) |
 | `POST` | `/grant` | Exchange OIDC `id_token` + agent SVID → delegation grant | OIDC `id_token` + SVID mTLS |
-| `POST` | `/actor-token` | Mint an audience-bound A→B token | Caller SVID + grant |
-| `POST` | `/sign` | Clavenar-side signing of a finalized verdict (§5) | Proxy SVID only |
+| `POST` | `/actor-token` | Mint an audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed request binding |
+| `POST` | `/sign` | Clavenar-side signing of a finalized verdict (§5) | Exact Proxy mTLS endpoint capability + typed request binding |
 | `POST` | `/revoke` | Revoke an instance SVID or a delegation grant (`{"kind":"svid","svid_id":...}` / `{"kind":"grant","jti":...}`, optional `reason`). Sets `revoked_at` + emits `svid.revoked` / `grant.revoked` chain v3 event. | Admin capability (`agents:admin`) — spec previously named "Operator WebAuthn" but identity terminates on OIDC + caps; admin is the cap-equivalent kill switch (matches `decommission`). |
 | `GET`  | `/jwks.json` | Public keys for grant/actor-token verification | Public |
 | `GET`  | `/.well-known/spiffe-bundle` | SPIFFE federation bundle | Public |
@@ -320,7 +320,7 @@ Five phases, each independently shippable. **All five shipped.**
 2. **Delegation grants.** *(shipped)* `/grant` exchange wired; HIL records the delegation principal on pending rows; proxy threads `X-Clavenar-Grant` through and rejects expired grants with `grant_expired`. Grants are also **just-in-time**: optional `max_uses` (metered at the proxy gate, `grant_usage_exhausted`), `nbf` / `not_after` validity windows (`grant_not_yet_valid`), and optional **recurring weekly windows** (`recurrence`, rejected off-window with `grant_outside_schedule`), with use-exhausted and unused-by-deadline grants self-revoking as `grant.auto_revoked` chain events (see [§ Suspend is hard](#identity-service)).
 3. **Action signing (chain v2).** *(shipped)* Ledger gained v2 dispatch (`HashableEntryV2` with `agent_spiffe`, `signature`, `key_id`); proxy calls `/sign` after the verdict resolves; verifier exposes JWKS-based per-row signature check; mixed-v1/v2 export verifies.
 4. **Attestation enforcement.** *(shipped)* `policies/attestation.rego` ships with `attestation_required` rules keyed on `wire_transfer` and `delete_*`; `attestation_allowlist.json` carries the per-tool measurement list; proxy attaches `AttestationClaims` (with a per-spiffe-id cache and `X-Clavenar-Attestation` per-request header override) on every `/evaluate`; chaos-monkey `unattested_binary` asserts deny.
-5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`); federation poller; two-tenant `run-federation.sh` e2e in `clavenar-e2e`.
+5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; certificate-capability and typed-request-bound `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`); federation poller; two-tenant `run-federation.sh` e2e in `clavenar-e2e`.
 
 The §11.3 valuation claim (⭐⭐⭐⭐⭐, "zero-trust score" metric) and the §15 trust-dividend story are both unblocked.
 
@@ -1524,9 +1524,9 @@ NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more 
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | POST | `/export/regulatory?from=…&to=…[&include_exports=true]` (clavenar-ledger) | optional `text/markdown` (≤ 1 MiB) | `application/gzip` (`.tar.gz`) |
-| POST | `/sign/blob` (clavenar-identity) | `{ digest_hex, audience }` | `{ signature, key_id, algorithm: "ed25519", digest_alg: "sha256", signed_at }` |
+| POST | `/sign/blob` (clavenar-identity) | `{ binding: { tenant, audience, purpose, operation, lifetime_seconds }, digest_sha256 }` | `{ signature, key_id, algorithm: "ed25519", signed_at }` |
 
-`POST /export/regulatory` is the auditor-facing export. `POST /sign/blob` is the new signing primitive on clavenar-identity (sibling to `/sign`, same caller-allowlist gate, audience-tagged forensic event), wired via `CLAVENAR_IDENTITY_URL` + `CLAVENAR_LEDGER_SPIFFE` and routed through `clavenar-ledger::identity_client::ManifestSigner` / `HttpManifestSigner`.
+`POST /export/regulatory` is the auditor-facing export. `POST /sign/blob` is the Ledger-only signing primitive on clavenar-identity: the exact verified Ledger certificate supplies `identity.sign.blob`, and the request binds export scope, ledger audience, `regulatory-export-manifest`, `ledger.export.regulatory`, and a ≤300-second lifetime. No asserted caller header or legacy signing allowlist is used.
 
 ### 5. Manifest schema (v6)
 
@@ -3015,7 +3015,7 @@ The nine `/grill-me` answers that pinned this section (chronological):
 
 Distribute governance as **signed, versioned Rego packs** that an operator installs only after a **mandatory local backtest** proves the pack doesn't regress known-attack coverage. Where the [Policy catalog](#policy-catalog) is the in-stack starter library, Policy Exchange is the *cross-deployment* distribution unit: sign a pack once, hand it to another operator, and their `install` is fail-closed on both signature and backtest.
 
-**Module status:** **shipped (v1.3.0).** Lives in `clavenar-sdk` (pack manifest types + `PackSigner` + verify), `clavenar-chaos-catalog` (`Attack::policy_input` backtest corpus), `clavenarctl` (`policy exchange {sign,install}`). No policy-engine or identity code change — the gate reuses `POST /policies/evaluate-batch` and signing reuses `POST /sign/blob`.
+**Module status:** install/verify and mandatory backtesting shipped in v1.3.0. The former direct production issuance path is retired: Identity `/sign/blob` is now Ledger-only and regulatory-purpose-bound. Pack issuance needs a distinct operator publication capability or offline signer; it cannot inherit the Ledger signing identity.
 
 ### 1. Pack format
 
@@ -3044,10 +3044,10 @@ The manifest (`schema_version "1"`) commits to each entry's `body_sha256`; the s
 
 | Verb | What it does |
 |---|---|
-| `clavenarctl policy exchange sign <dir>` | hash each `.rego`, build `pack.json`, sign the digest via clavenar-identity `POST /sign/blob` (audience `policy-pack`), write `pack.json` + `pack.sig` |
+| `clavenarctl policy exchange sign <dir>` | legacy direct Identity signing path; production Identity rejects `policy-pack` after the endpoint-capability baseline |
 | `clavenarctl policy exchange install <dir>` | verify hashes + signature, **backtest**, then land each policy via the policy-engine write API |
 
-Signing reuses `/sign/blob` unchanged — only the new `audience: "policy-pack"` value (already permitted by identity's `[a-z0-9-]` validator). The signature is verified against the issuer JWKS (`--jwks-url`) or an operator-pinned SPKI PEM (`--pubkey`); identity signs the decoded 32 digest bytes, so verify is `ed25519_verify(pubkey, sha256(canonical), sig)`.
+Production `/sign/blob` no longer admits policy-pack purpose or operator/CLI caller assertions: only the verified Ledger capability may request a regulatory-export signature. Pack verification and backtesting remain valid, but pack issuance requires a separately authorized offline/operator signer until a distinct policy-publication endpoint capability ships; it cannot ride the production Ledger identity.
 
 ### 3. Mandatory backtest gate
 
@@ -5728,10 +5728,10 @@ federation, agent registry / lifecycle.
 
 | Threat | Defense |
 |---|---|
-| An attacker calls `/sign` directly to mint a chain signature for a forged event. | `X-Caller-Spiffe` allowlist (`CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS`). The identity service refuses signing requests from any SPIFFE ID not in the allowlist. |
+| An attacker calls `/sign` directly to mint a chain signature for a forged event. | The exact verified Proxy certificate supplies `identity.sign.action`; Identity then requires target/tenant/ledger-audience/purpose/operation/lifetime agreement and compares canonical agent/method/correlation fields before signing. Headers cannot grant authority. |
 | An attacker calls `/svid` to mint a cert for an arbitrary `agent_id`. | The agent registry (enforce mode) gates `/svid` on `(tenant, agent_name)` registration + lifecycle state. `unregistered_agent`, `agent_suspended`, `agent_decommissioned`, `scope_outside_envelope` all reject. |
 | An attacker calls `/grant` to forge an OIDC delegation. | The IdP-issued bearer is verified against the trusted IdP's JWKS before any grant is minted. |
-| An attacker mints an A2A token for a foreign tenant. | `/actor-token` is gated on `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS`. Cross-tenant minting requires the federation bundle exchange. |
+| An attacker mints an A2A token for a foreign tenant. | The verified Proxy endpoint capability is necessary but insufficient: local target SPIFFE segments and tenant, peer audience, purpose, exact operation/scope, and lifetime must agree before minting. |
 
 #### Repudiation
 
