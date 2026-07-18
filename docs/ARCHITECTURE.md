@@ -127,7 +127,7 @@ flowchart TD
   DeepReview -->|publish review verdict| Bus
 
   Simulator -->|persona mTLS traffic| Proxy
-  Simulator -->|mTLS CSR /svid + /grant| Identity
+  Simulator -->|one-use bootstrap; then persisted current-SVID CSR renewal| Identity
   Simulator -->|HTTP auto-decide pendings| HIL
 
   Browser -->|HTTPS| Caddy
@@ -292,7 +292,7 @@ flowchart TD
   Vault --> WorkloadSVID
   Vault --> Sign
 
-  AgentAttest -->|CSR-bound POST /svid; key stays local| SVID
+  AgentAttest -->|durable intent + CSR-bound POST /svid; key stays local| SVID
   HumanOIDC -->|POST /grant — RFC 8693 token exchange| Grant
   SVID -->|POST /actor-token + grant| ActorToken
   Bootstrap -->|POST /workload-svid every TTL/2| WorkloadSVID

@@ -200,7 +200,8 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 
 | Method | Path | Purpose | Auth |
 |---|---|---|---|
-| `POST` | `/svid` | Sign a caller-owned CSR into an instance SVID against bound attestation evidence | Exact Simulator mTLS capability + target authority + attestation evidence (§6) |
+| `POST` | `/svid` | Sign a caller-owned CSR into an instance SVID against bound attestation evidence | One-use exact Simulator bootstrap/recovery or exact current agent SVID + target authority + attestation evidence (§6) |
+| `POST` | `/agents/{id}/svid-recovery?tenant=<t>` | Revoke current SVIDs and open one recovery generation | mTLS + OIDC `agents:admin`; mandatory reason; signed durable lifecycle row |
 | `POST` | `/grant` | Exchange OIDC `id_token` + agent SVID → delegation grant | OIDC `id_token` + SVID mTLS |
 | `POST` | `/actor-token` | Mint an audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed request binding |
 | `POST` | `/actor-token/redeem` | Verify and consume one audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed expected binding |
@@ -237,11 +238,14 @@ Identity rejects a CSR larger than 16 KiB before parsing, verifies the PKCS#10
 self-signature, permits only ECDSA P-256/SHA-256 or Ed25519 public keys, and
 rejects every requested extension. CSR subject and SAN values are never
 authority: Identity constructs the exact CN and SPIFFE URI SAN from the
-authorized target. The current caller authority is deliberately narrow: the
-verified mTLS workload must be `service/simulator`, the tenant must be
-`simulator`, and the target row's immutable `created_by_sub` must be
-`system:simulator-bootstrap`. Endpoint capability alone cannot substitute a
-tenant, creator, or target.
+authorized target. Caller authority is lifecycle-specific. Initial enrollment
+accepts only verified `service/simulator`, tenant `simulator`, and an immutable
+`system:simulator-bootstrap` target whose `svid_bootstrap_state=available`;
+success retires that state atomically. Renewal authenticates as the exact
+current agent SVID: tenant, agent, instance SPIFFE URI, stored leaf fingerprint,
+validity, revocation, and supersession must all match, and the request may target
+only itself. Endpoint capability alone cannot substitute a tenant, creator,
+target, or credential generation.
 
 ```json
 200
@@ -264,15 +268,27 @@ response containing `key_pem` is rejected rather than ignored. Stable
 CSR failures are `413 csr_too_large`, `400 invalid_csr`,
 `400 invalid_csr_signature`, `422 unsupported_csr_algorithm`,
 `422 csr_extensions_forbidden`, and `422 csr_binding_mismatch`; target
-substitution returns `403 issuance_authority_denied`. Real attestation methods
-and their caller-authority mappings remain a separate rollout from this
-key-custody boundary.
+substitution, retired bootstrap, stale/revoked/superseded renewal, and consumed
+recovery return `403 issuance_authority_denied`; CSR reuse returns
+`409 issuance_replay`.
+
+Before CA signing, Identity commits a `svid_issuance_intents` row containing the
+exact target, CSR digest, verified caller SPIFFE/fingerprint, authority kind,
+and recovery/prior-SVID binding. A success transaction inserts attestation and
+SVID rows, retires bootstrap or supersedes the prior SVID, terminalizes the
+intent as `issued`, and queues the `svid.issued` chain payload in the durable
+outbox before returning the certificate. Failures terminalize as `denied` or
+`failed`; startup changes abandoned `pending` rows to immutable `interrupted`
+without re-signing. Database triggers forbid terminal rewrites and intent
+deletion. Real attestation methods remain a separate rollout from this
+key-custody and lifecycle boundary.
 
 #### 4.2 Storage
 
 SQLite, mirroring the ledger's "boring + auditable" stance:
 
-- `svids` (id, spiffe_id, attestation_id, not_before, not_after, revoked_at)
+- `svids` (id, spiffe_id, attestation_id, not_before, not_after, revoked_at, credential_fingerprint, superseded_at, superseded_by, issuance_intent_id)
+- `svid_issuance_intents` (id, tenant, agent_name, csr_sha256, caller_spiffe, caller_fingerprint, authority_kind, recovery_generation, prior_svid_id, requested_at, terminal_state, terminal_at, terminal_reason, svid_id)
 - `grants` (jti, agent_spiffe, human_sub, scope_json, yellow_scope_json, exp, revoked_at, max_uses, not_before, not_after, recurrence_json)
 - `attestations` (id, kind {tpm-quote, sev-snp, sgx-dcap, gcp-tpm, aws-nitro, k8s-projected}, evidence_blob, verified_at, policy_version)
 
@@ -641,6 +657,16 @@ POST /agents/{id}/envelope/narrow
 
 The handler verifies the new envelope is a strict subset of the old (for narrow) or strict superset (for widen) and rejects otherwise (`422 envelope_not_narrower` / `422 envelope_not_wider`). Caller passes the whole intended state; no diff parsing, no JSON-merge-patch ambiguity.
 
+SVID recovery is not an issuance fallback. An `agents:admin` caller posts a
+mandatory bounded reason to `/agents/{id}/svid-recovery?tenant=<t>`. Identity
+requires an Active agent with retired bootstrap, increments the recovery
+generation, revokes and supersedes every current SVID, and commits the registry
+transition with a signed `agent.svid_recovery_opened` outbox row. The exact
+Simulator service may consume that generation once; issuance atomically returns
+the state to `retired`. A second ceremony while recovery is pending, a recovery
+before initial enrollment, cross-tenant access, and generation replay fail
+closed.
+
 ### 6. Gate integration with `/svid` and `/grant`
 
 The agent record is consulted in the same SQLite transaction as the issuance INSERT. No TOCTOU window between gating check and minting.
@@ -649,12 +675,13 @@ The agent record is consulted in the same SQLite transaction as the issuance INS
 
 | Status | Error | Condition |
 |---|---|---|
-| 200 | — | Record exists, Active, exact verified caller owns the immutable bootstrap target, CSR and its attestation binding are valid, attestation kind in record's allowlist (or in global allowlist if record's is empty) |
+| 200 | — | Record exists and Active; exact one-use bootstrap/recovery or exact current SVID owns the target; intent/result commits before credential release; CSR and attestation binding pass |
 | 403 | `unregistered_agent` | No record for `(tenant, agent_name)` |
 | 403 | `agent_suspended` | Record exists, state Suspended |
 | 403 | `agent_decommissioned` | Record exists, state Decommissioned |
 | 403 | `attestation_kind_not_accepted` | Record's `attestation_kinds_accepted` non-empty and presented kind not in it |
 | 403 | `issuance_authority_denied` | Verified caller, tenant, immutable creator, or target ownership does not match |
+| 409 | `issuance_replay` | CSR digest already has an issuance intent, including failed/interrupted attempts |
 | 400/413/422 | CSR error catalog (§4.1.1) | Malformed, tampered, oversized, unsupported, extension-bearing, or attestation-unbound CSR |
 | 422 | (existing) | Existing attestation-evidence shape errors |
 
