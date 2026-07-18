@@ -41,6 +41,7 @@ authoritative wire-contract detail still lives in those sections.
 | § | Module | Status | Landed | Services touched |
 |---|---|---|---|---|
 | 1 | [Identity service](#identity-service) | shipped | — | `clavenar-identity` (new, port 8086 / 8186), `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil` |
+| 1a | [Workload attestation verifier contract](#6-capability-attestation) | contract shipped; production verifier pending | v1.125.0 | `clavenar-proxy`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-e2e`, `clavenar-charts` |
 | 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | shipped | chain v3 | `clavenar-identity`, `clavenar-ctl` (new binary `clavenarctl`), `clavenar-console`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-chaos-monkey` |
 | 2a | [Pre-flight certification](#agent-onboarding-wao) | shipped | v1.22.0 | `clavenar-ctl` (`agents certify`), `clavenar-identity` (`/agents/{id}/certification` + `CertificationMode` gate + `certified_at_version`), `clavenar-chaos-catalog` (`agent_cert` family), `clavenar-ledger` (no change — v3 `agent.certified` rows), `clavenar-console` (cert badge) |
 | 3 | [Tenancy scope](#tenancy-scope) | described | — | (semantics, no new service) |
@@ -369,22 +370,68 @@ The signing service returns `{ signature, key_id, signed_at }`. The proxy's NATS
 
 ### 6. Capability attestation
 
-Gating model: Policy Engine consults a new `attestation_required` rule per tool/method, evaluated against fresh attestation evidence the proxy attaches to `PolicyInput`.
+**Implementation status.** The versioned verifier boundary is shipped. A real
+platform verifier is not yet shipped: the existing `dev-mock` provider and
+caller-supplied test header are not production evidence and cannot satisfy this
+contract. Until the verifier, production-mode refusal, and binding rollout are
+complete, an `attestation_required` policy is containment scaffolding rather
+than proof that approved code is running.
 
-```rust
-struct PolicyInput {
-    // ... existing fields ...
-    attestation: Option<AttestationClaims>,   // NEW
-}
+The canonical machine contract is
+[`contracts/attestation-verifier-v1.schema.json`](contracts/attestation-verifier-v1.schema.json),
+with positive and adversarial fixtures in
+[`contracts/attestation-verifier-v1.fixture.json`](contracts/attestation-verifier-v1.fixture.json).
+It defines three strict, no-extra-field envelopes:
 
-struct AttestationClaims {
-    kind: AttestationKind,         // tpm | sev-snp | sgx-dcap | nitro | gcp-shielded | k8s-projected
-    measurement: String,           // hex-encoded PCR/MRENCLAVE/etc.
-    issued_at: DateTime<Utc>,      // freshness
-    expires_at: DateTime<Utc>,     // ≤ 15min
-    nonce_echo: String,            // proves liveness against a Clavenar-issued nonce
-}
-```
+| Envelope | Producer → consumer | Required meaning |
+|---|---|---|
+| `AttestationVerificationRequest` | evidence collector → verifier | Opaque bounded evidence, its digest and kind, a one-use challenge, and the exact bindings the verifier must recover from trusted evidence. |
+| `VerifiedAttestation` | verifier → Identity/Proxy/Policy | Verifier-derived measurement, issuer/trust anchor, policy versions, times, and every expected binding. `status=verified` is accepted only after the complete comparison below. |
+| `AttestationRejection` | verifier → caller | Contract version, request UUID, `status=rejected`, and one stable sanitized reason. It never reflects evidence, measurements, platform claims, keys, or trust material. |
+
+#### 6.1 Exact verifier bindings
+
+The request binds all of the following. The verifier result must equal the
+request exactly; a caller assertion, best-effort parse, or partial match is not
+authority.
+
+| Binding | Contract field | Rule |
+|---|---|---|
+| Challenge | `challenge.nonce` → `challengeNonceSha256` | 32 random bytes, unpadded base64url; one use; request and verification occur within its 120-second window. The result exposes only its SHA-256 digest. |
+| Evidence | `evidenceKind`, `evidenceSha256` | Kind is one of the six production identifiers; decoded evidence is at most 65,536 bytes and its digest covers the exact opaque bytes. `dev-mock` is deliberately absent. |
+| Public key | `publicKeySha256` | SHA-256 of canonical SPKI DER. It must equal the key proven inside the platform evidence and the key expected by enrollment/runtime mTLS. |
+| SVID generation | `svidSha256` | SHA-256 of the exact leaf SVID DER. A different renewal generation invalidates a cached result even when the logical workload is unchanged. |
+| Workload identity | `spiffeId`, `tenant`, `workload`, `instance` | The canonical SPIFFE URI and each parsed identity component must all match trusted evidence and each other; no cross-tenant, cross-workload, or cross-instance projection. |
+| Platform trust | `platformIssuer`, `trustAnchorId` | The verifier constructs both from a configured trust chain. Evidence cannot select an unconfigured issuer or anchor. |
+| Approval policy | `measurementPolicyVersion` | The normalized `measurementSha256` must be approved by the exact tenant-scoped signed measurement-policy version. |
+| Verifier policy | `verifierId`, `verifierPolicyVersion` | The result names the implementation and exact verification policy used; a policy downgrade or unknown verifier is rejected. |
+
+Supported v1 evidence-kind identifiers are `aws-nitro`, `gcp-shielded`,
+`k8s-key-bound`, `sev-snp`, `sgx-dcap`, and `tpm2-quote`. An identifier only
+selects a verifier; it does not assert that the opaque bytes are genuine.
+
+#### 6.2 Freshness, cache, and failures
+
+- Challenges live for at most 120 seconds. Evidence may be at most 30 seconds
+  in the future for clock skew and at most 300 seconds old when verified.
+- A verified result lives for at most 900 seconds. Consumers cache it for
+  `min(expiresAt - now, 300 seconds)`.
+- The cache key includes contract version, evidence kind, measurement, public
+  key, SVID, SPIFFE ID, tenant, workload, instance, trust anchor, measurement
+  policy, verifier, and verifier policy. A change to any dimension misses or
+  invalidates the entry.
+- Missing, malformed, oversized, unknown, stale, future, mismatched,
+  unverifiable, or unavailable evidence fails closed. There is no mock,
+  unbound-cache, caller-header, or last-known-good fallback.
+- Stable reasons distinguish contract, evidence, kind, challenge, nonce,
+  freshness, key, SVID, identity, tenant, workload, instance, measurement,
+  issuer, verifier-policy, unavailable-verifier, and invalid-result failures.
+  The schema owns the exact reason inventory.
+
+Policy Engine ultimately evaluates `attestation_required` only against a
+`VerifiedAttestation` that passed this complete contract. The legacy five-field
+`AttestationClaims` shape is not equivalent and must not be promoted into a
+verified result by deserialization alone.
 
 Rego rule sketch:
 
@@ -402,9 +449,8 @@ deny[msg] {
 }
 ```
 
-The allowlist is per-method, not per-tenant — the security claim is "the code that calls `wire_transfer` is the code we approved." Allowlist updates are a separate signed artifact (think Sigstore-style transparency log; v1 it's a checked-in JSON file in the policy repo).
-
-**Performance note.** Attestation verification is expensive (10–50ms for a TPM quote). The proxy caches verified attestations keyed by `spiffe_id || measurement` for `min(expires_at, 5min)`. Cache misses block the request; cache hits add zero latency to the hot path. This is the only way to keep the §6 "every millisecond × 50 sub-calls" budget intact.
+Measurement approval is tenant-scoped and signed; a checked-in global
+allowlist or matching measurement string is not approval under this contract.
 
 ### 7. Wire-contract changes
 
@@ -413,7 +459,8 @@ Shared types are duplicated on each side of the wire. The fields below need to l
 | Edge | Field added | Repos to grep |
 |---|---|---|
 | Proxy → Brain | `tenant: Option<String>` (Phase 5 — demo prefix or SVID `tenant/<t>`; scopes Brain's per-agent persona/drift/verdict state) | `clavenar-proxy/src/fork.rs`, `clavenar-brain/src/wire.rs` |
-| Proxy → Policy | `agent_spiffe: String`, `attestation: Option<AttestationClaims>` | `clavenar-proxy/src/fork.rs`, `clavenar-policy-engine/src/lib.rs` |
+| Evidence collector → verifier → Identity/Proxy/Policy | `AttestationVerificationRequest`, `VerifiedAttestation`, `AttestationRejection` (contract 1.0.0) | `clavenar-identity/src/attestation_contract.rs`, `clavenar-proxy/src/attestation_contract.rs`, `clavenar-policy-engine/src/attestation_contract.rs` |
+| Proxy → Policy | `agent_spiffe: String`, `attestation: Option<AttestationClaims>` (legacy scaffold; not a verified-result claim) | `clavenar-proxy/src/fork.rs`, `clavenar-policy-engine/src/wire.rs` |
 | Proxy → HIL | `agent_spiffe: String`, `delegation_jti: String` | `clavenar-proxy/src/sandbox_handoff.rs` (CreatePending site), `clavenar-hil/src/api.rs` |
 | Proxy → Ledger (NATS) | `agent_spiffe`, `signature`, `key_id` (chain v2) | `clavenar-proxy`, `clavenar-ledger/src/chain.rs` |
 
@@ -432,15 +479,18 @@ Console (`clavenar-console`) needs a "Delegation: alice@acme via support-bot-3" 
 
 ### 9. Migration & rollout
 
-Five phases, each independently shippable. **All five shipped.**
+Five phases, each independently shippable. Identity, signing, and federation
+phases shipped. The attestation policy scaffold and verifier contract shipped;
+the production verifier and enforcement migration remain pending.
 
 1. **SVID issuance, no enforcement.** *(shipped)* `clavenar-identity` mints SVIDs alongside the existing CA. Proxy parses the SPIFFE SAN from the cert and falls back to CN for legacy clients.
 2. **Delegation grants.** *(shipped)* `/grant` emits strict EdDSA compact JWS, HIL records the verified delegation principal, and proxy rejects invalid (`grant_invalid`), expired (`grant_expired`), or unverifiable-during-bounded-JWKS-outage (`grant_jwks_unavailable`) grants. Grants are also **just-in-time**: optional `max_uses` (metered at the proxy gate, `grant_usage_exhausted`), `nbf` / `not_after` validity windows (`grant_not_yet_valid`), and optional **recurring weekly windows** (`recurrence`, rejected off-window with `grant_outside_schedule`), with use-exhausted and unused-by-deadline grants self-revoking as `grant.auto_revoked` chain events (see [§ Suspend is hard](#identity-service)).
 3. **Action signing (chain v2).** *(shipped)* Ledger gained v2 dispatch (`HashableEntryV2` with `agent_spiffe`, `signature`, `key_id`); proxy calls `/sign` after the verdict resolves; verifier exposes JWKS-based per-row signature check; mixed-v1/v2 export verifies.
-4. **Attestation enforcement.** *(shipped)* `policies/attestation.rego` ships with `attestation_required` rules keyed on `wire_transfer` and `delete_*`; `attestation_allowlist.json` carries the per-tool measurement list; proxy attaches `AttestationClaims` (with a per-spiffe-id cache and `X-Clavenar-Attestation` per-request header override) on every `/evaluate`; chaos-monkey `unattested_binary` asserts deny.
+4. **Attestation enforcement.** *(scaffold + contract shipped; production verifier pending)* `policies/attestation.rego` contains `attestation_required` rules and the proxy carries a legacy mock/header test path. Contract 1.0.0 now defines the only acceptable production verifier boundary. The mock/header path, checked-in global allowlist, and legacy `AttestationClaims` do not constitute real verification.
 5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; certificate-capability and typed-request-bound `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`) and atomic shared durable replay reservation; federation poller; two-tenant and multi-replica restart/partition e2e in `clavenar-e2e`.
 
-The §11.3 valuation claim (⭐⭐⭐⭐⭐, "zero-trust score" metric) and the §15 trust-dividend story are both unblocked.
+No real-attestation or production-code-integrity claim is unblocked by the
+contract alone.
 
 ### 10. Test surface
 

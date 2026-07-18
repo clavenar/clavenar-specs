@@ -548,20 +548,23 @@ cat manifest.sig    # 128 hex chars + LF
 # partition/recovery behavior.
 ```
 
-### 3.7 Capability attestation enforcement
+### 3.7 Capability attestation verifier contract
 
-**Concept.** SVID + grant prove identity and authorization, but they don't prove the agent's *binary* is the one we approved. A compromised supply chain could swap the binary post-deploy and the SVID would still be valid. Capability attestation closes that gap: for sensitive tools (Yellow tier + a configurable allowlist), the agent's runtime presents a fresh hardware-attested measurement (TPM PCR, SEV-SNP report, etc.); Policy denies if the measurement isn't in the per-tool allowlist.
+**Concept.** SVID + grant prove identity and authorization, but they do not prove the agent's binary is approved. Contract 1.0.0 defines what a real verifier must prove before Identity, Proxy, or Policy can consume an attestation result: trusted evidence provenance plus exact nonce, public-key, SVID, SPIFFE, tenant, workload, instance, measurement-policy, and verifier-policy bindings.
 
-**Implementation.** `policies/attestation.rego` denies when `tool_type == wire_transfer` (or `delete_*`) and attestation is absent/stale or measurement isn't in `attestation_allowlist.json`. `PolicyInput.attestation: Option<AttestationClaims>` carries the kind, measurement, issued_at, expires_at, nonce_echo. Proxy harvests attestation from a SAN-bound cache (verified once, reused for `min(expires_at, 5min)`) or per-request `X-Clavenar-Attestation` header override. Six attestation kinds wired: `tpm`, `sev-snp`, `sgx-dcap`, `nitro`, `gcp-shielded`, `k8s-projected`. Rule short-circuits for non-SVID legacy CN-only callers (gates only fire when `agent_spiffe` is set).
+**Implementation status.** The strict JSON Schema, positive fixture, 22 adversarial fixtures, mirrored Rust wire types, Compose mounts, Helm immutable ConfigMap, and release drift checker ship together. Limits are 64 KiB evidence, 32-byte/120-second challenges, 30-second future skew, 300-second evidence age, 900-second verified-result lifetime, and a 300-second cache ceiling. Supported production identifiers are `aws-nitro`, `gcp-shielded`, `k8s-key-bound`, `sev-snp`, `sgx-dcap`, and `tpm2-quote`; `dev-mock` is excluded.
+
+The existing Rego allowlist and proxy mock/header path remain test scaffolding. They do not implement a real platform verifier and do not make an attestation-required production claim.
 
 **Verify.**
 
 ```bash
-./repos/clavenar-chaos-monkey/... --scenario unattested_binary
-# Asserts wire_transfer with measurement not in allowlist → policy deny
+python3 repos/clavenar-e2e/scripts/check_attestation_verifier_contract.py
+# Verifies canonical/mirrored bytes, strict wire shapes, all bindings,
+# freshness/size limits, sanitized reasons, and 22 adversarial cases.
 ```
 
-Inspect the allowlist at `repos/clavenar-policy-engine/policies/attestation_allowlist.json`.
+Inspect `contracts/attestation-verifier-v1.schema.json` and its adjacent fixture.
 
 ### 3.8 Agent registry + lifecycle (WAO)
 
