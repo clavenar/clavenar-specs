@@ -56,7 +56,7 @@ authoritative wire-contract detail still lives in those sections.
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
 | 10c | [Deception layer](#deception-layer) | shipped | v1.78.0 | `clavenar-identity` (`decoys` table + `/decoys` API + `clavenar_decoys` KV + curated seed), `clavenar-proxy` (KV mirror, `tools/list` splice, deterministic deny gate, containment publish), `clavenar-ledger` (no change — v3 `decoy.registered`/`decoy.retired` rows) |
-| 11 | [Internal service mTLS](#internal-service-mtls) | shipped through apps v0.8.3, NATS v0.8.4, and the named website edge v1.99.0 | v0.8.3, v0.8.4, v1.99.0 | every backend plus the website edge — every internal application hop is mTLS-gated; any CA-valid client certificate may reach merged `/verify`, while the exact website SPIFFE identity alone enables forwarded-source trust; NATS transport is TLS+mTLS |
+| 11 | [Internal service mTLS](#internal-service-mtls) | shipped through apps v0.8.3, NATS v0.8.4, the named website edge v1.99.0, and generated route capabilities v1.124.0 | v0.8.3, v0.8.4, v1.99.0, v1.124.0 | every backend plus the website edge — every internal application hop is mTLS-gated; Ledger, Policy Engine, HIL, and Identity additionally enforce one digest-bound exact-caller/method/template policy; any CA-valid client certificate may reach merged `/verify`, while the exact website SPIFFE identity alone enables forwarded-source trust; NATS transport is TLS+mTLS |
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
@@ -3715,8 +3715,8 @@ Production Caddy authenticates to Ledger `:8183` with a CA-valid
 reach the merged `/verify` route. Any CA-valid client certificate may reach
 that merged route; the exact website SPIFFE identity governs only whether
 Ledger trusts the replaced forwarding value. That identity is deliberately
-absent from Ledger's internal caller-prefix policy, so trusted forwarding never
-grants `/log`, audit, stream, export, or agent-enumeration authority.
+absent from Ledger's generated internal route grants, so trusted forwarding
+never grants `/log`, audit, stream, export, or agent-enumeration authority.
 
 ### 1. Hops in scope
 
@@ -3782,11 +3782,13 @@ Server side (every backend):
 - Boots HTTPS via `axum-server` + `rustls`. Plain-HTTP listen path
   is preserved on a separate port (`/health`, `/readyz` only — same
   pattern the proxy already uses for the kubelet probe).
-- Verifies caller's client cert chains to the CA root *and* the
-  caller's SAN URI matches an allowlist:
-  `CLAVENAR_<SVC>_ALLOWED_CALLERS=spiffe://clavenar.local/service/proxy,spiffe://clavenar.local/service/console`.
-- 401 (not 403) on mismatch with body `{"error":"untrusted_caller"}` —
-  matches existing identity-side `unregistered_agent` shape.
+- Verifies the caller's client cert chains to the CA root and extracts one exact
+  SPIFFE URI SAN. Ledger, Policy Engine, HIL, and Identity then apply the
+  generated route-capability contract in §3.2. Services outside that contract
+  retain their narrow listener-level caller allowlists.
+- A peer that cannot establish trusted mTLS receives no application response.
+  An authenticated workload that lacks the selected route capability receives
+  the stable 403 denial in §3.2.
 
 Client side (proxy, console, deep-review):
 
@@ -3828,8 +3830,51 @@ walks permit 3 requests per trusted source per minute and 12 globally per
 minute, allow one walk in flight, and retain at most 64 active trusted-source
 windows. The merged `/verify` route accepts any CA-valid client certificate;
 the website SVID test fixture demonstrates that access, while `POST /log` and
-every internal route return 401 because that identity is intentionally absent
-from the internal caller-prefix policy.
+every internal route return the generated 403 capability denial because that
+identity is intentionally absent from the exact route grant.
+
+#### 3.2 Generated application route capabilities
+
+Ledger, Policy Engine, HIL, and Identity load one canonical generated policy
+bundle before binding their application listeners. The bundle is generated
+deterministically from the reviewed endpoint-capability matrix and commits to
+that matrix and the listener matrix by SHA-256. Compose and Helm project the
+same exact bytes. Each service requires all three settings: the mounted bundle
+path, expected bundle digest, and expected endpoint-matrix digest. Missing or
+unreadable bytes, a digest mismatch, a missing service section, duplicate or
+malformed identities/routes, an unknown caller, or an unsupported method or
+path template aborts startup. There is no handwritten service-level override.
+
+The v1.124.0 bundle contains 11 exact workload identities, four governed
+services, 52 capability families, and 117 method/template route records. Each
+identity maps one canonical caller ID such as `service-proxy` to exactly one
+`spiffe://clavenar.local/service/proxy` URI. Agent SVIDs map only to the
+separate `agent-workload` caller class where a route explicitly grants it;
+arbitrary agent identities never become service callers.
+
+Authorization runs after certificate validation and before request extraction
+or handler execution. It selects the service section, requires an exact HTTP
+method, matches the complete normalized path against one static template, and
+then requires the verified caller ID in that route's `allowedCallerIds`.
+Templates contain only literal segments and whole-segment `{parameter}`
+placeholders; wildcard, prefix, query-string, and method-fallback matching are
+invalid. No match and a match without a grant both fail closed as:
+
+```json
+{
+  "error": "capability_denied",
+  "reason": "capability_not_granted"
+}
+```
+
+The response status is 403. Public and diagnostic router branches are layered
+outside this application middleware and retain their own existing transport,
+rate, and route controls. In particular, Ledger's merged `/verify` and
+Identity's public key/bundle reads are not silently converted into internal
+service capabilities. A release is accepted only when generated-policy tests
+cover missing/wrong service and digest, unknown caller, wrong method, wrong and
+overlapping templates, and when a live cross-service matrix proves every
+non-granted workload/route pair is denied in both supported deployment shapes.
 
 ### 4. Bootstrap
 
@@ -3914,9 +3959,9 @@ of the cryptographic mTLS check.
 
 The chart's production profile makes the named-forwarder boundary explicit:
 Ledger receives the strict settings above, its application Service exposes
-`8183`, and its internal caller-prefix policy remains limited to the canonical
-profile-governed SPIFFE prefixes for proxy, console, deep-review, and the Helm
-simulator where enabled. Compose projects only `ca.crt` and
+`8183`, and its generated internal route policy remains limited to the
+canonical exact grants for proxy, console, and deep-review. Compose projects
+only `ca.crt` and
 `service-website.{crt,key}` into Caddy and places Caddy on a dedicated,
 Internet-capable `edge` network with only its required Ledger, console, and
 demo-mint upstreams; it cannot resolve or reach NATS on the default network.

@@ -1926,6 +1926,40 @@ curl -X POST http://localhost:8081/inspect -H 'content-type: application/json' \
 
 **Verify.** See §1.10, §4.1.
 
+### 13.8 Generated workload route capabilities
+
+**Concept.** A CA-valid workload certificate authenticates a caller; it does
+not grant every route on that listener. Ledger, Policy Engine, HIL, and Identity
+authorize application requests with one generated exact-caller/method/template
+policy derived from the reviewed endpoint matrix. Public and diagnostic router
+branches stay outside this policy.
+
+**Implementation.** `clavenar-e2e/GENERATED_WORKLOAD_CAPABILITY_BUNDLE.json`
+is deterministic and SHA-256-bound to both source matrices. Compose and the
+`clavenar-charts` ConfigMap project byte-identical policy. The four services use
+the shared `clavenar-shared` gate after mTLS identity extraction and before
+handlers. Startup refuses missing/stale bytes, wrong service identity, unknown
+callers, and malformed or ambiguous templates. The v1.124.0 inventory contains
+11 service identities, four services, 52 capability families, and 117 exact
+route records. A missing route or caller grant returns 403
+`capability_denied` / `capability_not_granted`.
+
+**Verify.** From an assembled public checkout:
+
+```bash
+cd clavenar-e2e
+python3 scripts/generate_workload_capability_bundle.py --check
+python3 scripts/check_endpoint_capability_matrix.py \
+  --source-root .. --require-source
+python3 -m unittest \
+  tests.test_workload_capability_bundle \
+  tests.test_generated_route_capability_contract -v
+```
+
+The canonical dev and production stack smokes additionally derive every
+forbidden service-certificate/route pair from the bundle and require the live
+listener to return the exact 403 denial before retaining a digest-bound receipt.
+
 ---
 
 ## 14. Forensic-tier deep review
