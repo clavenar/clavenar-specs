@@ -552,7 +552,7 @@ cat manifest.sig    # 128 hex chars + LF
 
 **Concept.** SVID + grant prove identity and authorization, but they do not prove the agent's binary is approved. Contract 1.0.0 defines what a real verifier must prove before Identity, Proxy, or Policy can consume an attestation result: trusted evidence provenance plus exact nonce, public-key, SVID, SPIFFE, tenant, workload, instance, measurement-policy, and verifier-policy bindings.
 
-**Implementation status.** The strict JSON Schema, positive fixture, 22 adversarial fixtures, mirrored Rust wire types, Compose mounts, Helm immutable ConfigMap, and release drift checker ship together. Limits are 64 KiB evidence, 32-byte/120-second challenges, 30-second future skew, 300-second evidence age, 900-second verified-result lifetime, and a 300-second cache ceiling. Supported production identifiers are `aws-nitro`, `gcp-shielded`, `k8s-key-bound`, `sev-snp`, `sgx-dcap`, and `tpm2-quote`; `dev-mock` is excluded.
+**Implementation status.** The strict JSON Schema, named enrollment and runtime-policy positive fixtures, 22 adversarial fixtures, mirrored Rust wire types, Compose mounts, Helm immutable ConfigMap, and release drift checker ship together. Limits are 64 KiB evidence, 32-byte/120-second challenges, 30-second future skew, 300-second evidence age, 900-second verified-result lifetime, and a 300-second cache ceiling. Supported production identifiers are `aws-nitro`, `gcp-shielded`, `k8s-key-bound`, `sev-snp`, `sgx-dcap`, and `tpm2-quote`; `dev-mock` is excluded.
 
 The existing Rego allowlist and proxy mock/header path remain test scaffolding. They do not implement a real platform verifier and do not make an attestation-required production claim.
 
