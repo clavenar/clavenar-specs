@@ -280,8 +280,9 @@ intent as `issued`, and queues the `svid.issued` chain payload in the durable
 outbox before returning the certificate. Failures terminalize as `denied` or
 `failed`; startup changes abandoned `pending` rows to immutable `interrupted`
 without re-signing. Database triggers forbid terminal rewrites and intent
-deletion. Real attestation methods remain a separate rollout from this
-key-custody and lifecycle boundary.
+deletion, require an issued intent to reference its exact tenant/agent SVID,
+and forbid rewriting or deleting that relationship. Real attestation methods
+remain a separate rollout from this key-custody and lifecycle boundary.
 
 #### 4.2 Storage
 
