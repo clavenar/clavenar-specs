@@ -516,7 +516,7 @@ cat manifest.sig    # 128 hex chars + LF
 
 **Concept.** Two Clavenar tenants need to A2A without sharing a CA. Tenant A publishes its trust bundle at a well-known URL; Tenant B's identity service polls that URL on a schedule. Cross-tenant actor tokens redeem against a freshness-gated peer-bundle store — if Tenant B's last-seen bundle for Tenant A is stale, A2A fails with `peer_bundle_stale:<td>` rather than silently accepting potentially-revoked keys.
 
-**Implementation.** `GET /.well-known/spiffe-bundle` (public). Federation poller in `clavenar-identity` configured via `CLAVENAR_FEDERATION_PEERS`. The exact verified Proxy certificate supplies separate `identity.actor-token.issue` and `.redeem` capabilities. Both requests carry target/tenant/audience/`a2a-mcp-forward`/operation/lifetime bindings. Redemption selects the peer bundle only from that expected binding, requires it to be fresh, verifies the exact `kid` and Ed25519 compact-JWS signature, and then compares issuer, subject, audience, scope, timestamps, and ≤60-second signed lifetime before replay state. Failures include `invalid_token:*`, `peer_bundle_unknown:<td>`, `peer_bundle_stale:<td>`, or `jti_already_used`.
+**Implementation.** `GET /.well-known/spiffe-bundle` (public). Federation poller in `clavenar-identity` configured via `CLAVENAR_FEDERATION_PEERS`. The exact verified Proxy certificate supplies separate `identity.actor-token.issue` and `.redeem` capabilities. Both requests carry target/tenant/audience/`a2a-mcp-forward`/operation/lifetime bindings. Redemption selects the peer bundle only from that expected binding, requires it to be fresh, verifies the exact `kid` and Ed25519 compact-JWS signature, and then compares issuer, subject, audience, scope, timestamps, and ≤60-second signed lifetime before atomically reserving the authenticated issuer/JTI in the shared durable `clavenar_actor_token_replay` JetStream KV bucket. Failures include `invalid_token:*`, `peer_bundle_unknown:<td>`, `peer_bundle_stale:<td>`, `jti_already_used`, or fail-closed `replay_store_unavailable`.
 
 **Verify.**
 
@@ -531,7 +531,7 @@ cat manifest.sig    # 128 hex chars + LF
 
 **Concept.** When agent A calls agent B (cross-Clavenar, possibly cross-tenant), B's proxy needs to know that A is authorized for this specific call. A delegation grant says "A can call X" but doesn't bind to a specific outbound call. The actor token is the missing piece: A's outbound request triggers the proxy to mint a single-use, audience-bound token; B's proxy verifies the token via the federation bundle before accepting.
 
-**Implementation.** Proxy outbound: agent sets `x-clavenar-audience: <target>`; proxy calls `/actor-token` with `{ binding: { target_spiffe, tenant, audience, purpose, operation, lifetime_seconds }, scope: [operation] }` and attaches the token. Identity emits an RFC 7515 compact JWS with protected `alg=EdDSA`, `typ=JWT`, and exact bundle `kid`, signing the encoded `protected.payload` input. Inbound: the peer proxy calls `/actor-token/redeem` with the token plus its exact expected binding. Identity strictly parses the three bounded compact segments, verifies the exact peer-bundle Ed25519 key before claim checks, and rejects legacy payload-only signatures. JOSE, claim, and binding failures do not consume the JTI. Successful JTIs are single-use — replay returns `409 jti_already_used`.
+**Implementation.** Proxy outbound: agent sets `x-clavenar-audience: <target>`; proxy calls `/actor-token` with `{ binding: { target_spiffe, tenant, audience, purpose, operation, lifetime_seconds }, scope: [operation] }` and attaches the token. Identity emits an RFC 7515 compact JWS with protected `alg=EdDSA`, `typ=JWT`, and exact bundle `kid`, signing the encoded `protected.payload` input. Inbound: the peer proxy calls `/actor-token/redeem` with the token plus its exact expected binding. Identity strictly parses the three bounded compact segments, verifies the exact peer-bundle Ed25519 key before claim checks, and rejects legacy payload-only signatures. JOSE, claim, time, freshness, and binding failures do not consume the JTI. Only then does Identity atomically create `SHA-256(issuer || NUL || jti)` in the bounded file-backed JetStream KV replay bucket. Successful JTIs are single-use across replicas and restarts — replay returns `409 jti_already_used`; unavailable or ambiguous storage returns `503 replay_store_unavailable`, with no local fallback.
 
 **Verify.**
 
@@ -539,6 +539,12 @@ cat manifest.sig    # 128 hex chars + LF
 ./repos/clavenar-e2e/scripts/check-actor-token-jose.sh dev
 # Mints with Proxy mTLS, verifies protected.payload against /jwks.json,
 # and proves protected-header, payload, and signature mutations fail.
+./repos/clavenar-e2e/scripts/check-actor-token-replay.sh \
+  --environment dev --identity-mtls-url https://localhost:18186 \
+  --cert-dir ./repos/clavenar-proxy/certs-dev \
+  --compose-file ./repos/clavenar-e2e/dev/docker-compose.yml
+# Proves one winner across two replicas, restart durability, and fail-closed
+# partition/recovery behavior.
 ```
 
 ### 3.7 Capability attestation enforcement

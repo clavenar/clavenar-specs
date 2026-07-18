@@ -86,7 +86,7 @@ flowchart TD
     Ledger[clavenar-ledger 8083]
   end
 
-  Bus[NATS — clavenar.forensic, clavenar.forensic.identity, clavenar.federation.jti]
+  Bus[NATS / JetStream — forensic subjects plus shared durable KV]
 
   subgraph Orch[Orchestrators]
     HIL[clavenar-hil 8084]
@@ -120,6 +120,7 @@ flowchart TD
   Bus -->|consume + persist| Ledger
   Ledger -->|verify-jws via JWKS| Identity
   Identity -->|publish clavenar.forensic.identity| Bus
+  Identity -->|atomic actor-token replay reservation| Bus
 
   HIL -->|annotated by| Sandbox
   DeepReview -->|consume sample| Bus

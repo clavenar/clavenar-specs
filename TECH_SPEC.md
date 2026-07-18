@@ -147,6 +147,19 @@ Malformed structures, unsupported algorithms/types, unknown or duplicate keys,
 bad signatures, and invalid claims fail before single-use replay state changes.
 Legacy tokens that signed only the decoded claims bytes are rejected.
 
+After every JOSE, peer-bundle freshness, claim, time, and expected-binding check
+passes, Identity derives `SHA-256(issuer || NUL || jti)` and atomically creates
+that key in the shared file-backed JetStream KV bucket
+`clavenar_actor_token_replay`. The bucket contract is exact: 300-second maximum
+age, 16 MiB maximum bytes, 8192-byte maximum value, history 1, delete denied,
+discard-new capacity policy, and an operator-selected replica count from 1 to
+5. Identity validates those properties before use. A pre-existing key returns
+`409 jti_already_used`; every missing, unreachable, partitioned, full,
+misconfigured, or acknowledgement-ambiguous store outcome returns the stable
+`503 replay_store_unavailable` response. There is no SQLite or publish/fan-out
+authority fallback. Consequently concurrent redemption through separate Identity
+replicas has one success, and reservations survive Identity and NATS restarts.
+
 The delegation grant is the missing piece in today's architecture. It carries:
 
 ```json
@@ -203,9 +216,11 @@ SQLite, mirroring the ledger's "boring + auditable" stance:
 - `svids` (id, spiffe_id, attestation_id, not_before, not_after, revoked_at)
 - `grants` (jti, agent_spiffe, human_sub, scope_json, yellow_scope_json, exp, revoked_at, max_uses, not_before, not_after, recurrence_json)
 - `attestations` (id, kind {tpm-quote, sev-snp, sgx-dcap, gcp-tpm, aws-nitro, k8s-projected}, evidence_blob, verified_at, policy_version)
-- `actor_token_jtis` (jti, issuer, audience, redeemed_at, expires_at)
 
 No JSON in queryable columns where it can be a column — we want SQL-grep-able audits.
+Actor-token replay reservations are deliberately outside SQLite in the shared
+durable JetStream KV bucket described in §3.2. A legacy `actor_token_jtis`
+table may remain migration-readable, but is never authorization authority.
 
 #### 4.3 Keys
 
@@ -337,6 +352,7 @@ Console (`clavenar-console`) needs a "Delegation: alice@acme via support-bot-3" 
 | Attestation expired mid-burst | Proxy returns 401 with `attestation_stale`; agent re-attests | Same model as expired SVID |
 | Vault Transit unavailable | Identity service degrades to `signing_unavailable` (above) | Single failure domain — Vault is already a hard dep |
 | Federation bundle stale (cross-tenant) | Reject A2A; allow same-tenant | Matches the §13.1 "identity is necessary but insufficient" framing — better to fail safe |
+| Actor-token replay KV unavailable, full, ambiguous, or contract-mismatched | Reject redemption with `503 replay_store_unavailable`; never write local replay authority | A receiving replica cannot authorize unless the authenticated issuer/JTI reservation is durably created exactly once |
 
 ### 9. Migration & rollout
 
@@ -346,13 +362,14 @@ Five phases, each independently shippable. **All five shipped.**
 2. **Delegation grants.** *(shipped)* `/grant` emits strict EdDSA compact JWS, HIL records the verified delegation principal, and proxy rejects invalid (`grant_invalid`), expired (`grant_expired`), or unverifiable-during-bounded-JWKS-outage (`grant_jwks_unavailable`) grants. Grants are also **just-in-time**: optional `max_uses` (metered at the proxy gate, `grant_usage_exhausted`), `nbf` / `not_after` validity windows (`grant_not_yet_valid`), and optional **recurring weekly windows** (`recurrence`, rejected off-window with `grant_outside_schedule`), with use-exhausted and unused-by-deadline grants self-revoking as `grant.auto_revoked` chain events (see [§ Suspend is hard](#identity-service)).
 3. **Action signing (chain v2).** *(shipped)* Ledger gained v2 dispatch (`HashableEntryV2` with `agent_spiffe`, `signature`, `key_id`); proxy calls `/sign` after the verdict resolves; verifier exposes JWKS-based per-row signature check; mixed-v1/v2 export verifies.
 4. **Attestation enforcement.** *(shipped)* `policies/attestation.rego` ships with `attestation_required` rules keyed on `wire_transfer` and `delete_*`; `attestation_allowlist.json` carries the per-tool measurement list; proxy attaches `AttestationClaims` (with a per-spiffe-id cache and `X-Clavenar-Attestation` per-request header override) on every `/evaluate`; chaos-monkey `unattested_binary` asserts deny.
-5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; certificate-capability and typed-request-bound `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`); federation poller; two-tenant `run-federation.sh` e2e in `clavenar-e2e`.
+5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; certificate-capability and typed-request-bound `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`) and atomic shared durable replay reservation; federation poller; two-tenant and multi-replica restart/partition e2e in `clavenar-e2e`.
 
 The §11.3 valuation claim (⭐⭐⭐⭐⭐, "zero-trust score" metric) and the §15 trust-dividend story are both unblocked.
 
 ### 10. Test surface
 
 - **`clavenar-e2e`** gains: SVID issuance happy path; revocation kills next request within 1s; signed-row chain verification against a regulator-style export.
+- **Actor-token replay** races one authenticated token through separate Identity replicas, proves exactly one success, restarts Identity and NATS without forgetting reservations, and proves partition/recovery never authorizes without a durable atomic create.
 - **`clavenar-chaos-monkey`** gains: `stolen_svid_replay`, `unattested_binary`, `expired_grant`, `cross_tenant_unfederated`. All four must produce specific, predicted verdicts.
 - **`clavenar-simulator`** has a `--delegation-mix` flag (env `SIM_DELEGATION_MIX`) — comma-separated pool of human `act.sub` values; each fire picks one at random and attaches a **real clavenar-identity-signed** `X-Clavenar-Grant`. The official-demo simulator self-mints an RS256 id_token with an externally mounted private key and `kid`, while identity receives only the matching public JWKS; it exchanges that token at identity's `/grant` for a signed grant per principal, minted against a dedicated `sim-grant-broker` agent it enrolls at boot. Strict asymmetric mode rejects HS256 or mixed verifier configuration. A background task keeps the per-principal pool warm. The proxy verifies the grant's exact compact-JWS signing input against a bounded-fresh identity JWKS, so an unsigned or legacy payload-only grant rejects `grant_invalid` and stale keys reject `grant_jwks_unavailable`; when identity is unreachable the simulator attaches no header (CN-only) rather than an invalid one. The console audit page renders the "Delegation: <human> via <agent>" badge with realistic variety.
 
@@ -461,7 +478,7 @@ Three states. Two reversible transitions, one terminal:
 - **Active → Suspended** is reachable by any owner-team member or any tenant admin. One-click pause for incident response.
 - **Suspended → Active** requires `agents:admin`. If the team that suspended themselves can also unsuspend themselves, the suspend lever doesn't survive a compromised team account.
 - **`* → Decommissioned`** requires `agents:admin`. Terminal. The row remains; the `(tenant, agent_name)` is permanently unreusable.
-- **Suspend is hard — shipped.** Suspension lands in the `clavenar_revocation` NATS-KV bucket (identity writes on every suspend/unsuspend and reconciles the bucket from registry truth at boot; `GET /revocation/list` exposes the same set over mTLS). The proxy mirrors the bucket in-memory via a KV watch and rejects every request from a suspended agent with `403 agent_revoked` before the pipeline runs; revoked delegation grants reject in flight by `jti` with `403 grant_revoked`. While the mirror has never synced (or lost its watch) the gate fails open *loudly* — `clavenar_proxy_revocation_cache_degraded` goes HIGH and sampled `revocation_check_degraded` forensic rows land, per the no-silent-fail-open rule. Issuance-side gates (`/svid`, `/grant` refuse Suspended) were already in place, so suspension now bites at mint time *and* on the very next in-flight request. Residual: the A2A actor-token single-use `jti` denylist remains per-instance SQLite (with the `clavenar.federation.jti` announce hook) — a multi-replica identity deployment should treat that as open hardening.
+- **Suspend is hard — shipped.** Suspension lands in the `clavenar_revocation` NATS-KV bucket (identity writes on every suspend/unsuspend and reconciles the bucket from registry truth at boot; `GET /revocation/list` exposes the same set over mTLS). The proxy mirrors the bucket in-memory via a KV watch and rejects every request from a suspended agent with `403 agent_revoked` before the pipeline runs; revoked delegation grants reject in flight by `jti` with `403 grant_revoked`. While the mirror has never synced (or lost its watch) the gate fails open *loudly* — `clavenar_proxy_revocation_cache_degraded` goes HIGH and sampled `revocation_check_degraded` forensic rows land, per the no-silent-fail-open rule. Issuance-side gates (`/svid`, `/grant` refuse Suspended) were already in place, so suspension now bites at mint time *and* on the very next in-flight request. A2A actor-token single-use state is also shared and durable: every receiving Identity replica atomically reserves the authenticated issuer/JTI in `clavenar_actor_token_replay`, failing closed when that store cannot acknowledge the create.
 - **Just-in-time grants — shipped.** A delegation grant can carry an optional consumption cap (`max_uses`), one-shot validity window (`nbf` / `not_after`), and **recurring weekly windows** (`recurrence` — fixed-offset on-call hours) on top of its lifetime. The proxy enforces them at the same in-flight gate as revocation: a not-yet-valid grant rejects `403 grant_not_yet_valid`, a call landing outside every recurring window rejects `403 grant_outside_schedule` (a time-bounded reject, not a revocation — a later in-window call is honored), and each admitted tool call CAS-increments the grant's counter in the shared `clavenar_grant_usage` NATS-KV bucket, rejecting an exhausted grant `403 grant_usage_exhausted`. **Self-revocation:** an identity sweep (every 30s, mirroring the chain-emission outbox sweeper) reconciles JIT grants against that bucket — a use-exhausted grant, or a windowed grant that lapsed unused, is marked revoked, written to the `clavenar_revocation` denylist (so future requests get the cleaner `grant_revoked`), and recorded as a `grant.auto_revoked` chain v3 event (`actor_sub = system:grant-sweep`, payload `reason ∈ {usage_exhausted, unused_by_deadline}`). Enforcement is immediate at the proxy; the chain event is eventually consistent within one sweep interval — audit, never the block. This composes with revocation on the consumption axis as Blast-Radius Autopilot composes on the scope axis.
 
 #### 3.3 Ownership
