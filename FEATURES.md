@@ -1939,9 +1939,12 @@ is deterministic and SHA-256-bound to both source matrices. Compose and the
 `clavenar-charts` ConfigMap project byte-identical policy. The four services use
 the shared `clavenar-shared` gate after mTLS identity extraction and before
 handlers. Startup refuses missing/stale bytes, wrong service identity, unknown
-callers, and malformed or ambiguous templates. The v1.124.0 inventory contains
-11 service identities, four services, 52 capability families, and 117 exact
-route records. A missing route or caller grant returns 403
+callers, and malformed or ambiguous templates. The v1.124.1 inventory contains
+11 service identities, four services, 54 capability families, and 118 exact
+route records. Simulator receives only the three route-specific bootstrap
+grants needed for demo agent registration, upstream registration, and grant
+minting; recovery, envelope/lifecycle mutation, and upstream retirement remain
+operator-only. A missing route or caller grant returns 403
 `capability_denied` / `capability_not_granted`.
 
 **Verify.** From an assembled public checkout:

@@ -3845,12 +3845,18 @@ unreadable bytes, a digest mismatch, a missing service section, duplicate or
 malformed identities/routes, an unknown caller, or an unsupported method or
 path template aborts startup. There is no handwritten service-level override.
 
-The v1.124.0 bundle contains 11 exact workload identities, four governed
-services, 52 capability families, and 117 method/template route records. Each
+The v1.124.1 bundle contains 11 exact workload identities, four governed
+services, 54 capability families, and 118 method/template route records. Each
 identity maps one canonical caller ID such as `service-proxy` to exactly one
 `spiffe://clavenar.local/service/proxy` URI. Agent SVIDs map only to the
 separate `agent-workload` caller class where a route explicitly grants it;
 arbitrary agent identities never become service callers.
+
+Simulator bootstrap authority is route-specific: it may register demo agents
+with `POST /agents`, register the demo upstream with `POST /upstreams`, mint
+delegation grants with `POST /grant`, and request SVIDs. It is not granted
+agent recovery, envelope or lifecycle mutation, upstream retirement, or any
+other administrative route grouped on the same Identity listener.
 
 Authorization runs after certificate validation and before request extraction
 or handler execution. It selects the service section, requires an exact HTTP
