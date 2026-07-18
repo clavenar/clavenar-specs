@@ -75,7 +75,7 @@ detail.
 
 Companion spec to `README.md` §11.3 ("Agent identity — IAM for bots"). Scoped to what §11.3 commits to and grounded in the primitives Clavenar already ships (NATS forensic bus, hash-chained ledger, HIL, `regorus` policy engine).
 
-**Module status:** **shipped.** Touches `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`; introduced the `clavenar-identity` service (port 8086). The companion [Agent onboarding](#agent-onboarding-wao) section (also shipped) layers the agent-registry / lifecycle / capability-envelope work on top of these primitives.
+**Module status:** **shipped.** Touches `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`; introduced the `clavenar-identity` service (port 8086). Agent issuance is CSR-bound: the agent generates and retains its key, while Identity validates and signs only its public-key request. The companion [Agent onboarding](#agent-onboarding-wao) section (also shipped) layers the agent-registry / lifecycle / capability-envelope work on top of these primitives.
 
 ### 1. What §11.3 actually commits to
 
@@ -200,7 +200,7 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 
 | Method | Path | Purpose | Auth |
 |---|---|---|---|
-| `POST` | `/svid` | Issue an instance SVID against an attestation document | Attestation evidence (§6) |
+| `POST` | `/svid` | Sign a caller-owned CSR into an instance SVID against bound attestation evidence | Exact Simulator mTLS capability + target authority + attestation evidence (§6) |
 | `POST` | `/grant` | Exchange OIDC `id_token` + agent SVID → delegation grant | OIDC `id_token` + SVID mTLS |
 | `POST` | `/actor-token` | Mint an audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed request binding |
 | `POST` | `/actor-token/redeem` | Verify and consume one audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed expected binding |
@@ -208,6 +208,65 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 | `POST` | `/revoke` | Revoke an instance SVID or a delegation grant (`{"kind":"svid","svid_id":...}` / `{"kind":"grant","jti":...}`, optional `reason`). Sets `revoked_at` + emits `svid.revoked` / `grant.revoked` chain v3 event. | Admin capability (`agents:admin`) — spec previously named "Operator WebAuthn" but identity terminates on OIDC + caps; admin is the cap-equivalent kill switch (matches `decommission`). |
 | `GET`  | `/jwks.json` | Public keys for grant/actor-token verification | Public |
 | `GET`  | `/.well-known/spiffe-bundle` | SPIFFE federation bundle | Public |
+
+#### 4.1.1 Agent SVID CSR contract
+
+The agent generates its private key locally and sends only a size-bounded PEM
+PKCS#10 request. The attestation nonce is the lowercase digest string
+`sha256:<hex(SHA-256(CSR DER))>`, binding the evidence to that exact signed
+public-key request.
+
+```json
+POST /svid
+{
+  "tenant": "simulator",
+  "agent_name": "support-bot-3",
+  "ttl_seconds": 3600,
+  "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\n...",
+  "attestation": {
+    "kind": "dev-mock",
+    "measurement": "0000",
+    "nonce_echo": "sha256:<64 lowercase hex characters>",
+    "issued_at": "2026-05-04T10:00:00Z",
+    "expires_at": "2026-05-04T10:05:00Z"
+  }
+}
+```
+
+Identity rejects a CSR larger than 16 KiB before parsing, verifies the PKCS#10
+self-signature, permits only ECDSA P-256/SHA-256 or Ed25519 public keys, and
+rejects every requested extension. CSR subject and SAN values are never
+authority: Identity constructs the exact CN and SPIFFE URI SAN from the
+authorized target. The current caller authority is deliberately narrow: the
+verified mTLS workload must be `service/simulator`, the tenant must be
+`simulator`, and the target row's immutable `created_by_sub` must be
+`system:simulator-bootstrap`. Endpoint capability alone cannot substitute a
+tenant, creator, or target.
+
+```json
+200
+{
+  "id": "<uuidv7>",
+  "spiffe_id": "spiffe://clavenar.local/tenant/simulator/agent/support-bot-3/instance/<uuidv7>",
+  "cert_pem": "-----BEGIN CERTIFICATE-----\n...",
+  "ca_cert_pem": "-----BEGIN CERTIFICATE-----\n...",
+  "not_before": "2026-05-04T10:00:00Z",
+  "not_after": "2026-05-04T11:00:00Z",
+  "attestation_id": "<uuidv7>"
+}
+```
+
+The success object has no private-key field. The caller requires the returned
+CA to match its configured trust root, verifies the leaf signature, requires
+the certificate public key to equal its local CSR key, and requires the exact
+returned SPIFFE ID as the URI SAN before installing the pair. A regressed
+response containing `key_pem` is rejected rather than ignored. Stable
+CSR failures are `413 csr_too_large`, `400 invalid_csr`,
+`400 invalid_csr_signature`, `422 unsupported_csr_algorithm`,
+`422 csr_extensions_forbidden`, and `422 csr_binding_mismatch`; target
+substitution returns `403 issuance_authority_denied`. Real attestation methods
+and their caller-authority mappings remain a separate rollout from this
+key-custody boundary.
 
 #### 4.2 Storage
 
@@ -224,7 +283,7 @@ table may remain migration-readable, but is never authorization authority.
 
 #### 4.3 Keys
 
-Issuer keys live in **Vault Transit** by default (Clavenar already runs Vault for credential injection). The identity service never holds private key material in-process — it calls `transit/sign/<key>` over the existing Vault client. Rotation is Vault-driven.
+Issuer signing keys live in **Vault Transit** by default (Clavenar already runs Vault for credential injection). The identity service never holds those private signing keys in-process — it calls `transit/sign/<key>` over the existing Vault client. Agent instance keys are generated and retained by the agent and never enter Identity. Rotation is Vault-driven.
 
 **Alt-backend for OSS / `clavenar-lite`** (added v0.6.6, multi-key in v0.6.8): a file-loaded Ed25519 signer is available behind the same `Sign` trait for deployments that don't run Vault. Opt-in via `CLAVENAR_IDENTITY_SIGNING_KEY_PATH=/path/to/key.pem` (PKCS#8 PEM); the key sits in process memory for the life of the binary. Vault takes precedence when both are configured; the file path is selected only when Vault env vars are unset. Operator setup: `openssl genpkey -algorithm ed25519 -out clavenar-identity.key && chmod 600 clavenar-identity.key`. The trade-off vs. Vault is "operational simplicity (no Vault dep) vs. compromise blast radius (key bytes in process)". The wire envelope (`vault:v1:<base64>`) is preserved by both backends so the ledger verifier's strip path stays unchanged; the JWKS `kid` (`clavenar-identity-file:v1` by default, override via `CLAVENAR_IDENTITY_SIGNING_KEY_ID`) distinguishes the backend for audit-row triage. Multi-key rotation: comma-separated paths + matching-length comma-separated kids — first becomes the active signer, the rest stay in JWKS so verifiers can still validate pre-rotation chain rows. See [Runbooks](#runbooks) §7 for the rotation procedure.
 
@@ -590,12 +649,14 @@ The agent record is consulted in the same SQLite transaction as the issuance INS
 
 | Status | Error | Condition |
 |---|---|---|
-| 200 | — | Record exists, Active, attestation kind in record's allowlist (or in global allowlist if record's is empty), attestation valid |
+| 200 | — | Record exists, Active, exact verified caller owns the immutable bootstrap target, CSR and its attestation binding are valid, attestation kind in record's allowlist (or in global allowlist if record's is empty) |
 | 403 | `unregistered_agent` | No record for `(tenant, agent_name)` |
 | 403 | `agent_suspended` | Record exists, state Suspended |
 | 403 | `agent_decommissioned` | Record exists, state Decommissioned |
 | 403 | `attestation_kind_not_accepted` | Record's `attestation_kinds_accepted` non-empty and presented kind not in it |
-| 422 | (existing) | Existing attestation-evidence shape errors, unchanged |
+| 403 | `issuance_authority_denied` | Verified caller, tenant, immutable creator, or target ownership does not match |
+| 400/413/422 | CSR error catalog (§4.1.1) | Malformed, tampered, oversized, unsupported, extension-bearing, or attestation-unbound CSR |
+| 422 | (existing) | Existing attestation-evidence shape errors |
 
 #### 6.2 `/grant` failure catalog (always, regardless of mode for registered agents)
 
@@ -609,15 +670,15 @@ The agent record is consulted in the same SQLite transaction as the issuance INS
 
 #### 6.3 Mode behaviour
 
-`CLAVENAR_IDENTITY_REGISTRATION_MODE = off | warn | enforce`. Default `enforce` (post-rollout posture; `RegistrationMode::default()` in `clavenar-identity/src/lib.rs`). Operators staging a brownfield rollout set `CLAVENAR_IDENTITY_REGISTRATION_MODE=warn` to onboard agents without 403'ing unregistered names first.
+`CLAVENAR_IDENTITY_REGISTRATION_MODE = off | warn | enforce`. Default `enforce` (post-rollout posture; `RegistrationMode::default()` in `clavenar-identity/src/lib.rs`). Operators staging a brownfield rollout may set `warn` for grant migration, but CSR-bound `/svid` never treats an absent row as issuance authority.
 
 | Mode | Unregistered name on `/svid` | Unregistered name on `/grant` | Registered agent + out-of-envelope grant |
 |---|---|---|---|
-| `off` | 200, no signal | 200, no signal | 200, no signal (envelope ignored) |
-| `warn` | 200 + `unregistered_agent` signal on forensic event | 200 with wildcard envelope + `unregistered_agent` signal | **403 `scope_outside_envelope`** |
+| `off` | 403 `issuance_authority_denied` | 200, no signal | 200, no signal (envelope ignored) |
+| `warn` | 403 `issuance_authority_denied` | 200 with wildcard envelope + `unregistered_agent` signal | **403 `scope_outside_envelope`** |
 | `enforce` | 403 `unregistered_agent` | 403 `unregistered_agent` | 403 `scope_outside_envelope` |
 
-The principle: **registration is opt-in to enforcement**. The mode flag governs the *unknown* case (no record). Once a record exists, its envelope is enforced regardless of mode — otherwise registration in `warn` would be decorative. This lets operators onboard their highest-risk agents first, get real enforcement immediately on those, and let lower-risk agents run unregistered until the global flip.
+The principle for grants remains: **registration is opt-in to enforcement**. For SVIDs, registry mode does not manufacture target authority; the exact verified workload-to-bootstrap-row relationship is mandatory in every mode. Once a record exists, its state and envelope semantics remain governed as above.
 
 The signal vocabulary on the forensic event uses `unregistered_agent` (consistent with `peer_bundle_stale` / `grant_expired` naming from the [Identity service](#identity-service) section).
 
@@ -772,7 +833,7 @@ The funnel turns "I have a fleet of unmanaged workloads" into registered agents 
 - **`agents bootstrap`** — interactive wizard for greenfield operators: prompts tenant / name / owner-team / envelope template (`minimal` | `read-only` | `read-write` | `custom`) / description, shows a summary, and registers idempotently (a matching re-run is a no-op; a drift surfaces a 4-conflict). Refuses a non-interactive stdin and points the caller at `agents create`.
 - **`agents import-from-scanner <report.json>`** — slugifies a `clavenar-shadow-scanner --json` report's finding locations into candidate agent names (`scanner-<slug>`), `--min-severity` floor, → a names file for `migrate`.
 - **`agents import-from-workloads <source>`** — three discovery sources: a SPIRE `entry show -output json` file, a flat list of `spiffe://…` IDs/paths/names, or `--from-identity` (pulls `GET /agents/orphans`). Each SPIFFE id resolves to a candidate name (clavenar `…/agent/<name>/…`, SPIRE k8s `…/ns/<ns>/sa/<sa>` → `<ns>-<sa>`, else the slugified last segment); a clavenar-shaped path naming a different tenant is skipped. Default writes a names file (review-first); `--enroll --default-owner-team <t>` registers the unenrolled names directly with a default envelope, reusing `migrate`'s idempotent register-if-absent engine (same `system:migration:<sub>` attribution, same `created`/`matched`/`drift` outcomes).
-- **`GET /agents/orphans?tenant=<t>`** (identity, any tenant member) — the workload-discovery feed: distinct `agent_name`s that minted an SVID (`svids` log) but have no `agents` row (`{agent_name, last_seen, svid_count}`). A decommissioned name still has a registry row, so it is **not** an orphan; the feed is exactly the registration gap.
+- **`GET /agents/orphans?tenant=<t>`** (identity, any tenant member) — the retained-data discovery feed: distinct historical `agent_name`s that minted an SVID (`svids` log) but have no `agents` row (`{agent_name, last_seen, svid_count}`). CSR-bound issuance cannot create new orphans because an exact immutable bootstrap-owned row is mandatory. A decommissioned name still has a registry row, so it is **not** an orphan.
 
 All three import paths share `migrate`'s exit codes and `--dry-run`/`--json`; the discovery sources are independent, so an operator mixes scanner findings, SPIRE entries, and the identity feed into one enrollment pass.
 

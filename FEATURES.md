@@ -451,7 +451,7 @@ curl ... -H "X-Clavenar-Callback-URL: https://my-agent.example.com/decide" ...
 
 **Concept.** Every agent has a verifiable workload identity — a SPIFFE SVID. The format is `spiffe://<trust-domain>/tenant/<tid>/agent/<agent-name>/instance/<uuidv7>`. Three layers:`tenant` is the billing/isolation boundary, `agent` is the stable logical identity (what policy keys off of), `instance` is the per-process replica (rotates on restart so we can revoke a single misbehaving replica without grounding the fleet). The SVID is short-TTL (≤1h) so a stolen cert has a tiny replay window.
 
-**Implementation.** `clavenar-identity:8086`, `POST /svid`. Caller presents attestation evidence (TPM quote, SEV-SNP report, SGX-DCAP, Nitro, GCP-Shielded, or k8s-projected token); the identity service verifies it against the per-tenant config; on success, mints the cert. SVID metadata persists in the `svids` SQLite table (`id, spiffe_id, attestation_id, not_before, not_after, revoked_at`). In `enforce` registration mode, `/svid` consults the agent registry first — unregistered names get `403 unregistered_agent`.
+**Implementation.** `clavenar-identity:8186`, mTLS `POST /svid`. The agent generates its P-256 or Ed25519 key locally, submits a ≤16 KiB self-signed PKCS#10 `csr_pem`, and binds attestation `nonce_echo` to `sha256(CSR DER)`. Identity rejects malformed/tampered/unsupported/extension-bearing requests, constructs the subject and exact SPIFFE URI SAN itself, and returns only certificate + CA material — never a private key. The verified `service/simulator` caller is restricted to tenant `simulator` and immutable `system:simulator-bootstrap` registry targets; cross-tenant, creator, and target substitution reject before signing. SVID metadata persists in the `svids` SQLite table (`id, spiffe_id, attestation_id, not_before, not_after, revoked_at`). In `enforce` registration mode, an absent row still gets `403 unregistered_agent`.
 
 **Verify.**
 
@@ -461,6 +461,7 @@ curl ... -H "X-Clavenar-Callback-URL: https://my-agent.example.com/decide" ...
 ```
 
 Console `/agents/{id}` lifecycle timeline shows the registration row that gates issuance.
+The live runner also proves CSR tamper, extension, nonce-binding, target-substitution, and response-private-key negatives.
 
 ### 3.2 OIDC delegation grants (`POST /grant`)
 
@@ -631,7 +632,7 @@ curl "http://localhost:8083/audit/correlation/<id>" | jq
 
 ### 3.12 Registration mode (`off|warn|enforce`)
 
-**Concept.** A migration switch. `off` ignores the registry entirely. `warn` keeps `/svid` and `/grant` succeeding for unregistered agents but stamps an `unregistered_agent` signal on the forensic event so operators see what would have been blocked. `enforce` rejects unregistered agents with 403. The principle: registration is opt-in to enforcement — once a record exists, its envelope is enforced regardless of mode, otherwise registration in `warn` would be decorative.
+**Concept.** A migration switch for registry and grant enforcement. `off` ignores registry gating and `warn` keeps `/grant` succeeding for unregistered agents with an `unregistered_agent` forensic signal; `enforce` rejects the absent row with 403. CSR-bound `/svid` is stricter in every mode: registry mode never manufactures authority, so an absent immutable bootstrap target returns `issuance_authority_denied` in `off|warn` (and the earlier `unregistered_agent` gate in `enforce`). Once a record exists, its envelope is enforced according to the mode contract.
 
 **Implementation.** `CLAVENAR_IDENTITY_REGISTRATION_MODE` env var, parsed into `Mode::{Off, Warn, Enforce}`. **Today the default is `Enforce`** (the rollout flip has already happened). Operators bulk-enroll legacy fleets via `clavenarctl agents migrate` before the flip.
 
