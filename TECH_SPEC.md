@@ -225,13 +225,7 @@ POST /svid
   "agent_name": "support-bot-3",
   "ttl_seconds": 3600,
   "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\n...",
-  "attestation": {
-    "kind": "dev-mock",
-    "measurement": "0000",
-    "nonce_echo": "sha256:<64 lowercase hex characters>",
-    "issued_at": "2026-05-04T10:00:00Z",
-    "expires_at": "2026-05-04T10:05:00Z"
-  }
+  "attestation": { "contractVersion": "1.0.0", "...": "AttestationVerificationRequest" }
 }
 ```
 
@@ -370,12 +364,11 @@ The signing service returns `{ signature, key_id, signed_at }`. The proxy's NATS
 
 ### 6. Capability attestation
 
-**Implementation status.** The versioned verifier boundary is shipped. A real
-platform verifier is not yet shipped: the existing `dev-mock` provider and
-caller-supplied test header are not production evidence and cannot satisfy this
-contract. Until the verifier, production-mode refusal, and binding rollout are
-complete, an `attestation_required` policy is containment scaffolding rather
-than proof that approved code is running.
+**Implementation status.** The `k8s-key-bound` verifier, signed measurement
+approval lifecycle, strict SVID issuance binding, exact-current runtime lookup,
+Proxy cache, and Policy input are shipped. Production refuses `dev-mock`,
+caller-supplied headers, unbound cache entries, revoked/superseded leaves, and
+unsigned/global measurement allowlists.
 
 The canonical machine contract is
 [`contracts/attestation-verifier-v1.schema.json`](contracts/attestation-verifier-v1.schema.json),
@@ -438,14 +431,8 @@ Rego rule sketch:
 ```rego
 deny[msg] {
   tool_requires_attestation[input.method]
-  not fresh_attestation(input.attestation)
-  msg := "attestation required or stale"
-}
-
-deny[msg] {
-  tool_requires_attestation[input.method]
-  not allowed_measurements[input.method][input.attestation.measurement]
-  msg := "agent measurement not in allowlist"
+  not strict_attestation
+  msg := "attestation_invalid"
 }
 ```
 
@@ -459,8 +446,8 @@ Shared types are duplicated on each side of the wire. The fields below need to l
 | Edge | Field added | Repos to grep |
 |---|---|---|
 | Proxy → Brain | `tenant: Option<String>` (Phase 5 — demo prefix or SVID `tenant/<t>`; scopes Brain's per-agent persona/drift/verdict state) | `clavenar-proxy/src/fork.rs`, `clavenar-brain/src/wire.rs` |
-| Evidence collector → verifier → Identity/Proxy/Policy | `AttestationVerificationRequest`, `VerifiedAttestation`, `AttestationRejection` (contract 1.0.0) | `clavenar-identity/src/attestation_contract.rs`, `clavenar-proxy/src/attestation_contract.rs`, `clavenar-policy-engine/src/attestation_contract.rs` |
-| Proxy → Policy | `agent_spiffe: String`, `attestation: Option<AttestationClaims>` (legacy scaffold; not a verified-result claim) | `clavenar-proxy/src/fork.rs`, `clavenar-policy-engine/src/wire.rs` |
+| Evidence collector → verifier → Identity/Proxy/Policy | `AttestationVerificationRequest`, `VerifiedAttestation`, `AttestationRejection` (contract 1.0.0) | `clavenar-identity/src/attestation_verifier.rs`, `clavenar-proxy/src/attestation.rs`, `clavenar-policy-engine/src/wire.rs` |
+| Proxy → Policy | `agent_spiffe`, `credential_fingerprint`, `public_key_sha256`, `attestation: Option<VerifiedAttestation>` | `clavenar-proxy/src/fork.rs`, `clavenar-policy-engine/src/wire.rs` |
 | Proxy → HIL | `agent_spiffe: String`, `delegation_jti: String` | `clavenar-proxy/src/sandbox_handoff.rs` (CreatePending site), `clavenar-hil/src/api.rs` |
 | Proxy → Ledger (NATS) | `agent_spiffe`, `signature`, `key_id` (chain v2) | `clavenar-proxy`, `clavenar-ledger/src/chain.rs` |
 
