@@ -378,7 +378,7 @@ repos/clavenar-e2e/dev/run-killchain.sh
 
 **Concept.** Some tool calls are too expensive (or too irreversible) to auto-approve even when Brain and Policy bless them. Wire transfers, account deletions, large refunds — the "Yellow tier." For these, the proxy parks the request at `clavenar-hil`, which surfaces it to a human approver and resolves the verdict on their click. The state machine is `Pending → Approved | Denied | Expired`. Approved → upstream fires (proxy treats it like Authorized). Denied/Expired/poll-timeout → 403 to the agent.
 
-**Implementation.** `clavenar-hil:8084`. Wire surface: `POST /pending` (proxy creates) with body `CreatePending { agent_id, correlation_id, method, request_payload, risk_summary, ttl_seconds, sandbox_report }`; `GET /pending/{id}` long-polled by the proxy until status leaves `pending`; `POST /pending/{id}/decide` for approver clicks; `POST /pending/{id}/modify` for modify-and-resume. Each state transition emits a NATS forensic event that lands in the chain.
+**Implementation.** `clavenar-hil:8084`. Wire surface: `POST /pending` (proxy creates) with body `CreatePending { agent_id, correlation_id, method, request_payload, risk_summary, ttl_seconds, sandbox_report }`; `GET /pending/{id}` long-polled by the proxy until status leaves `pending`; `POST /decide/{id}` for approve, deny, or modify-and-resume. Each state transition emits a NATS forensic event that lands in the chain.
 
 **Verify.** Drive the centerpiece scenario through the simulator and watch a row land in `/audit` with `tool_type=wire_transfer` in `Pending` state, then approve via console `/hil`, watch upstream fire.
 
@@ -1029,7 +1029,21 @@ python3 clavenar-e2e/scripts/check-hil-decision-principals.py --require-source
 # arbitrary workload, and Simulator-to-operator-row negatives.
 ```
 
-### 5.9 Sessions, CSRF, JWKS cache
+### 5.9 Route-wide authenticated HIL tenant scope
+
+**Concept.** An authenticated approver may decide and observe only their tenant's HIL work. Query parameters and request JSON are filters, not proof of tenant authority; foreign objects behave like absent objects and SSE/aggregates never reveal cross-tenant events or counts.
+
+**Implementation.** Exact Console mTLS sends `X-Clavenar-Tenant-Scope`, derived from the authenticated server session. HIL converts it to `PendingScope::Tenant` and applies it to decide, list, summary/cursor, stream, object, correlation, annotation, assignment, decision-link mint, and aggregate paths. Exact Simulator mTLS cannot send that header and receives the fixed `CLAVENAR_HIL_SIMULATOR_TENANT`; demo cookies receive `PendingScope::DemoPrefix`; only explicit auth-disabled mode retains query/body tenant compatibility.
+
+**Verify.**
+
+```bash
+python3 clavenar-e2e/scripts/check-hil-tenant-scope.py --require-source
+# The canonical dev/prod smoke also creates two tenants and proves route-wide
+# cross-tenant rejection, cursor binding, and zero SSE cross-emission live.
+```
+
+### 5.10 Sessions, CSRF, JWKS cache
 
 **Concept.** Mechanical defaults that don't warrant their own sections.
 

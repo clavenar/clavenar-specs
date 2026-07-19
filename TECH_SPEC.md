@@ -1032,12 +1032,12 @@ Cross-cutting clarification — applies to every module. Clavenar v1 shipped a *
 
 ### 2. Operator-tenant scoping (Phases 1–5, shipped — capability-complete, not yet live-exercised)
 
-The year-2 operator-tenant arm landed: the demo-prefix machinery of §7 was re-keyed onto the authenticated **operator tenant** — the OIDC `tenant` claim at the console edge and the SVID `tenant/<t>` segment at the data plane. Every surface below is isolation-tested, but absent a live customer tenant it runs today only against a test OIDC tenant; a single-tenant deployment is unaffected (the no-tenant `System` path behaves exactly as v1 did).
+The year-2 operator-tenant arm landed: the demo-prefix machinery of §7 was re-keyed onto the authenticated **operator tenant** — the OIDC `tenant` claim at the console edge and the SVID `tenant/<t>` segment at the data plane. Every surface below is isolation-tested, but absent a live customer tenant it runs today only against a test OIDC tenant; a single-tenant deployment is unaffected (its `System` session resolves to the configured deployment tenant, default `acme`).
 
 - **Identity (P1).** `OidcRegistry` refuses boot if two tenants (or a tenant and the fallback) share an issuer — the implicit issuer→tenant binding is only sound when an issuer maps to one tenant. A token whose issuer doesn't match the body tenant returns `403 tenant_mismatch` (wiring the previously-dead `AuthError::TenantMismatch`) on `/agents` and `/grant`; forged / expired still 401. `/sign` is SPIFFE-allowlisted, not OIDC, so it is correctly outside this gate.
 - **Console (P2).** A per-request `TenantScope { Demo(prefix) | Operator(tenant) | System }` extractor resolves the tenant once (demo cookie wins → operator session tenant → System). The operator tenant is read from the OIDC token at login via `CLAVENAR_CONSOLE_OIDC_TENANT_CLAIM` (default `org_id`) into `SessionData.tenant`; the agents surfaces scope to it and a cross-tenant read 404s (never confirms a foreign row exists). Non-OIDC / claimless modes stay `System` (single-tenant preserved).
 - **Ledger verdict reads (P3).** v1/v2/v4 verdict reads (`read_entries_for_agent` + paged/before/after/since, `/count`, by-correlation, distinct-agents) take an optional `?tenant=` on the internal-mTLS router and append `AND tenant=?` (plain equality, index-friendly). A partial index `idx_entries_tenant_agent_verdict (tenant, agent_id) WHERE chain_version <> 3` backs it. Legacy NULL-tenant verdict rows were backfilled to `single-tenant-legacy` (v3 excluded; the v1/v2/v4 hashables never include `tenant`, so the backfill is `/verify`-safe — confirmed at prod scale). Demo and operator are mutually-exclusive arms: `?tenant=` is ignored when a demo-session token is present.
-- **Policy + HIL (P4).** The policy-engine tenant column (built generic in Phase 0) now also accepts operator labels: operator tenants fork-on-write and are never TTL-swept (only demo tenants are). HIL gained `pending_requests.tenant` (+ index, idempotent migration) and a `/decide` **operator gate** — a caller claiming a tenant may only decide that tenant's pendings (403 otherwise), mirroring the demo-prefix gate; list reads filter `AND tenant=?`. The console's `scoped_policies` / `scoped_hil` thread the operator tenant through.
+- **Policy + HIL (P4).** The policy-engine tenant column (built generic in Phase 0) also accepts operator labels: operator tenants fork-on-write and are never TTL-swept (only demo tenants are). HIL's `pending_requests.tenant` (+ index, idempotent migration) is now enforced route-wide. Decisions bind the authenticated `DecisionPrincipal.tenant` to the row; queue, summary/cursor, stream, object, correlation, annotation, assignment, decision-link mint, and aggregate routes receive an authoritative `PendingScope`. Exact Console mTLS must carry `X-Clavenar-Tenant-Scope`, derived by Console from its authenticated server session; exact Simulator mTLS receives HIL's fixed configured tenant and cannot send the header. Query/body tenant text is compatibility-only when authentication is explicitly disabled and can never widen an enabled request. Cross-tenant object paths 404, a foreign cursor 400s, and streams/aggregates filter before serialization or computation. The console's `scoped_policies` / `scoped_hil` thread the operator tenant through.
 - **Brain (P5).** `tenant` is in the `/inspect` request shape. Classifiers and the indirect-injection detector stay shared, but the persona-drift baseline, the on-disk persona (`personas/{tenant}/{agent}.md` shadows a shared base), and the L1/L2 verdict cache key off `(tenant, agent)` — and the proxy's per-agent history store is tenant-scoped via `scoped_agent_key` — so no signal or cached verdict crosses tenants.
 
 **Honest status.** Prod runs one *test* OIDC tenant (`acme`, issuer `https://idp.test/`); the prod console is `auth: disabled` (synthetic admin) and dev is `basic-admin`, so no real operator tenant has driven these paths. Isolation correctness is established by unit / integration tests, not by live multi-customer traffic.
@@ -1045,7 +1045,7 @@ The year-2 operator-tenant arm landed: the demo-prefix machinery of §7 was re-k
 ### 3. What still does not filter on operator tenant
 
 - **Self-Learn mining corpus / Policy Lab replay** (`read_replay_corpus`, [Console policy management](#console-policy-management)). Still has no operator-tenant predicate — the miner and the replay-batch see a shared pool. (The demo-prefix arm scopes the demo's own corpus; the operator arm is the residual.)
-- **Per-tenant HIL approver routing.** One approval surface; per-tenant Slack / Teams routing, and operator-scoping of HIL get-by-id / stats / stream, are not yet wired.
+- **Per-tenant HIL approver routing.** One approval surface; Slack / Teams delivery still has no per-tenant destination routing. HIL HTTP decision and read/mutation routes are tenant-scoped independently of that notification-routing residual.
 - **SAML tenant extraction.** Only the OIDC claim path resolves an operator tenant; a SAML deployment yields no tenant.
 - **Per-tenant Brain replicas / deep-review budget.** Brain *state* is tenant-keyed (§2), but model replicas and a per-tenant deep-review model / budget (the optional "Phase 5.1") are not split.
 
@@ -1076,10 +1076,11 @@ front of every correlation-id UUID by `clavenar-proxy`). Enforced end-to-end:
   `clavenar_shared::demo_prefix::prefix_matches_first_group`, never
   `starts_with`. Per-row reads (`/audit/{agent_id}`, `/count`, `/lifecycle`,
   analysis) are mTLS-internal; only the aggregate `/verify` is browser-reachable.
-- **HIL.** A `DemoScope` middleware scopes every read endpoint at the
-  persistence layer (`correlation_id LIKE '<prefix>-%'`); single-row reads 404 /
-  by-correlation 403 cross-prefix; the approve queue is own-prefix-only (no
-  `source` column). A present-but-invalid demo cookie is 401, never an operator.
+- **HIL.** The route-wide `PendingScope::DemoPrefix` arm scopes every read
+  endpoint at the persistence layer (`correlation_id LIKE '<prefix>-%'`);
+  single-row and by-correlation reads both 404 cross-prefix, and the approve
+  queue is own-prefix-only (no `source` column). A present-but-invalid demo
+  cookie is 401, never an operator.
 - **Policy engine.** `policies` carry a nullable `tenant`; `tenant IS NULL` is
   the global base (incl. the protected floor, which a tenant cannot weaken), a
   `tenant=<prefix>` row shadows base by name. `/evaluate` selects the per-tenant
@@ -1670,6 +1671,26 @@ The trust path is **mode-dependent** because WebAuthn already has a stronger pri
   tenant, method, and credential from the exact simulator workload identity,
   `CLAVENAR_HIL_SIMULATOR_TENANT`, and the peer certificate, then rejects any
   decision outside that tenant. The simulator sends only verdict and reason.
+
+WP-04.5 applies that authenticated tenant beyond the decision handler. HIL's
+route middleware inserts exactly one `PendingScope` for queue lists, bounded
+summaries and cursors, SSE, get-by-id, correlation lookup, incident annotation,
+assignment, decision-link minting, and approval aggregates:
+
+- exact Console mTLS must provide `X-Clavenar-Tenant-Scope`; Console derives it
+  from `TenantScope::Operator`, or from the configured single-deployment tenant
+  for `TenantScope::System`;
+- exact Simulator mTLS cannot provide that header and is always confined to
+  `CLAVENAR_HIL_SIMULATOR_TENANT` inside HIL;
+- a valid demo cookie resolves to `PendingScope::DemoPrefix` and remains
+  narrower than workload credentials; and
+- only the explicit `CLAVENAR_HIL_AUTH_DISABLED=true` bridge retains request
+  query/body tenant filters for local compatibility.
+
+The request's `tenant` query or JSON field is never provenance and never
+authority in enabled mode. A Console tenant header on `/decide` must also equal
+the independently authenticated `DecisionPrincipal.tenant`; foreign objects
+are deliberately indistinguishable from missing objects.
 
 The bearer is a second factor for the non-WebAuthn modes. Internal s2s mTLS via
 clavenar-identity SVIDs (see [Internal service mTLS](#internal-service-mtls) —
