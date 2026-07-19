@@ -1497,6 +1497,28 @@ Console + HIL human-auth surface — what an operator presents to the console, h
 
 Originally, WebAuthn was the only auth path. That was a dealbreaker for buyers with existing OIDC SSO and there was no solo-evaluation mode. Cross-channel approvers (Slack / Teams) had no way to anchor their clicks to a stable operator identity, so chain rows could carry inconsistent `decided_by` values across channels. Read routes had no viewer-or-better gate, so a misconfigured deploy could leak audit data to anyone who hit the URL.
 
+### 1a. Durable accountable-enrollment state
+
+HIL's SQLite authority includes additive tables for invitations, one-time
+deployment bootstrap, credential addition, recovery, and enrollment ceremonies.
+Every record binds a deployment, tenant, normalized subject, issuer, fixed
+purpose, expiry, attempt ceiling/count, lifecycle status, and transition
+timestamps. Invitation/recovery tokens and WebAuthn challenges are stored only
+as SHA-256 digests. Only one live subject/purpose flow is permitted, and a
+deployment can create only one bootstrap authority over its lifetime.
+
+The lifecycle is `pending → completed | cancelled | expired | exhausted`.
+Mutations use conditional SQLite transitions over the exact binding; terminal
+records cannot be replayed. A ceremony must reference an exact live parent and
+cannot outlive it. The schema migration is additive and idempotent, preserving
+existing pending decisions, credentials, and cross-channel identities.
+
+This release stages the durable state boundary only. The current registration
+HTTP handlers do not yet mint or consume these authorities; authenticated
+invitation/bootstrap, existing-credential addition, and separately authorized
+recovery are enabled only by their subsequent route rollout. Schema presence
+alone grants no enrollment authority.
+
 ### 2. Auth modes
 
 Four modes selected via `CLAVENAR_CONSOLE_AUTH={disabled|basic-admin|webauthn|oidc}`:

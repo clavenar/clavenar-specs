@@ -942,6 +942,26 @@ CLAVENAR_CONSOLE_AUTH=disabled cargo run -p clavenar-console -- --bind 0.0.0.0
 
 **Verify.** Console `/login` in WebAuthn mode prompts a passkey ceremony. After auth, approving a HIL pending stamps `webauthn:<name>` on the chain row.
 
+### 5.3a Durable accountable-enrollment state
+
+**Concept.** Invitation, one-time bootstrap, credential addition, and recovery
+need durable, tenant/subject-bound authority before public routes can safely use
+them. A restart must not reopen bootstrap or erase attempt/replay state.
+
+**Implementation.** HIL provisions five additive SQLite tables. Authority rows
+carry deployment, tenant, normalized subject, issuer, fixed purpose, expiry,
+bounded attempts, lifecycle status, and audit timestamps; bearer material and
+ceremony challenges persist only as SHA-256 digests. Exact conditional
+transitions enforce completion/cancellation/expiry/exhaustion, one active flow,
+one lifetime bootstrap per deployment, and a live exact parent for every
+ceremony. The storage API is staged before route adoption and grants no new
+enrollment authority by itself.
+
+**Verify.** Run `cargo test enrollment:: --lib` in `clavenar-hil`. The suite
+proves clean/idempotent schema creation, existing-row preservation, canonical
+binding, digest-only persistence, uniqueness, bounded attempts, expiry,
+terminal replay rejection, and parent-bound ceremony lifetime.
+
 ### 5.4 OIDC code flow + JWKS
 
 **Concept.** Generic OIDC against any compliant IdP. Tested in CI against Keycloak (the only IdP with reliable Dockerized fixtures); quickstart docs cover Google / Okta / Azure AD / Auth0 without CI fixtures (their public test infra is unreliable). JWKS is cached for an hour, refreshed reactively on signature failure.
