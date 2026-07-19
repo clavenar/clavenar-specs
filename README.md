@@ -520,6 +520,26 @@ A Yellow-tier action suspends the agent's execution state and triggers the HIL
 workflow; the proxy holds the agent's connection (bounded by a poll timeout) until
 the request is approved, denied, or expires.
 
+### Typed modification contract
+
+`Modify` never accepts a replacement request document. Contract
+`clavenar.hil.modification-diff/v1` permits 1–16 replacements of existing JSON
+scalar leaves below `params.arguments`; each path is a 1–8 element object-key
+vector. Add/remove, array traversal, object/array values, duplicate/no-op paths,
+and JSON-RPC envelope, method, tool, identifier, tenant, schema, credential,
+grant, or policy fields are rejected. The authoritative schema and fixed digest
+vector are [`contracts/hil-modification-diff-v1.schema.json`](contracts/hil-modification-diff-v1.schema.json)
+and [`contracts/hil-modification-diff-v1.fixture.json`](contracts/hil-modification-diff-v1.fixture.json).
+
+Clavenar canonical JSON v1 is UTF-8 JSON with no insignificant whitespace,
+lexicographically sorted object keys, preserved array order, and deterministic
+`serde_json` scalar encoding. HIL persists `sha256:` commitments for the
+original, reviewed, and candidate execution payloads. Proxy independently
+reapplies the diff to its own original bytes and requires all three commitments
+to match before the candidate advances. A candidate digest is not proof of
+post-modification authorization or execution: complete re-gating and terminal
+execution receipts remain separate required stages.
+
 ### Meeting humans where they work
 
 - **Slack / MS Teams.** A rich-text card to a designated channel: Approve, Deny,

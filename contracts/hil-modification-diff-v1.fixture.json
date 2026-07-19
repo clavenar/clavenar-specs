@@ -1,0 +1,40 @@
+{
+  "contract": "clavenar.hil.modification-diff/v1",
+  "originalPayload": {
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "payments.transfer",
+      "arguments": {
+        "amount": 500,
+        "destination": "old"
+      }
+    },
+    "id": 7
+  },
+  "modificationDiff": {
+    "contract": "clavenar.hil.modification-diff/v1",
+    "replacements": [
+      {
+        "path": ["amount"],
+        "value": 100
+      }
+    ]
+  },
+  "candidatePayload": {
+    "id": 7,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "amount": 100,
+        "destination": "old"
+      },
+      "name": "payments.transfer"
+    }
+  },
+  "originalPayloadDigest": "sha256:f15696c34c6067dfd40717418d366a3879238765033bbc1e2a1304114e405861",
+  "reviewedPayloadDigest": "sha256:819487b80d4b1986126cbd2e3b623ed008c87bbd79f22b1afd1c55b751f3c0d1",
+  "candidateExecutionPayloadDigest": "sha256:819487b80d4b1986126cbd2e3b623ed008c87bbd79f22b1afd1c55b751f3c0d1",
+  "candidateOnly": true
+}
