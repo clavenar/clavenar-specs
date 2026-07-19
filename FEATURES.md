@@ -990,11 +990,11 @@ open http://localhost:8085/login
 # Login → /audit works → /hil works (read-only) → buttons hidden
 ```
 
-### 5.6 Server-stamped `decided_by`
+### 5.6 Server-derived decision principal
 
-**Concept.** Originally the chain stamped `decided_by = "clavenar-console"` regardless of which human clicked. After the fix, HIL stamps `decided_by` server-side from the verified principal — the request body can't override it. Three formats: `webauthn:{name}`, `oidc:<sub>`, `basic:<username>`.
+**Concept.** HIL attaches a closed `DecisionPrincipal {subject, tenant, method, credential}` to every enabled HTTP decision. It writes `decided_by` from `subject` and provenance from `method`; request body fields and caller text cannot override or infer either value.
 
-**Implementation.** `clavenar-hil/src/decide.rs` resolves the verified principal from session/cookie/bearer and writes it to the chain row. Slack and Teams clicks stamp `oidc:<sub>` via the linked `oidc_sub` lookup — the underlying channel ID never appears on the chain.
+**Implementation.** WebAuthn sessions bind the exact tenant, subject, and passkey credential. Console builds the typed subject/tenant/method claim from its authenticated server session; HIL accepts it only from the exact Console workload and supplies the mTLS certificate fingerprint. HIL synthesizes Simulator's `workload-mtls` principal and permits it only on the configured simulator tenant. Slack and Teams retain their separately authenticated channel mapping.
 
 **Verify.**
 
@@ -1003,11 +1003,11 @@ open http://localhost:8085/login
 curl http://localhost:8083/audit/correlation/<id> | jq '.[] | .decided_by'
 ```
 
-### 5.7 `approver_assertion` JSON blob
+### 5.7 Typed `approver_assertion`
 
-**Concept.** Hook for stronger per-decision claims later. Today: just records `{ method, credential_id|sub|username, iat }` per format. Hooks for future per-decision WebAuthn step-up over OIDC sessions.
+**Concept.** The legacy column name remains for wire and SQLite compatibility, but enabled HTTP decisions store one uniform typed principal rather than mode-specific caller blobs.
 
-**Implementation.** Field on the HIL state-transition forensic event. WebAuthn shape: `{ method: "webauthn", credential_id: "...", iat: ... }`. OIDC: `{ method: "oidc-session", sub: "...", iat: ... }`. Basic-admin: `{ method: "basic-admin", username: "..." }` (intentionally cheap — no chain-of-trust to assert).
+**Implementation.** The exact JSON keys are `subject`, `tenant`, `method`, and `credential`. WebAuthn and demo credentials are derived from verified sessions; Console and Simulator credentials are exact workload-certificate fingerprints. Historical chat and auth-disabled rows may retain their older shapes.
 
 **Verify.**
 
@@ -1015,20 +1015,18 @@ curl http://localhost:8083/audit/correlation/<id> | jq '.[] | .decided_by'
 curl http://localhost:8083/audit/correlation/<id> | jq '.[] | .approver_assertion'
 ```
 
-### 5.8 Console → HIL trust (mode-dependent)
+### 5.8 Console and Simulator → HIL trust
 
-**Concept.** Two trust paths, depending on the console's auth mode. WebAuthn mode keeps HIL as the credential authority — it's already a stronger primitive and we don't tear it out. Operator-mTLS, OIDC, basic-admin, and SAML modes use a shared bearer token (`CLAVENAR_HIL_DECIDE_TOKEN` or its exclusive `_FILE` source); the console verifies the operator, stamps `decided_by`, and presents the bearer to HIL on `/decide`. HIL accepts the request-body `decided_by` only when the bearer validates. The bearer is the interim posture; internal s2s mTLS via clavenar-identity SVIDs is the planned uniform replacement.
+**Concept.** WebAuthn keeps HIL as the credential authority. Operator-mTLS, OIDC, basic-admin, and SAML use a shared bearer as a second factor, but HIL also requires the exact Console workload identity and accepts only a typed session-derived claim. Simulator receives a distinct server-synthesized machine principal over one configured tenant. Arbitrary workloads and caller-supplied identities are rejected.
 
-**Implementation.** Console: `auth_handlers.rs` calls HIL with `Authorization: Bearer <DECIDE_TOKEN>` + `X-Clavenar-Decided-By: <principal>`. HIL: middleware verifies the bearer (constant-time compare); without it, falls back to `Authn::Disabled` legacy path. Console refuses to boot if the configured mode requires the token and it's missing. Production enables strict external-secret mode: HIL/session, HIL/console decision bearer, and the shared demo-session key arrive through bounded regular files. Inline-plus-file ambiguity and weak/default values fail startup without disclosing values.
+**Implementation.** Console calls HIL with `Authorization: Bearer <DECIDE_TOKEN>` plus a hex-encoded `X-Clavenar-Decision-Principal`. HIL constant-time verifies the bearer, binds the exact Console mTLS peer, validates subject/method/tenant, and injects the TLS credential fingerprint. The legacy `X-Clavenar-Decided-By` header is a hard `400`. Simulator sends no principal or tenant claim; HIL uses its exact mTLS identity plus `CLAVENAR_HIL_SIMULATOR_TENANT`. Strict external-secret rules remain unchanged.
 
 **Verify.**
 
 ```bash
-# Tamper with the X-Clavenar-Decided-By header without a bearer
-curl -X POST http://localhost:8084/pending/<id>/decide \
-  -H "X-Clavenar-Decided-By: admin@evil.com" \
-  -d '{"approve":true}'
-# 401 missing bearer
+python3 clavenar-e2e/scripts/check-hil-decision-principals.py --require-source
+# Verifies spoofed approver/tenant/method/credential, legacy header,
+# arbitrary workload, and Simulator-to-operator-row negatives.
 ```
 
 ### 5.9 Sessions, CSRF, JWKS cache

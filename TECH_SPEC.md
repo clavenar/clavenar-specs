@@ -1626,11 +1626,26 @@ The literal `"clavenar-console"` value has been replaced — HIL now stamps `dec
 - `oidc:<sub>` — OIDC mode; also stamped on Slack / Teams clicks after self-link (the OAuth-linked `oidc_sub` flows through, not the underlying channel id).
 - `basic:<username>` — basic-admin mode (auditor reads this and immediately knows the deployment was running in basic-admin mode).
 
-The chain row also carries an `approver_assertion` JSON blob — extension hook for stronger per-decision claims:
+The chain row's `approver_assertion` is now one uniform, typed
+`DecisionPrincipal` rather than a mode-specific caller blob:
 
-- WebAuthn: `{ "method": "webauthn", "credential_id": "...", "iat": ... }`
-- OIDC: `{ "method": "oidc-session", "sub": "...", "iat": ... }`
-- Basic: `{ "method": "basic-admin", "username": "..." }` (intentionally cheap — no chain-of-trust to assert)
+```json
+{
+  "subject": "oidc:248289761001",
+  "tenant": "acme",
+  "method": "oidc",
+  "credential": "workload-mtls:sha256:<console-leaf-fingerprint>"
+}
+```
+
+WebAuthn uses the exact passkey credential id bound into HIL's signed session;
+demo uses a digest of the verified demo JWT; Console bearer modes use the exact
+Console workload-certificate fingerprint; simulator uses the exact simulator
+workload-certificate fingerprint. The method is a closed enum (`webauthn`,
+`oidc`, `saml`, `basic-admin`, `operator-mtls`, `demo-session`,
+`workload-mtls`, or the explicit development-only `auth-disabled`). HIL writes
+`decided_by` from `DecisionPrincipal.subject` and provenance from its typed
+`method`; neither is inferred from arbitrary caller text.
 
 Existing WebAuthn rows in the chain don't get the field retroactively; only rows produced after the field landed carry it. No chain-version bump required; the field is additive.
 
@@ -1638,10 +1653,29 @@ Existing WebAuthn rows in the chain don't get the field retroactively; only rows
 
 The trust path is **mode-dependent** because WebAuthn already has a stronger primitive and we don't tear it out:
 
-- **WebAuthn mode (today, unchanged):** HIL is the credential authority. The console proxies WebAuthn ceremonies and shuttles HIL's session cookie back to the browser; subsequent `/decide` calls attach the HIL cookie and HIL stamps `decided_by` from the verified principal.
-- **Operator-mTLS / OIDC / basic-admin / SAML:** HIL has no console-session credential to verify, so console and HIL share a bearer secret (`CLAVENAR_HIL_DECIDE_TOKEN` or the mutually exclusive `CLAVENAR_HIL_DECIDE_TOKEN_FILE`). Console verifies the operator, stamps `decided_by`, and presents the bearer on `/decide`. HIL trusts the request-body `decided_by` *only when* a valid bearer is present; its separate auth-disabled compatibility path remains limited to explicitly configured development bridges. Console refuses to boot if the configured mode requires the token and it is missing; HIL defaults to per-request validation (401 on a token-less decide) but operators can opt into the same boot-time guard by setting `CLAVENAR_HIL_REQUIRE_DECIDE_TOKEN=true`. Production additionally sets each service's `REQUIRE_EXTERNAL_SECRETS` guard: HIL then requires its session, decision, and demo-session keys from regular bounded files even when HIL auth is disabled, while console requires its decision/demo files. Inline-plus-file ambiguity, short/known placeholder values, and structurally weak repeated values fail startup without logging their contents.
+- **WebAuthn mode:** HIL is the credential authority. The signed session binds
+  tenant, normalized subject, and the exact credential id used at login;
+  `/decide` rejects older name-only sessions and derives the principal without
+  consulting decision JSON.
+- **Operator-mTLS / OIDC / basic-admin / SAML:** Console derives a typed
+  subject/tenant/method claim only from its authenticated server session and
+  sends it in `X-Clavenar-Decision-Principal`. HIL accepts that claim only when
+  the bearer is valid **and** the verified mTLS peer is the exact Console
+  workload, then supplies the credential fingerprint from TLS state. The
+  legacy `X-Clavenar-Decided-By` header is a hard `400`; request-body
+  `decided_by`, tenant, and assertion values cannot alter the enabled-mode
+  principal. The explicit auth-disabled development bridge remains visibly
+  unauthenticated.
+- **Simulator:** HIL accepts no principal header. It synthesizes subject,
+  tenant, method, and credential from the exact simulator workload identity,
+  `CLAVENAR_HIL_SIMULATOR_TENANT`, and the peer certificate, then rejects any
+  decision outside that tenant. The simulator sends only verdict and reason.
 
-The bearer is the interim posture for the non-WebAuthn modes; internal s2s mTLS via clavenar-identity SVIDs (see [Internal service mTLS](#internal-service-mtls) — **shipped** across all six rollout sessions plus dynamic workload-SVID refresh) gates every internal hop today.
+The bearer is a second factor for the non-WebAuthn modes. Internal s2s mTLS via
+clavenar-identity SVIDs (see [Internal service mTLS](#internal-service-mtls) —
+**shipped** across all six rollout sessions plus dynamic workload-SVID refresh)
+provides the exact workload identity from which HIL accepts or synthesizes the
+principal.
 
 Deployment authentication material has one explicit, non-secret generation
 identifier spanning the HIL session key, HIL decision bearer, demo-session key,
@@ -1695,8 +1729,8 @@ The `/hil` queue is an operator workbench, not just a list. Shipped additive on 
 - **Notifier channels** — `Slack`, `Microsoft Teams`, `PagerDuty` (Events v2), a generic HTTP webhook, and **SMTP email** (`lettre`, rustls). Each is env-enabled independently (missing config → channel disabled). `GET /notifications/config` reports which channels are live as booleans + pool names (no secrets); `POST /notifications/test` fires a synthetic notification to every configured channel. The console exposes both at `/hil/settings`.
 - **Signed decision links (approve from anywhere)** — a decision link is a *pointer plus an authorization claim, never a bearer credential*. HIL mints a per-pending HMAC token `{pending_id}.{action}.{exp}.{sig}` where `sig = HMAC-SHA256(link_key, "{pending_id}.{action}.{exp}")` and `link_key` is **derived** from the session-cookie key via a domain-separated HMAC (no new secret; rotating the master key invalidates outstanding links). `GET /pending/{id}/decision-link?action=approve|deny&ttl_secs=…` mints one (approver-gated, `409` on an already-decided row, default TTL 1 h, clamped ≤ 24 h); `POST /decision-link/verify` validates a token (constant-time, signature checked *before* any field is trusted) and returns its claim plus the target pending's summary (ungated like the other `/pending` reads — the response is a strict subset of `GET /pending/{id}`, no new oracle). The console redemption page `GET/POST /decide/redeem?token=` **still requires a normal authenticated approver session** before it decides: GET shows the confirm form, POST re-verifies the token server-side (the action + pending id come from the *signature*, never the form) and decides through the unchanged `/decide` path with the session credential. So a leaked link alone decides nothing — it only spares the approver from hunting the pending down. The action is bound into the signature, so an `approve` link can never be replayed as a `deny`; expiry is enforced; and the pending state machine bounds replay (a second decide on a settled row is the usual `409`). **No `/decide` wire-contract change and no new `Status`.**
   - **Channel-carried links** — when `CLAVENAR_CONSOLE_URL` is set, every pending and escalation notification carries the two redemption URLs (`{console}/decide/redeem?token=…` for approve and deny, default TTL 1 h) so an approver acts straight from the channel. Slack and Teams cards gain action-bound "Approve in console" / "Deny in console" buttons (Slack URL buttons supersede the generic "Open in console" deep-link; Teams adds `Action.OpenUrl` actions alongside the `Action.Http` ones); PagerDuty `custom_details`, the generic webhook body, and the SMTP email each carry `approve_url` / `deny_url`. The URLs are minted from the same derived `link_key`, so each still redeems only through an authenticated console session — a leaked card decides nothing, and the Slack URL buttons carry a non-`approve:`/`deny:` `action_id` so an inbound click is never parsed as a real decision.
-  - **Terminal redemption** — `clavenarctl pending decide <token>` redeems the same link from a shell: it `POST`s the token to `/decision-link/verify`, prints the target pending, and (only with `--yes`) decides through `/decide/{id}`. The CLI carries no special authority — it dials HIL over **mTLS with an allowlisted client cert** and presents the **`CLAVENAR_HIL_DECIDE_TOKEN`** trusted-caller bearer (`X-Clavenar-Decided-By` stamps the operator into the chain), the same path the console uses. So the link is still a pointer plus an action claim, never a credential: redeeming needs the operator's own standing authority. Without `--yes` the command is a dry run (verify + preview, decides nothing); a token whose pending already settled returns the usual `not_pending`.
-  - **Decided-via chain marker** — every decision records the operator *surface* it arrived through in the chain-hashable `policy_decision.decided_via`: `console` (the queue), `signed-link` (a redeemed decision link), `terminal` (`clavenarctl pending decide`), `slack-card` / `teams-card` (the chat webhooks), `incident-containment` (a fleet-incident one-click case deny), `demo` (a demo visitor), or `system:ttl-sweep` (auto-expiry). It is orthogonal to `approver_provenance` (the *authentication channel*) — a single OIDC operator can decide via the queue, a link, or the CLI, and each is distinguished. The surface is server-derived for verified-cookie / demo callers and taken from the request body only on the trusted bearer / disabled paths (same precedence as `decided_by`), defaulting to `console`. Hashable, so a link-mediated decision is tamper-evidently marked; additive inside the opaque `policy_decision` blob, so **no chain-version bump**. The console audit-detail surfaces it as a labeled badge. Channel-carried-link controls are env knobs rather than a console settings form: the link lifetime is **`CLAVENAR_HIL_DECISION_LINK_TTL_SECS`** (clamped `[60 s, 24 h]`, default 1 h) and per-channel enablement follows the `CLAVENAR_CONSOLE_URL` gate plus each channel's own configuration.
+  - **Terminal inspection** — `clavenarctl pending decide <token>` `POST`s the token to `/decision-link/verify` and prints the target pending, but carries no decision authority. HIL no longer accepts a caller-supplied terminal identity; applying the action requires the normal authenticated Console redemption flow. The retained hidden CLI `--yes` compatibility flag fails without sending `/decide`. A token whose pending already settled returns the usual `not_pending`.
+  - **Decided-via chain marker** — every decision records the operator *surface* it arrived through in the chain-hashable `policy_decision.decided_via`: `console` (the queue), `signed-link` (a redeemed decision link), `slack-card` / `teams-card` (the chat webhooks), `incident-containment` (a fleet-incident one-click case deny), `demo` (a demo visitor), or `system:ttl-sweep` (auto-expiry). It is orthogonal to `approver_provenance` (the *authentication method*). The exact Console workload may provide descriptive surface metadata; simulator, verified-cookie, and demo surfaces are fixed by HIL. Enabled-mode provenance is derived only from the typed `DecisionPrincipal`, never surface or subject text. Hashable, so a link-mediated decision is tamper-evidently marked; additive inside the opaque `policy_decision` blob, so **no chain-version bump**. The console audit-detail surfaces it as a labeled badge. Channel-carried-link controls are env knobs rather than a console settings form: the link lifetime is **`CLAVENAR_HIL_DECISION_LINK_TTL_SECS`** (clamped `[60 s, 24 h]`, default 1 h) and per-channel enablement follows the `CLAVENAR_CONSOLE_URL` gate plus each channel's own configuration.
 
 Hard approver-group routing (§8) remains deferred — pinning a row to a *named* approver group is a change to *who* may decide; quorum and hand-off above are about *how many* and *routing*, not gating.
 
@@ -1918,13 +1952,14 @@ The catalog is the static source of truth in `clavenar-ledger/src/compliance.rs`
 Schema v2 (additive over v1): the Article-14 `metric` gains `attested`
 and a `provenance_summary` map counting every decision row by its
 HIL-stamped channel provenance — `webauthn`, `oidc`, `saml`,
-`basic-admin`, `demo-session`, `bearer`, `teams-card`, `system`,
+`basic-admin`, `operator-mtls`, `demo-session`, `workload-mtls`, `teams-card`, `system`,
 `auth-disabled`, or `unrecorded` for rows that pre-date provenance
 tracking. Provenance is derived server-side in HIL from the verified
 principal at decide time and rides inside the forensic event's
 `policy_decision` object; it is never read from a request body. The
-demo simulator's auto-decider authenticates through the bearer path
-with a `system:<name>` stamp (provenance `system`), and the whole
+demo simulator's auto-decider authenticates through the bearer plus its exact
+mTLS workload identity; HIL synthesizes its machine principal with provenance
+`workload-mtls` and confines it to the configured simulator tenant. The whole
 sidecar sits behind the simulator's `hil-sidecar` cargo feature so a
 production build can compile it out (`--no-default-features`; compose
 exposes it as the `CARGO_BUILD_FLAGS` build arg).
