@@ -537,8 +537,13 @@ lexicographically sorted object keys, preserved array order, and deterministic
 original, reviewed, and candidate execution payloads. Proxy independently
 reapplies the diff to its own original bytes and requires all three commitments
 to match before the candidate advances. A candidate digest is not proof of
-post-modification authorization or execution: complete re-gating and terminal
-execution receipts remain separate required stages.
+post-modification authorization or execution. Proxy reparses the canonical
+candidate, rechecks current quota, agent/grant authority, attestation and decoy
+state, then sends the candidate itself through Brain and Policy. Fresh Green may
+advance; Red fails closed; fresh Yellow creates a distinct blocking HIL row over
+the candidate. The original approval cannot be reused, `auto` is promoted to a
+human tier for that round, and a second modification is rejected. Terminal
+execution receipts remain a separate required stage.
 
 ### Meeting humans where they work
 

@@ -410,12 +410,25 @@ In the console `/hil/{id}` page, the sandbox report renders above the raw payloa
 
 **Concept.** Sometimes an approver looks at a pending request and thinks "this would be fine if it were $100 instead of $5000." Rather than denying and forcing the agent to retry, the approver edits the payload in the UI and approves the modified version. The chain records both the original and the modified payloads.
 
-**Implementation.** `POST /pending/{id}/modify` on `clavenar-hil`. Console exposes a textarea-edit form; htmx submits the modified payload; the proxy's long-poll resolves with the modified payload, which is what gets forwarded upstream. Two chain rows: the `pending.created` (with original) and the `pending.approved` (with modified payload + a flag that modification occurred).
+**Implementation.** The existing `POST /decide/{id}` accepts only the typed
+`clavenar.hil.modification-diff/v1` scalar-replacement contract. HIL commits the
+original and candidate digests; Proxy independently reconstructs canonical
+candidate bytes. The candidate is then reparsed and re-enters current quota,
+revocation, grant, attestation, decoy, Brain, and Policy gates before signing or
+forwarding. Fresh Green may continue. Fresh Red denies. Fresh Yellow creates a
+distinct blocking pending over the candidate; only a plain approval of that row
+continues, while row reuse or a second modification fails closed. The final
+Proxy audit signal and parameter hash belong to the candidate, not the original.
 
 **Verify.** In the console `/hil/{id}` page, click "Modify" — the payload becomes editable. Save → approve. Check the chain for both rows:
 
 ```bash
-curl "http://localhost:8083/audit/correlation/<correlation_id>" | jq
+python3 clavenar-e2e/scripts/check-hil-modification-diffs.py --require-source
+./clavenar-e2e/scripts/check-hil-modification-regating-live.sh \
+  --environment dev --compose-file clavenar-e2e/dev/docker-compose.yml \
+  --env-file /tmp/clavenar-smoke.env --proxy-url https://localhost:19443 \
+  --hil-url https://localhost:18084 --ledger-url https://localhost:18183 \
+  --cert-root clavenar-proxy/certs-dev --receipt /tmp/wp-04.7.json
 ```
 
 ### 2.4 Async callback flow (`X-Clavenar-Callback-URL`)
