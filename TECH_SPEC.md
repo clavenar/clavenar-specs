@@ -1513,11 +1513,29 @@ records cannot be replayed. A ceremony must reference an exact live parent and
 cannot outlive it. The schema migration is additive and idempotent, preserving
 existing pending decisions, credentials, and cross-channel identities.
 
-This release stages the durable state boundary only. The current registration
-HTTP handlers do not yet mint or consume these authorities; authenticated
-invitation/bootstrap, existing-credential addition, and separately authorized
-recovery are enabled only by their subsequent route rollout. Schema presence
-alone grants no enrollment authority.
+Registration now consumes this authority. Anonymous `/auth/register/start`
+requests fail closed. First enrollment requires either a one-use invitation
+issued by an authenticated, non-demo Console Admin or the separately
+provisioned one-use deployment bootstrap. HIL independently requires the exact
+Console workload identity on invitation and recovery issuance, stores only the
+returned authority's digest, and binds consumption to the exact deployment,
+tenant, normalized subject, issuer, and purpose.
+
+Credential addition requires the existing identity's verified HIL passkey
+session. Separately authorized recovery requires a one-use Console-Admin
+authority and does not accept a session belonging to another tenant or
+identity. Completion atomically inserts the identity/credential and
+terminalizes the ceremony plus its parent authority, so neither half can
+commit alone. Bootstrap completion leaves the deployment's lifetime row
+terminal across restart; a new token or pod cannot reactivate it.
+
+`webauthn_approver_identities` is the canonical identity roster. Its
+`(tenant, normalized_name)` pair and user handle are unique; every new
+credential references one identity while credential IDs retain their global
+primary key. Pre-existing unbound credentials are retained for evidence but
+are not silently promoted. They require explicit controlled re-enrollment.
+WP-04.3 retains request-rate limits, concurrency caps, restart-safe WebAuthn
+challenge payloads, and RP-configuration hardening.
 
 ### 2. Auth modes
 
