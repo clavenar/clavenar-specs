@@ -1534,8 +1534,25 @@ terminal across restart; a new token or pod cannot reactivate it.
 credential references one identity while credential IDs retain their global
 primary key. Pre-existing unbound credentials are retained for evidence but
 are not silently promoted. They require explicit controlled re-enrollment.
-WP-04.3 retains request-rate limits, concurrency caps, restart-safe WebAuthn
-challenge payloads, and RP-configuration hardening.
+WebAuthn registration and authentication state is durable rather than
+process-local. HIL serializes the server-side challenge state into SQLite and
+caps starts plus outstanding ceremonies independently by deployment,
+tenant, normalized subject, and a SHA-256 digest of the trusted source. The
+Console overwrites browser-supplied source metadata and HIL accepts that
+forward only from the exact Console workload SVID; direct callers are keyed
+from their transport peer. Limits and the sliding window are explicit
+validated deployment configuration.
+
+Finish reloads the exact kind/deployment/RP-id/RP-origin-bound state, so HIL or
+Console restart does not invalidate an in-flight ceremony and configuration
+substitution fails closed. Invalid finishes increment a bounded durable
+attempt count without destroying the first retry. Success is a conditional
+one-use transition: authentication consumes the state with its credential
+counter update, while registration consumes the WebAuthn state, enrollment
+ceremony, parent authority, identity, and credential in one SQLite
+transaction. Concurrent or replayed finishes cannot both commit. The
+browser-visible Console ceremony cookie is the opaque HIL UUID and has no
+process-local Console mapping.
 
 ### 2. Auth modes
 
