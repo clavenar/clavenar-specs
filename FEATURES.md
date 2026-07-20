@@ -1020,7 +1020,7 @@ curl http://localhost:8083/audit/correlation/<id> | jq '.[] | .decided_by'
 
 **Concept.** The legacy column name remains for wire and SQLite compatibility, but enabled HTTP decisions store one uniform typed principal rather than mode-specific caller blobs.
 
-**Implementation.** The exact JSON keys are `subject`, `tenant`, `method`, and `credential`. WebAuthn and demo credentials are derived from verified sessions; Console and Simulator credentials are exact workload-certificate fingerprints. Historical chat and auth-disabled rows may retain their older shapes.
+**Implementation.** The exact JSON keys are `subject`, `tenant`, `method`, and `credential`. WebAuthn and demo credentials are derived from verified sessions; Console and Simulator credentials are exact workload-certificate fingerprints. HIL's non-human auto tier uses the reserved typed principal `system:policy-tier` with method `system` and credential `policy-tier:auto`, so its method and stored provenance agree without impersonating a workload certificate. Historical chat and auth-disabled rows may retain their older shapes.
 
 **Verify.**
 
