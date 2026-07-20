@@ -531,6 +531,13 @@ grant, or policy fields are rejected. The authoritative schema and fixed digest
 vector are [`contracts/hil-modification-diff-v1.schema.json`](contracts/hil-modification-diff-v1.schema.json)
 and [`contracts/hil-modification-diff-v1.fixture.json`](contracts/hil-modification-diff-v1.fixture.json).
 
+The explicit SDK-governed execution mode is versioned as
+`clavenar.execution/v1`. Its strict signed authorization/workload-receipt
+schema and golden vector are
+[`contracts/execution-receipt-v1.schema.json`](contracts/execution-receipt-v1.schema.json)
+and
+[`contracts/execution-receipt-v1.fixture.json`](contracts/execution-receipt-v1.fixture.json).
+
 Clavenar canonical JSON v1 is UTF-8 JSON with no insignificant whitespace,
 lexicographically sorted object keys, preserved array order, and deterministic
 `serde_json` scalar encoding. HIL persists `sha256:` commitments for the
