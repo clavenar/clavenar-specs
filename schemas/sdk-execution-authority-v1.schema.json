@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/schemas/sdk-execution-authority-v1.schema.json",
+  "title": "Clavenar SDK execution authority v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "feature",
+    "contract",
+    "executionWireContract",
+    "governedExecutor",
+    "ordering",
+    "effectInvariants",
+    "executorInput",
+    "callerOutput",
+    "callerOutputForbidden",
+    "failBeforeExecutor",
+    "failAfterEffectWithoutSuccess",
+    "retainedFeatures"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "feature": { "const": "WP-06.1" },
+    "contract": { "const": "clavenar.sdk-execution-authority/v1" },
+    "executionWireContract": { "const": "clavenar.execution/v1" },
+    "governedExecutor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "registration", "cloneSemantics", "perCallInjectionAllowed"],
+      "properties": {
+        "authority": { "const": "sdk-only" },
+        "registration": { "const": "client-construction" },
+        "cloneSemantics": { "const": "shared-callback" },
+        "perCallInjectionAllowed": { "const": false }
+      }
+    },
+    "ordering": {
+      "const": [
+        "require-registered-executor",
+        "require-workload-signing-key",
+        "request-side-effect-free-authorization",
+        "validate-exact-signed-payload",
+        "invoke-registered-executor",
+        "hash-actual-result",
+        "sign-terminal-receipt",
+        "persist-terminal-receipt",
+        "return-actual-result"
+      ]
+    },
+    "effectInvariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorizationEffects",
+        "sdkExecutorEffects",
+        "proxyExecutionAllowed",
+        "receiptPersistenceRequiredForSuccess"
+      ],
+      "properties": {
+        "authorizationEffects": { "const": 0 },
+        "sdkExecutorEffects": { "const": 1 },
+        "proxyExecutionAllowed": { "const": false },
+        "receiptPersistenceRequiredForSuccess": { "const": true }
+      }
+    },
+    "executorInput": { "const": ["exact-authorized-execution-payload"] },
+    "callerOutput": {
+      "const": ["actual-result", "effect-id", "terminal-receipt-metadata"]
+    },
+    "callerOutputForbidden": {
+      "const": ["signed-authorization", "execution-payload", "host-executable-tool-call"]
+    },
+    "failBeforeExecutor": {
+      "const": [
+        "missing-executor",
+        "missing-signing-key",
+        "authorization-denied",
+        "authorization-review",
+        "authorization-invalid"
+      ]
+    },
+    "failAfterEffectWithoutSuccess": {
+      "const": [
+        "invalid-effect-id",
+        "receipt-signing-failure",
+        "receipt-persistence-failure"
+      ]
+    },
+    "retainedFeatures": {
+      "const": [
+        "WP-06.2",
+        "WP-06.3",
+        "WP-06.4",
+        "WP-06.5",
+        "WP-06.6",
+        "WP-06.7",
+        "WP-06.8",
+        "WP-06.9",
+        "WP-06.10",
+        "WP-06.11"
+      ]
+    }
+  }
+}
+
