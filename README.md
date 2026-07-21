@@ -538,15 +538,6 @@ schema and golden vector are
 and
 [`contracts/execution-receipt-v1.fixture.json`](contracts/execution-receipt-v1.fixture.json).
 
-The governed SDK convenience path owns a clone-shared executor registered when
-the client is built. It authorizes first, invokes that executor with the exact
-signed payload, records the workload-signed terminal receipt, and returns the
-actual result plus non-executable receipt metadata. It never releases the
-authorized call into a host-managed tool loop. Missing executor or receipt
-persistence fails the operation.
-The exact invariant set is
-[`schemas/sdk-execution-authority-v1.schema.json`](schemas/sdk-execution-authority-v1.schema.json).
-
 Clavenar canonical JSON v1 is UTF-8 JSON with no insignificant whitespace,
 lexicographically sorted object keys, preserved array order, and deterministic
 `serde_json` scalar encoding. HIL persists `sha256:` commitments for the
