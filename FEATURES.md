@@ -2192,6 +2192,14 @@ clavenar-chaos-monkey --category deception   # decoy_trap_dump_secrets, decoy_lu
 
 **Verify.** Validate the fixture with its schema and compare its bytes across all five SDKs, Proxy, Lite, and assembled E2E. Counting tests must show more than one decision transport attempt under injected 5xx/network failures while every registered-executor and server-upstream effect count remains at most one. Invalid, partial, mixed, unknown, and legacy-unselected traffic receives no automatic retry.
 
+### 6.11 Explicit client migration
+
+**Concept.** A tool call must never change from inspection to execution because a client omitted a selector. Side-effect-free decision and durable server execution are explicit, mutually exclusive contracts. Selector-free compatibility is limited to effect-free MCP control methods.
+
+**Implementation.** Proxy 0.5.0 and Lite 0.9.0 return HTTP 426 `client_contract_required` with `executable:false` for every unselected effect-capable `/mcp` request before any mutable gate or tool effect. The maintained SDKs select `clavenar.decision/v1`; intentional server executors select `clavenar.server-execution/v1`; both allocate their canonical ID before network access. [`docs/SDK_MIGRATION.md`](docs/SDK_MIGRATION.md) publishes the client-first rollout and gateway-first rollback procedure, and [`contracts/client-migration-v1.fixture.json`](contracts/client-migration-v1.fixture.json) is the exact cross-repository matrix.
+
+**Verify.** Validate the migration fixture and compare every mirror byte-for-byte. Gateway owner tests must count zero Ledger, HIL, receipt, and upstream effects for an unselected tool call; unselected control methods must remain available with zero tool effects. The assembled and live suites retain decision, atomic batch, pending, lost-response, durable replay, uncertain reconciliation, and receipt-redelivery proofs.
+
 **Verify.** Run each package's owner test suite, then compare the fixture across all five repositories byte-for-byte. The conformance tests assert one decision request, zero decision-side effects, one executor invocation after authorization, intent-before-effect ordering, actual provider result return, and fail-closed behavior for missing durability, identity/payload substitution, and persistence errors.
 
 ---

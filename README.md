@@ -854,5 +854,8 @@ This document is the narrative. The shipped runtime lives in sibling repos.
 | —     | `clavenar-console`       | 8085  | Operator UI (axum + Askama); WebAuthn / OIDC / SAML / basic-admin auth ladder; `/demo` curated scenarios; stats dashboards    |
 
 For per-feature claims with copy-paste verification commands and expected output,
-see [`./FEATURES.md`](./FEATURES.md). For design records, the threat model, and
-on-call runbooks, see [`./TECH_SPEC.md`](./TECH_SPEC.md).
+see [`./FEATURES.md`](./FEATURES.md). Before upgrading an SDK or gateway across
+the explicit execution boundary, follow the
+[`governed execution migration guide`](./docs/SDK_MIGRATION.md). For design
+records, the threat model, and on-call runbooks, see
+[`./TECH_SPEC.md`](./TECH_SPEC.md).
