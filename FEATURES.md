@@ -41,6 +41,8 @@ The host-cargo runner (`run.sh`) builds in **debug profile on purpose** — Appl
 12. [Supply chain & threat model](#12-supply-chain--threat-model)
 13. [Wire contracts](#13-wire-contracts)
 14. [Forensic-tier deep review](#14-forensic-tier-deep-review)
+15. [Deception layer (decoys)](#15-deception-layer-decoys)
+16. [Governed language SDK execution](#16-governed-language-sdk-execution)
 
 ---
 
@@ -2163,6 +2165,18 @@ nats kv ls clavenar_decoys | wc -l                   # 6
 # Firing a trap decoy is denied and looks like a policy block (chaos catalog)
 clavenar-chaos-monkey --category deception   # decoy_trap_dump_secrets, decoy_lure_export_credentials
 ```
+
+---
+
+## 16. Governed language SDK execution
+
+### 16.1 Cross-language decision and execution parity
+
+**Concept.** An SDK inspection call must never select a server-execution route by accident. Every language allocates one stable request identity locally, selects the side-effect-free decision contract explicitly, and submits a model turn as one ordered atomic batch. The host registers the only executor and supplies durable storage, so an authorization is committed before the effect and the actual result, effect identity, and terminal receipt are committed together afterward.
+
+**Implementation.** The TypeScript, Python, Go, Java, and .NET packages mirror [`contracts/sdk-cross-language-v1.fixture.json`](contracts/sdk-cross-language-v1.fixture.json) and [`contracts/execution-receipt-v1.fixture.json`](contracts/execution-receipt-v1.fixture.json) byte for byte. Their legacy inspection surfaces now send `x-clavenar-decision-contract: clavenar.decision/v1`, `x-clavenar-execution-contract: clavenar.execution/v1`, and a canonical `x-clavenar-idempotency-id`; batch helpers encode `clavenar.atomic-tool-call-batch/v1`. Their explicit governed-execution APIs validate the returned authorization, commit durable intent, call one registered executor, and persist completion plus the workload-signed receipt without exposing an executable authorization to the host loop.
+
+**Verify.** Run each package's owner test suite, then compare the two fixture files across all five repositories byte-for-byte. The conformance tests assert one decision request, zero decision-side effects, one executor invocation after authorization, intent-before-effect ordering, actual provider result return, and fail-closed behavior for missing durability, identity/payload substitution, and persistence errors.
 
 ---
 
