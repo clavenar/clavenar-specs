@@ -4,7 +4,6 @@
   "decision": {
     "headers": {
       "x-clavenar-decision-contract": "clavenar.decision/v1",
-      "x-clavenar-execution-contract": "clavenar.execution/v1",
       "x-clavenar-idempotency-id": "cfcc8767-4c73-41cc-8ece-b855863924c4"
     },
     "single_request": {
@@ -84,7 +83,20 @@
       "content": "{\"ok\":true}"
     }
   },
-  "receipt_fixture": "execution-receipt-v1.fixture.json",
+  "receipt": {
+    "contract": "clavenar.execution/v1",
+    "stage": "execution.completed",
+    "authorization_id": "354c33ed-e5d3-4af7-a1b8-b009d50b0bc5",
+    "idempotency_id": "cfcc8767-4c73-41cc-8ece-b855863924c4",
+    "payload_sha256": "sha256:269123e546c75ec2df26ce4a52baeab92e58afdfabcb111c3e9069a37f78f1c5",
+    "result_sha256": "sha256:4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93",
+    "effect_id": "provider-operation-123",
+    "workload_signature": {
+      "algorithm": "ES256",
+      "credential_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+  },
   "fail_closed": [
     "missing_durable_store",
     "missing_registered_executor",
