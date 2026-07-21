@@ -2184,6 +2184,14 @@ clavenar-chaos-monkey --category deception   # decoy_trap_dump_secrets, decoy_lu
 
 **Verify.** Run the shared fixture and a counting upstream against each service. Exact replay must leave the count at one, a changed payload under the same identity must return 409 with the count unchanged, a retained in-flight record must return the uncertain outcome without a call, and missing storage must return 503 without a call.
 
+### 6.10 Retry separation
+
+**Concept.** Automatic retry is safe only when the selected operation is provably side-effect-free. An SDK may retry an explicit `clavenar.decision/v1` request after a transport failure or 5xx response, but every attempt must carry the original canonical idempotency ID and the same request semantics. Effect-capable execution is single-attempt: recovery happens through retained completed results, explicit lookup, or an uncertain outcome, never by silently invoking the executor or upstream again.
+
+**Implementation.** [`contracts/retry-separation-v1.fixture.json`](contracts/retry-separation-v1.fixture.json) classifies every decision, polling, SDK-executor, Proxy/Lite server-execution, legacy, invalid-selector, replay, uncertain, and receipt-delivery surface. The language SDKs construct their retrying transport internally with the exclusive decision selector and stable pre-network ID. Registered executors sit outside that loop. Proxy and Lite call an upstream at most once after durable intent; exact client retries use the WP-06.9 durable lookup. Pending polling is bounded lookup-only behavior and never resubmits the original request. Receipt outbox retry is delivery-only and cannot execute an effect.
+
+**Verify.** Validate the fixture with its schema and compare its bytes across all five SDKs, Proxy, Lite, and assembled E2E. Counting tests must show more than one decision transport attempt under injected 5xx/network failures while every registered-executor and server-upstream effect count remains at most one. Invalid, partial, mixed, unknown, and legacy-unselected traffic receives no automatic retry.
+
 **Verify.** Run each package's owner test suite, then compare the fixture across all five repositories byte-for-byte. The conformance tests assert one decision request, zero decision-side effects, one executor invocation after authorization, intent-before-effect ordering, actual provider result return, and fail-closed behavior for missing durability, identity/payload substitution, and persistence errors.
 
 ---
