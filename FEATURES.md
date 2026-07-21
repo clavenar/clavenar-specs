@@ -2176,6 +2176,14 @@ clavenar-chaos-monkey --category deception   # decoy_trap_dump_secrets, decoy_lu
 
 **Implementation.** The TypeScript, Python, Go, Java, and .NET packages mirror [`contracts/sdk-cross-language-v1.fixture.json`](contracts/sdk-cross-language-v1.fixture.json) byte for byte. Their legacy inspection surfaces now send `x-clavenar-decision-contract: clavenar.decision/v1` and a canonical `x-clavenar-idempotency-id`; batch helpers encode `clavenar.atomic-tool-call-batch/v1`. Their explicit governed-execution APIs validate the returned `clavenar.execution/v1` authorization, commit durable intent, call one registered executor, and persist completion plus the workload-signed receipt without exposing an executable authorization to the host loop.
 
+### 6.9 Durable Proxy and Lite server execution
+
+**Concept.** Server execution is an explicit alternative to side-effect-free authorization. Its caller supplies a stable identity before the request; the server commits what it is about to execute, makes at most one upstream attempt, and durably retains the actual result before returning it. Retrying a completed identity reads that result. Retrying an interrupted identity reports uncertainty and never guesses that another effect is safe.
+
+**Implementation.** Send `x-clavenar-server-execution-contract: clavenar.server-execution/v1` together with a canonical `x-clavenar-idempotency-id` on `POST /mcp`. Proxy requires a verified SPIFFE workload and durable server-execution store; Lite requires an authenticated agent and uses its SQLite store. Both bind caller, route, method/tool, submitted request digest, and effective request digest in `execution.intent`; atomically commit exact response status/body/digest, a stable `execution.completed` receipt, and the forensic outbox obligation before response; replay exact completed calls; conflict substitutions; and return a non-executable uncertain error for retained in-flight calls. [`contracts/server-execution-v1.fixture.json`](contracts/server-execution-v1.fixture.json) is mirrored byte for byte in both services.
+
+**Verify.** Run the shared fixture and a counting upstream against each service. Exact replay must leave the count at one, a changed payload under the same identity must return 409 with the count unchanged, a retained in-flight record must return the uncertain outcome without a call, and missing storage must return 503 without a call.
+
 **Verify.** Run each package's owner test suite, then compare the fixture across all five repositories byte-for-byte. The conformance tests assert one decision request, zero decision-side effects, one executor invocation after authorization, intent-before-effect ordering, actual provider result return, and fail-closed behavior for missing durability, identity/payload substitution, and persistence errors.
 
 ---
