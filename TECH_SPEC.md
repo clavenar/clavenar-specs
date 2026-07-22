@@ -203,6 +203,8 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 |---|---|---|---|
 | `POST` | `/svid` | Sign a caller-owned CSR into an instance SVID against bound attestation evidence | One-use exact Simulator bootstrap/recovery or exact current agent SVID + target authority + attestation evidence (§6) |
 | `POST` | `/agents/{id}/svid-recovery?tenant=<t>` | Revoke current SVIDs and open one recovery generation | mTLS + OIDC `agents:admin`; mandatory reason; signed durable lifecycle row |
+| `POST` | `/workload-svid` | Sign a service-owned CSR into its next exact workload generation | Exact pinned bootstrap once/recovery once, or exact current workload leaf; immutable request ID/CSR intent |
+| `POST` | `/workloads/{service}/svid-recovery` | Revoke the current workload SVID and open one bootstrap recovery generation | Exact Console mTLS endpoint capability + OIDC `workloads:recover`; mandatory reason; signed durable lifecycle row |
 | `POST` | `/grant` | Exchange OIDC `id_token` + agent SVID → delegation grant | OIDC `id_token` + SVID mTLS |
 | `POST` | `/actor-token` | Mint an audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed request binding |
 | `POST` | `/actor-token/redeem` | Verify and consume one audience-bound A→B token | Exact Proxy mTLS endpoint capability + typed expected binding |
@@ -4005,8 +4007,8 @@ unreadable bytes, a digest mismatch, a missing service section, duplicate or
 malformed identities/routes, an unknown caller, or an unsupported method or
 path template aborts startup. There is no handwritten service-level override.
 
-The v1.124.2 bundle contains 11 exact workload identities, four governed
-services, 54 capability families, and 118 method/template route records. Each
+The generated bundle contains 11 exact workload identities, four governed
+services, 59 capability families, and 124 method/template route records. Each
 identity maps one canonical caller ID such as `service-proxy` to exactly one
 `spiffe://clavenar.local/service/proxy` URI. Agent SVIDs map only to the
 separate `agent-workload` caller class where a route explicitly grants it;
@@ -4044,25 +4046,18 @@ non-granted workload/route pair is denied in both supported deployment shapes.
 
 ### 4. Bootstrap
 
-Identity is the bootstrap target itself — its receive path cannot
-require an SVID the caller does not yet hold. Two-tier solution:
+Identity is the bootstrap target itself — its receive path cannot require a
+workload SVID the caller does not yet hold. `gen_certs.sh --env <env>` mints a
+long-lived per-service certificate under the shared CA, configured through
+`CLAVENAR_<SVC>_TLS_DIR` and projected per workload by the chart.
 
-1. **Bootstrap cert (option C absorbed).** `gen_certs.sh --env <env>`
-   mints a long-lived (1 year default — see §10 Q1) per-service cert
-   under the same CA root. Each service Secret carries its own
-   server + client pair. Configured via `CLAVENAR_<SVC>_TLS_DIR` and
-   mounted by the helm chart (see §7).
-2. **Workload SVID refresh (deferred to v1.x+3).** Once the
-   bootstrap cert is online, a service may call identity's existing
-   `/sign` endpoint to obtain a short-lived SVID with the
-   `service/<name>` SPIFFE URI and present it on subsequent hops.
-   The bootstrap cert stays as the fallback if SVID refresh fails.
-   **Not in v1.x+2.**
-
-Identity's own `/sign` receive path accepts both forms: a bootstrap
-cert (long-lived, deploy-time) or a fresh workload SVID. The
-`CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS` env (already in place) gains
-the `service/*` prefix.
+The bootstrap leaf is enrollment authority, not a standing fallback. Identity
+pins its fingerprint to the exact service and accepts it at
+`POST /workload-svid` only for the first generation. Once generation one is
+committed, normal renewal requires the exact current workload SVID. Bootstrap
+may be admitted one more time only after the separately authorized recovery
+endpoint opens a new one-use recovery generation. `/sign` is not a workload
+SVID enrollment endpoint.
 
 ### 5. Trust root
 
@@ -4235,9 +4230,10 @@ Companion to [Internal service mTLS](#internal-service-mtls). Where
 that section ships the **bootstrap layer** (1-year per-service cert
 pairs read once at boot, plus a server-side SPIFFE allowlist on every
 receive path), this section ships the **dynamic layer**: each service
-periodically exchanges its bootstrap cert for a short-lived workload
-SVID minted by `clavenar-identity`, presents the SVID on subsequent
-hops, and falls back to the bootstrap cert if refresh fails. The
+uses its bootstrap cert exactly once to enroll for a short-lived workload
+SVID minted by `clavenar-identity`, persists that SVID and caller-held key,
+and presents the exact current generation on subsequent refreshes and
+hops. Bootstrap is never an automatic serving fallback after enrollment. The
 client side also gains the deferred server-identity check —
 validating the peer's SPIFFE SAN URI matches the expected
 `service/<name>` rather than just "any cert signed by the clavenar CA"
@@ -4245,12 +4241,14 @@ validating the peer's SPIFFE SAN URI matches the expected
 
 **Module status:** **shipped** — the `clavenar-workload-identity`
 crate (`refresh.rs` ArcSwap hot-reload, `verifier.rs` peer-SPIFFE SAN
-check, `server_config.rs` `ResolvesServerCert`). Every internal
-service exchanges its bootstrap cert for a short-lived SVID on a
+check, `server_config.rs` `ResolvesServerCert`). The managed HTTP service set
+(`proxy`, `brain`, `policy-engine`, `ledger`, `hil`, `identity`, `console`,
+and `simulator`) exchanges its bootstrap cert for a short-lived SVID on a
 ~15-minute cadence (`CLAVENAR_<SVC>_WORKLOAD_REFRESH_URL`) and
 verifies the peer's SPIFFE SAN against `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE`;
-a refresh failure falls back to the bootstrap cert without dropping
-the connection. Live on both envs.
+a refresh failure retains only the exact current SVID. Expiry fails readiness
+and TLS handshakes. Recovery is a separate operator-admin ceremony that opens
+one bootstrap generation. Live on both envs.
 
 ### 1. What this closes
 
@@ -4258,7 +4256,7 @@ Three gaps left open by v1.x+2:
 
 | # | Gap (today) | Closure (v1.x+3) |
 |---|---|---|
-| G1 | A leaked bootstrap cert is valid for up to 1 year and there is no in-band rotation — the only revocation is `gen_certs.sh` + rolling restart, which requires operator action and a maintenance window. | Workload SVIDs are short-lived (≤1h TTL). A leaked SVID is valid for ≤1h after the rotation runbook flips the issuer key. The bootstrap cert moves from "primary credential" to "fallback exercised only at pod restart" — its 1-year lifetime is acceptable because it is no longer the typically-in-use credential. |
+| G1 | A leaked bootstrap cert is valid for up to 1 year and there is no in-band rotation — the only revocation is `gen_certs.sh` + rolling restart, which requires operator action and a maintenance window. | Workload SVIDs are short-lived (≤1h TTL). Bootstrap is fingerprint-pinned, accepted only for initial enrollment, and atomically retired. Reuse fails unless an operator explicitly opens one recovery generation. |
 | G2 | The receive-side allowlist (`CLAVENAR_<SVC>_ALLOWED_CALLERS`) validates *who* the caller claims to be, but the client side does not validate *who the server claims to be* beyond "DNS-host match + valid CA cert." A compromised brain pod could plant a brain-signed cert at the policy-engine DNS name and intercept proxy→policy calls. | Every outbound caller gains an `expected_server_spiffe` config equivalent to the receive-side allowlist. The reqwest client validates the server cert's SAN URI matches one entry in the expected list; mismatch = closed connection before any request body is sent. |
 | G3 | Rotation of an in-service issuer key (Vault Transit `rotate`) only takes effect for *agents* (they re-fetch SVIDs on every long-running session). Services hold the bootstrap cert until pod restart, so a Transit rotation does not propagate into the s2s trust path until the operator rolls every Deployment. | A workload-SVID refresh inherits Transit rotation for free — the next refresh after a rotation picks up the new issuer kid. Services rotate at TTL/2 cadence, so within ~30 min of an issuer rotation every s2s leg is using a freshly-minted SVID under the new key. |
 
@@ -4269,26 +4267,25 @@ for **G3** (no operator step needed to propagate a rotation).
 
 ### 2. Hops in scope
 
-Every service that holds a bootstrap cert today (`gen_certs.sh`
-SERVICES list as of v0.8.4: `proxy`, `brain`, `policy-engine`,
-`ledger`, `hil`, `identity`, `console`, `deep-review`, `simulator`,
-`nats`, `demo-mint`) gains the refresh client. The receive side of
-the relationship is unchanged from v1.x+2 — the allowlist already
+The managed refresh set is `proxy`, `brain`, `policy-engine`, `ledger`, `hil`,
+`identity`, `console`, and `simulator`. Workloads outside that set do not gain
+issuance authority merely because a bootstrap certificate exists. The receive
+side of the relationship is unchanged from v1.x+2 — the allowlist already
 accepts `service/<name>` SAN URIs, and short-lived SVIDs carry the
 same SAN URI as the bootstrap cert, so no receive-side code changes.
 
-`clavenar-identity` is the bootstrap target for the refresh call
-itself. Its receive path accepts either a bootstrap cert *or* a
-freshly-minted workload SVID, identically — the SAN-URI allowlist
-match is what gates `/workload-svid`. This avoids the chicken-and-egg
-where identity could not refresh itself.
+`clavenar-identity` is the bootstrap target for the refresh call itself.
+Its receive path distinguishes authority by exact leaf fingerprint: an
+unseen, pinned bootstrap may create generation one; after that only the
+non-expired, non-revoked, non-superseded current workload SVID may create
+the next generation. An operator-opened recovery generation temporarily
+admits the pinned bootstrap once. SAN equality alone is never authority.
 
 `nats` (the server, not the pubsub clients) is **out of scope** for
 SVID refresh: NATS does not currently support certificate hot-reload
-without dropping connections, and the 1-year bootstrap cert is the
-operationally acceptable trade-off for the server side. NATS *clients*
-(the seven NATS-pub/sub services from B7.5) reuse their workload SVID
-for the NATS handshake the same way they reuse it for HTTP hops.
+without dropping connections, and its server credential remains a separate
+operator rotation concern. This feature does not change the existing NATS
+client certificate plumbing.
 
 ### 3. Wire shape
 
@@ -4296,15 +4293,20 @@ New endpoint on `clavenar-identity`:
 
 ```text
 POST /workload-svid
-Headers: (client cert presented at mTLS handshake — bootstrap cert or
-          live workload SVID, both accepted)
-Body: { "ttl_seconds": 1800 }    // optional, capped at MAX_TTL_SECONDS
+Headers: (exact bootstrap authority for generation one/recovery, or the
+          exact current workload SVID for renewal)
+Body: {
+  "request_id": "<uuidv7>",
+  "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...", // <=16 KiB
+  "ttl_seconds": 1800
+}
 
 200 → {
   "id":          "<uuidv7>",
+  "request_id":  "<uuidv7>",
+  "generation":  2,
   "spiffe_id":   "spiffe://clavenar.local/service/<name>",
   "cert_pem":    "...",
-  "key_pem":     "...",
   "ca_cert_pem": "...",
   "not_before":  "2026-05-14T13:00:00Z",
   "not_after":   "2026-05-14T13:30:00Z"
@@ -4313,6 +4315,7 @@ Body: { "ttl_seconds": 1800 }    // optional, capped at MAX_TTL_SECONDS
 400 → { "error": "ttl_seconds_too_large" }      // > MAX_TTL_SECONDS
 401 → { "error": "caller_spiffe_missing" }      // no client cert
 403 → { "error": "caller_not_allowed" }         // SAN not in allowlist
+409 → { "error": "issuance_conflict" }          // replay mismatch/stale authority
 503 → { "error": "ca_unavailable" }             // clavenar-identity boot incomplete
 ```
 
@@ -4331,24 +4334,30 @@ The handler validates:
    the existing `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS` value if
    unset — they describe the same caller set).
 3. The requested `ttl_seconds` ≤ `MAX_TTL_SECONDS` (3600).
+4. `request_id` is UUIDv7, the CSR is a valid self-signed supported-key
+   PKCS#10 request without caller-controlled extensions, and its public key
+   matches the certificate to be returned.
+5. The verified caller leaf fingerprint is the pinned initial/recovery
+   bootstrap or the exact current workload generation for the same SPIFFE ID.
 
 On success the handler:
 
-1. Generates a fresh keypair (`ed25519-dalek` or `ring` depending on
-   clavenar-identity's CA backend).
-2. Mints a cert valid for `ttl_seconds` (default 1800), SAN URI =
+1. Commits a pre-sign `workload_svid_issuance_intents` row binding the
+   immutable request ID, CSR digest, caller fingerprint, authority kind, and
+   recovery generation. Same-key retries return the retained public result;
+   mismatches conflict and interrupted intents are never re-signed.
+2. Signs the caller-generated CSR into a cert valid for `ttl_seconds`
+   (default 1800), SAN URI =
    caller's SAN URI, signed by the clavenar CA.
-3. Persists a `workload_svids` row (`id`, `spiffe_id`, `not_before`,
-   `not_after`, `caller_kind` ∈ {`bootstrap`, `workload`} —
-   distinguishes "first refresh after boot" from "background
-   refresh").
+3. In one transaction, persists the public cert and exact generation,
+   supersedes the prior SVID, retires bootstrap/recovery authority,
+   terminalizes the intent, and queues the signed lifecycle event.
 4. Emits a `svid.workload_refreshed` chain v3 forensic event (see
    §6).
-5. Returns the cert + key + CA + lifetime.
+5. Returns cert + CA + lifetime. Identity never receives or returns the key.
 
-The handler **does not** echo the requesting caller's key material;
-key generation happens inside clavenar-identity to keep the trust
-chain anchored on identity-controlled randomness.
+The private key is generated and persisted by the workload helper before it
+sends the CSR. Identity retains only public certificate material and digests.
 
 **Why a new endpoint, not extending `/svid`?** Two reasons. (i)
 `/svid` carries agent-attestation semantics (`tenant`, `agent_name`,
@@ -4370,7 +4379,8 @@ service. State per worker:
 ```rust
 struct WorkloadIdentity {
     bootstrap: Arc<CertPair>,           // loaded once at boot
-    current: ArcSwap<CertPair>,         // active credential (workload or bootstrap)
+    current: ArcSwap<CertPair>,         // persisted exact current credential
+    store: CredentialStore,             // owner-only atomic current/pending files
     expected_server_spiffe: Vec<String>, // §5 client-side check
     refresh_url: Url,                   // https://identity:8186/workload-svid
     ttl_target: Duration,               // requested TTL, default 1800s
@@ -4382,11 +4392,12 @@ State transitions:
 
 | State | Trigger | Action |
 |---|---|---|
-| `Bootstrapping` (boot) | `start()` called | Set `current = bootstrap`; spawn refresh task; first attempt fires immediately. |
-| `Bootstrapping` → `Refreshed` | First `/workload-svid` succeeds | Atomic-swap `current` to the workload SVID; log `info` once. |
-| `Refreshed` → `Refreshed` | Background sweep at `remaining_ttl / 2` | Same as first attempt. Atomic-swap on success. |
-| `Refreshed` → `Refreshing-stale` | Background sweep fails (3 retries × `1s/4s/16s` jitter, 60s total wall budget) | Keep `current` unchanged. Log `warn`. Retry in `min(60s, remaining_ttl/4)`. |
-| `Refreshing-stale` → `Bootstrap-fallback` | `current.not_after` passes with no successful refresh | Atomic-swap `current` back to `bootstrap`. Log `error`. Continue retry loop. |
+| `Bootstrapping` (first boot) | `start()` called with no persisted current SVID | Set `current = bootstrap`; readiness false; persist a pending CSR/key/request ID before the first attempt. |
+| `Bootstrapping` → `Refreshed` | First `/workload-svid` succeeds | Validate response against the pending CSR, atomically persist current, delete pending, swap `current`, set readiness true. |
+| `Refreshed` (restart) | Helper loads valid owner-only `current.json` | Start with that exact SVID/key; bootstrap is not restored. A corrupt or mismatched record fails boot. |
+| `Refreshed` → `Refreshed` | Background sweep at `remaining_ttl / 2` | Build mTLS from exact current, durably create/reuse the pending CSR, and atomically persist before swapping on success. |
+| `Refreshed` → `Refreshing-stale` | Background sweep fails (3 retries × `1s/4s/16s`, bounded request deadline) | Keep only `current` unchanged; never switch credentials. Acknowledgement-loss retries reuse the durable request ID and CSR. |
+| `Refreshing-stale` → `Expired` | `current.not_after` passes | Set readiness false; refuse inbound TLS with the expired SVID; never restore bootstrap. Recovery requires the operator endpoint. |
 | any → `Stopped` | `stop()` called or drop | Abort the refresh task. `current` is observable until the parent process exits. |
 
 The **atomic swap** is via `arc_swap::ArcSwap<CertPair>` — outbound
@@ -4436,9 +4447,11 @@ impl WorkloadIdentity {
 (`CLAVENAR_<SVC>_TLS_DIR`/`CLAVENAR_<SVC>_TLS_CA_PATH` etc.), the
 expected-peer allowlist
 (`CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE=spiffe://clavenar.local/service/identity,...`),
-and the refresh URL (`CLAVENAR_<SVC>_WORKLOAD_REFRESH_URL`, default
-`https://identity:8186/workload-svid` in compose; absent → refresh
-disabled, behave exactly as v1.x+2 — bootstrap-only).
+the refresh URL (`CLAVENAR_<SVC>_WORKLOAD_REFRESH_URL`, default
+`https://identity:8186/workload-svid` in compose), and the required
+owner-only persistence directory (`CLAVENAR_<SVC>_WORKLOAD_STATE_DIR`).
+An absent refresh URL is supported only for explicit local bootstrap-only
+configurations; shipped Compose and Helm configurations enable both values.
 
 `reqwest_client()` returns a client whose `Identity` is sourced from
 `current.load()` at request time. Implementation detail: the helper
@@ -4510,23 +4523,26 @@ A new Grafana panel (`clavenar_identity_workload_refreshes_total{
 caller_kind, service }`) plus a stat-tile of "bootstrap-only services
 in the last 1h" lands in session 2.
 
-### 8. Failure & fallback semantics
+### 8. Failure & recovery semantics
 
 | Failure | Behaviour | Reasoning |
 |---|---|---|
-| `clavenar-identity` unreachable on `/workload-svid` | Caller logs `warn`, retries with `1s/4s/16s` backoff; keeps current credential. After current credential expires: falls back to bootstrap cert. | Refresh is *additive*; the bootstrap path is always available. A long identity outage degrades to "running on bootstrap" — same posture as v1.x+2. |
+| `clavenar-identity` unreachable on `/workload-svid` | Caller logs `warn`, retries with `1s/4s/16s` backoff, and keeps the exact current credential. After expiry, readiness and new TLS handshakes fail. | Retired bootstrap cannot silently regain renewal or serving authority. |
 | `/workload-svid` returns 403 (`caller_not_allowed`) | Caller logs `error` once per backoff loop and continues to retry. Operator must extend `CLAVENAR_IDENTITY_WORKLOAD_ALLOWED_CALLERS` and roll identity. | Persistent 403 means the operator removed this service from the allowlist deliberately or accidentally — let the human notice; do not bake-in auto-decommission. |
 | Server-side SPIFFE SAN-URI mismatch (client-side check) | rustls closes the TLS connection before the HTTP layer sees the response. Caller surfaces as a `reqwest::Error` with `is_request()` true; the existing retry / circuit-breaker logic on each call site handles it. | Cryptographic check, not policy — no body to read. |
 | `CLAVENAR_<SVC>_EXPECTED_PEER_SPIFFE` unset | Client-side check disabled. Connection succeeds against any clavenar-CA cert at the configured DNS name. | Empty allowlists preserve bootstrap-only compatibility for local/partial deployments, but are not a safe warn-first posture. Compose and Helm set the peer pins for shipped stacks. |
 | Helper start failure (env missing, cert unparseable) | Service refuses to boot with a precise error message naming the missing env or unparseable file. | Misconfiguration must be loud — silent fall-back to a partial trust posture is the failure mode this slice exists to prevent. |
 | Vault Transit unreachable mid-refresh | Identity returns `503 signing_unavailable`; caller treats as transient (retry loop). | Same posture as v1.x+2 — Vault is a hard dep for identity. |
 
-The fallback chain is **bootstrap → workload → bootstrap**: the
-service boots on the bootstrap cert, swaps to a workload SVID once
-identity issues one, and reverts to the bootstrap cert if the SVID
-expires with no successful refresh. Each transition logs at `info`
-(refresh success), `warn` (transient refresh failure), or `error`
-(reverted to bootstrap; refresh still failing).
+The lifecycle is **bootstrap enrollment → exact-current workload renewal →
+expiry fail-closed**. Automatic bootstrap fallback is forbidden. An operator
+with OIDC `workloads:recover` may call
+`POST /workloads/{service}/svid-recovery` with a bounded reason. Identity
+emits signed lifecycle evidence, revokes the current generation, increments
+the recovery generation, and admits the pinned bootstrap exactly once. The
+operator stops the workload before opening recovery, removes only that
+workload's owner-only `current.json` and `pending.json`, and then restarts it;
+the service never deletes state or selects bootstrap on its own.
 
 ### 9. Implementation roadmap
 
@@ -4543,17 +4559,17 @@ Five sessions, each independently shippable:
 Sessions 2 and 5 were the behavior-changing slices; sessions 3 + 4
 were mechanical callsite swaps once session 2 shipped the helper. The
 slice ended with v1.x+2's bootstrap-only posture formally retired in
-shipped compose and Helm stacks — the current posture is "workload SVIDs
-as primary credential, bootstrap as fallback only."
+shipped compose and Helm stacks. WP-08.5 subsequently removed automatic
+bootstrap fallback and made exact-current persistence and renewal normative.
 
 ### 10. What this spec deliberately does not include
 
 - **Hot-reload of the clavenar CA root.** A CA-root rotation still
   requires re-running `gen_certs.sh` and rolling every Deployment.
   The workload SVID is signed by the CA root, so a root rotation
-  invalidates every outstanding workload SVID; the bootstrap cert
-  is the operational fallback that makes the roll graceful, but
-  the roll itself is not avoided.
+  invalidates every outstanding workload SVID. Bootstrap is not an
+  automatic fallback; the rotation runbook must explicitly open
+  recovery or install a replacement enrollment generation.
 - **SVID issuance for the NATS server.** NATS does not cert-hot-
   reload without dropping client connections; the 1-year bootstrap
   cert stays as the server-side credential.
@@ -4620,6 +4636,11 @@ proceed against these.
    NATS *server* stays on the 1-year bootstrap cert (§2);
    server-side SVID would need NATS cert hot-reload which
    doesn't exist without dropping client connections.
+
+**Superseded by WP-08.5 (2026-07-22):** the historical staged-rollout locks
+above remain useful provenance, but bootstrap fallback and server-generated
+workload keys are no longer valid behavior. The exact-current, caller-held-key,
+durable-intent, explicit-recovery contract in §§3–9 is authoritative.
 
 These locks shape the implementation surface for session 2:
 new crate, `POST /workload-svid` with `MAX_TTL_SECONDS=3600`
