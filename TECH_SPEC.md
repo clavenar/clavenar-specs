@@ -17,6 +17,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
 - [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
+- [Forensic event envelope](#forensic-event-envelope) — stable producer/event/stage identity, payload commitments, and explicit causal predecessors
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
@@ -53,6 +54,7 @@ authoritative wire-contract detail still lives in those sections.
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
 | 9a | [Policy exchange](#policy-exchange) | install/verify shipped; production issuance redesign required | v1.3.0 | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
+| 9b | [Forensic event envelope](#forensic-event-envelope) | contract shipped | v1.163.0 | `clavenar-specs`, `clavenar-e2e`; producer outbox and consumer migrations are separately versioned follow-ons |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3350,6 +3352,89 @@ Before any policy touches the live store, `install` replays the **Rego-decidable
 ### 4. Install semantics & provenance
 
 Install is **fail-closed**: an unsigned pack, a signature mismatch, a file-hash mismatch, a compile failure, or any regression all abort with a non-zero exit and land nothing. On success each policy is created with `active: true` and a version `reason` carrying `[pack <name>@<version> key=<key_id>]` so the chain records where the rule came from. Name collisions are **refused** (no in-place replace in v1) so an install can't silently shadow an existing policy.
+
+---
+
+## Forensic event envelope
+
+**Module status:** contract shipped in release 1.163.0. The strict schema and
+positive corpus are
+[`contracts/forensic-event-v1.schema.json`](contracts/forensic-event-v1.schema.json)
+and
+[`contracts/forensic-event-v1.fixture.json`](contracts/forensic-event-v1.fixture.json).
+This module fixes identity and causality only. Transactional producer outboxes,
+acknowledged JetStream delivery, Ledger uniqueness, and crash reconciliation
+are separate rollout stages and must not be inferred from this contract.
+
+### Envelope
+
+Every v1 record contains exactly these fields; unknown fields fail validation.
+
+| Field | Contract |
+|---|---|
+| `contract` | Literal `clavenar.forensic-event/v1`. |
+| `producer` | A registered service name plus the exact workload SPIFFE ID and lowercase SHA-256 credential fingerprint that created the record. |
+| `event_id` | Lowercase RFC 4122 UUID allocated once before the first governed action and retained for every stage of that operation. |
+| `stage` | One registered v1 stage from the table below. |
+| `occurred_at` | UTC RFC 3339 timestamp ending in `Z`; an exact retry retains the original value. |
+| `tenant` | Authenticated tenant scope, or the reserved `system` scope for deployment-wide observations. |
+| `actor` | Authenticated human/system principal and credential commitment, or `null` when the workload is the only actor. |
+| `correlation_id` | Lowercase UUID used only to group related work. It is not event identity, idempotency, or proof of causality. |
+| `idempotency_id` | Lowercase UUID naming the producer's governed operation. It is allocated before the first effect and retained on retry. |
+| `payload` | Complete stage-specific JSON object. |
+| `payload_sha256` | `sha256:` plus lowercase SHA-256 of the payload's RFC 8785 JSON Canonicalization Scheme bytes. |
+| `policy`, `brain` | Complete provenance pair or `null`. Partial provenance is invalid. |
+| `causal_predecessor` | Exact preceding `(producer, event_id, stage, payload_sha256)` or `null` for a causal root. |
+
+The immutable record identity is `(producer.service, event_id, stage)`. An
+exact replay under that tuple is the same record. Reusing it with a different
+payload commitment, tenant, workload, actor, correlation/idempotency binding,
+provenance, occurrence time, or predecessor is a conflict and must create no
+replacement event. All stages of one governed operation reuse its `event_id`
+and stable binding fields. A causally derived operation allocates its own event
+ID and points to its immediate predecessor; an exact tuple cannot name itself
+as predecessor.
+
+### Stage registry
+
+| Stage | Meaning |
+|---|---|
+| `operation.intent` | Local durable intent exists before a governed effect or authority release. |
+| `execution.authorization` | Exact execution authorization is committed. |
+| `execution.started` | The one admitted effect attempt crossed its local execution boundary. |
+| `execution.completed` | The exact effect/result binding completed. |
+| `execution.failed` | A definitive terminal failure completed with no success claim. |
+| `execution.uncertain` | An effect may have occurred and automatic execution is forbidden. |
+| `credential.released` | Credential/signature authority was released after its durable intent. |
+| `transition.committed` | A lifecycle, HIL, policy, or distributed-control transition committed. |
+| `observation.recorded` | Non-authoritative observation; it cannot stand in for an intent or terminal stage. |
+
+Stage names describe facts, not transport progress. Publication attempts,
+JetStream acknowledgements, and Ledger ingestion do not change an operation's
+stage. Adding a stage or producer requires a new reviewed contract version or a
+backwards-compatible revision that updates the schema, corpus, and every strict
+validator together before use.
+
+### Existing execution contract mapping
+
+The already shipped `clavenar.execution/v1` bytes and Ledger chain versions do
+not change. An adapter wraps the complete signed authorization or receipt as
+the generic `payload`: `authorization_id` becomes `event_id`; the existing
+idempotency, correlation, tenant, and workload bindings retain their values;
+`authorization` maps to `execution.authorization`; and
+`execution.completed` retains its existing name. The terminal record points to
+the authorization tuple and its exact generic payload commitment. Policy and
+Brain provenance come from the retained authorization. Because the existing
+wire has no generic `occurred_at`, the future transactional adapter must commit
+that time with the local stage and retain it on every replay; it must never
+derive a new time during redelivery.
+
+The golden corpus includes a two-stage governed execution, cross-producer HIL
+and credential-release causality, and a system observation. Its digests are
+normative test vectors. Implementations must reject digest mismatch,
+non-canonical identity/time, unknown producer/stage, missing workload or tenant,
+partial provenance, exact self-predecessors, conflicting tuple reuse, and
+unknown fields before publication or append.
 
 ---
 

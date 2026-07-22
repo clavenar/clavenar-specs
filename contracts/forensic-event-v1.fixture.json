@@ -1,0 +1,176 @@
+{
+  "contract": "clavenar.forensic-event-fixture/v1",
+  "events": [
+    {
+      "contract": "clavenar.forensic-event/v1",
+      "producer": {
+        "service": "proxy",
+        "workload": {
+          "spiffe_id": "spiffe://clavenar.local/service/proxy",
+          "credential_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      "event_id": "6c82bb19-6faf-4c0b-8a6b-233655ba63f2",
+      "stage": "execution.authorization",
+      "occurred_at": "2026-07-22T12:00:00.000Z",
+      "tenant": "acme",
+      "actor": {
+        "subject": "alice@example.com",
+        "issuer": "https://idp.example.com/",
+        "authentication_method": "oidc",
+        "credential_id_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "correlation_id": "96adfc4f-b18c-4f6f-a34d-9cf882defe51",
+      "idempotency_id": "2e0c0445-2675-4a50-aedb-4c42f220ef1d",
+      "payload": {
+        "authorization_id": "6c82bb19-6faf-4c0b-8a6b-233655ba63f2",
+        "method": "tools/call",
+        "payload_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tool_name": "payments.transfer"
+      },
+      "payload_sha256": "sha256:ad28467ed5c6e1bbb975fa73573d647119bc3d02f9b0aefac8e9cfb280f2b5bd",
+      "policy": {
+        "version": "2026-07-22.1",
+        "bundle_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "brain": {
+        "version": "brain-2026-07-22",
+        "evidence_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "causal_predecessor": null
+    },
+    {
+      "contract": "clavenar.forensic-event/v1",
+      "producer": {
+        "service": "proxy",
+        "workload": {
+          "spiffe_id": "spiffe://clavenar.local/service/proxy",
+          "credential_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      "event_id": "6c82bb19-6faf-4c0b-8a6b-233655ba63f2",
+      "stage": "execution.completed",
+      "occurred_at": "2026-07-22T12:00:01.250Z",
+      "tenant": "acme",
+      "actor": {
+        "subject": "alice@example.com",
+        "issuer": "https://idp.example.com/",
+        "authentication_method": "oidc",
+        "credential_id_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "correlation_id": "96adfc4f-b18c-4f6f-a34d-9cf882defe51",
+      "idempotency_id": "2e0c0445-2675-4a50-aedb-4c42f220ef1d",
+      "payload": {
+        "effect_id": "provider-operation-123",
+        "result_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "payload_sha256": "sha256:090b948e5d05491935972f04cae8ee139d54a1d9286d2b130c33404c5515cbe6",
+      "policy": {
+        "version": "2026-07-22.1",
+        "bundle_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "brain": {
+        "version": "brain-2026-07-22",
+        "evidence_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "causal_predecessor": {
+        "producer": "proxy",
+        "event_id": "6c82bb19-6faf-4c0b-8a6b-233655ba63f2",
+        "stage": "execution.authorization",
+        "payload_sha256": "sha256:ad28467ed5c6e1bbb975fa73573d647119bc3d02f9b0aefac8e9cfb280f2b5bd"
+      }
+    },
+    {
+      "contract": "clavenar.forensic-event/v1",
+      "producer": {
+        "service": "hil",
+        "workload": {
+          "spiffe_id": "spiffe://clavenar.local/service/hil",
+          "credential_fingerprint": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      },
+      "event_id": "488f69d5-92a2-4883-968e-b40092fa8f50",
+      "stage": "transition.committed",
+      "occurred_at": "2026-07-22T12:00:02Z",
+      "tenant": "acme",
+      "actor": {
+        "subject": "approver-7",
+        "issuer": "clavenar-hil",
+        "authentication_method": "webauthn",
+        "credential_id_sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "correlation_id": "96adfc4f-b18c-4f6f-a34d-9cf882defe51",
+      "idempotency_id": "ae066768-d699-48a7-97fc-6fae028f27be",
+      "payload": {
+        "decision": "approve",
+        "pending_id": "4e923bcb-2a27-4fd5-a93f-2a77569de78f"
+      },
+      "payload_sha256": "sha256:025a92ce87046d790a6c2f9195a67944d43d050c77612b71bce75c805297c171",
+      "policy": null,
+      "brain": null,
+      "causal_predecessor": {
+        "producer": "proxy",
+        "event_id": "6c82bb19-6faf-4c0b-8a6b-233655ba63f2",
+        "stage": "execution.authorization",
+        "payload_sha256": "sha256:ad28467ed5c6e1bbb975fa73573d647119bc3d02f9b0aefac8e9cfb280f2b5bd"
+      }
+    },
+    {
+      "contract": "clavenar.forensic-event/v1",
+      "producer": {
+        "service": "identity",
+        "workload": {
+          "spiffe_id": "spiffe://clavenar.local/service/identity",
+          "credential_fingerprint": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+        }
+      },
+      "event_id": "d0669ad4-9de4-4ddd-a28f-b1f7f36c56df",
+      "stage": "credential.released",
+      "occurred_at": "2026-07-22T12:00:03.000000Z",
+      "tenant": "acme",
+      "actor": null,
+      "correlation_id": "96adfc4f-b18c-4f6f-a34d-9cf882defe51",
+      "idempotency_id": "8eced7cc-0b84-4a68-896d-d587cb4539da",
+      "payload": {
+        "credential_fingerprint": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "credential_kind": "actor_token",
+        "subject": "spiffe://clavenar.local/tenant/acme/agent/payments/instance/one"
+      },
+      "payload_sha256": "sha256:d6c2acb00aefc3eebdab57dc9cca78ac02cdfc3ee084d326628c1e352abd12f8",
+      "policy": null,
+      "brain": null,
+      "causal_predecessor": {
+        "producer": "hil",
+        "event_id": "488f69d5-92a2-4883-968e-b40092fa8f50",
+        "stage": "transition.committed",
+        "payload_sha256": "sha256:025a92ce87046d790a6c2f9195a67944d43d050c77612b71bce75c805297c171"
+      }
+    },
+    {
+      "contract": "clavenar.forensic-event/v1",
+      "producer": {
+        "service": "assurance",
+        "workload": {
+          "spiffe_id": "spiffe://clavenar.local/service/assurance",
+          "credential_fingerprint": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+        }
+      },
+      "event_id": "c2e5f1cb-4e7b-4a2f-af44-a0f33d10b1f5",
+      "stage": "observation.recorded",
+      "occurred_at": "2026-07-22T12:05:00Z",
+      "tenant": "system",
+      "actor": null,
+      "correlation_id": "296e36a4-bf45-4b8c-b803-8a96c25b03fa",
+      "idempotency_id": "d56f1f8b-93b1-41de-8039-980a49933188",
+      "payload": {
+        "catalog_version": "2026-07-22",
+        "coverage": 0,
+        "scenario": "forensic-contract-boundary"
+      },
+      "payload_sha256": "sha256:44b8c6ab5fd89768aef213080e8bf4894f069755484e5eba31f09694f5ee5953",
+      "policy": null,
+      "brain": null,
+      "causal_predecessor": null
+    }
+  ]
+}

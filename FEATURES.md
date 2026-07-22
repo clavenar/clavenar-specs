@@ -1379,7 +1379,36 @@ nats sub 'clavenar.forensic'    # in a separate terminal
 ./repos/clavenar-chaos-monkey/...    # scenarios fire, events stream by
 ```
 
-### 8.2 UUIDv4 `correlation_id`
+### 8.2 Versioned forensic event and causal identity
+
+**Concept.** Correlation joins are useful for investigation but do not make
+retries idempotent and cannot prove which exact record caused another action.
+`clavenar.forensic-event/v1` gives every logical stage an immutable
+`(producer.service, event_id, stage)` identity, commits the complete canonical
+payload, and names an exact immediate predecessor when causality crosses a
+stage or service boundary.
+
+**Implementation.** The strict public schema and golden corpus live in
+`contracts/forensic-event-v1.{schema,fixture}.json`. One governed operation
+allocates and retains one lowercase UUID before its first action; every stage
+reuses that ID plus the authenticated tenant/workload, correlation, and
+idempotency bindings. Payload SHA-256 uses RFC 8785 canonical bytes. Policy and
+Brain provenance are either complete or null. The existing
+`clavenar.execution/v1` bytes remain unchanged and map deterministically into
+the generic envelope. Outboxes, broker acknowledgements, and Ledger uniqueness
+land in subsequent producer/consumer migrations.
+
+**Verify.** Run the assembled contract checker. It compares the public and E2E
+mirrors byte-for-byte, validates every golden event and causal edge, recomputes
+payload commitments, and rejects governed identity, stage, timestamp, digest,
+provenance, predecessor, duplicate-conflict, and extra-field mutations.
+
+```bash
+cd ../clavenar-e2e
+python3 scripts/check_forensic_event_contract.py --require-source
+```
+
+### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
 
@@ -1393,7 +1422,7 @@ curl http://localhost:8083/audit/correlation/<id> | jq
 # Every event from every layer for that request appears in one response
 ```
 
-### 8.3 Origin tag (`source` column)
+### 8.4 Origin tag (`source` column)
 
 **Concept.** The simulator stamps `x-clavenar-source: simulator` on every request so the console's "Hide simulated traffic" filter can strip its noise. **`source` is metadata, not in the hashable** — an attacker that controls a client could stamp any value. Never used for authz, tamper detection, or chain integrity.
 
@@ -1406,7 +1435,7 @@ curl http://localhost:8083/audit?source=simulator | jq '.[].correlation_id' | so
 # Sim correlation IDs only
 ```
 
-### 8.4 Annotation signal column
+### 8.5 Annotation signal column
 
 **Concept.** Identity- and proxy-side rejection annotations ride on `LogRequest.signal`: `unregistered_agent`, `agent_suspended`, `agent_decommissioned`, `attestation_kind_not_accepted`, `peer_bundle_stale:<td>`, `grant_expired`, `signing_unavailable`, etc. Persisted as a nullable column, **not in the hashable**, queryable via `/audit`. The console's filter chips key off it.
 
@@ -1419,7 +1448,7 @@ curl http://localhost:8083/audit?source=simulator | jq '.[].correlation_id' | so
 open 'http://localhost:8085/audit?signal=peer_bundle_stale:other-tenant'
 ```
 
-### 8.5 Outbound verdict webhooks (clavenar-lite)
+### 8.6 Outbound verdict webhooks (clavenar-lite)
 
 **Concept.** Operators want every terminal pipeline outcome (allow / deny / park, plus `would_deny` / `would_park` in observe mode) and every HIL decision (`decide_allow` / `decide_deny`) pushed to their SIEM in real time — no scrape lag, no polling. The webhook ships one stable-shape JSON event per outcome to a configured URL. Distinct from the human-facing Slack webhook (which posts Markdown); this one is for ingest pipelines (Datadog HTTP source, Splunk HEC, Loki, Vector, in-house).
 
@@ -1434,7 +1463,7 @@ CLAVENAR_LITE_WEBHOOK_URL=http://localhost:4444/ clavenar-lite start &
 # Drive any agent → see one JSON event per outcome on the sink
 ```
 
-### 8.6 Streaming audit egress (ledger → SIEM)
+### 8.7 Streaming audit egress (ledger → SIEM)
 
 **Concept.** The full-stack ledger's counterpart to §8.5. Where the cold-tier export (§9) writes one Parquet snapshot per day for archive, the egress sweeper streams every chain row to a SIEM within seconds. Per-sink cursors keep the streams independent of cold export and of each other: mid-batch crashes advance only past entries the sink confirmed, and the next sweep retries from the first failed row. Stable wire envelope across all three sinks carries the chain row's UUID so downstream dedup is straightforward.
 

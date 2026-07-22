@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.clavenar.com/forensic-event-v1.schema.json",
+  "title": "Clavenar forensic event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "producer",
+    "event_id",
+    "stage",
+    "occurred_at",
+    "tenant",
+    "actor",
+    "correlation_id",
+    "idempotency_id",
+    "payload",
+    "payload_sha256",
+    "policy",
+    "brain",
+    "causal_predecessor"
+  ],
+  "properties": {
+    "contract": { "const": "clavenar.forensic-event/v1" },
+    "producer": { "$ref": "#/$defs/producer" },
+    "event_id": { "$ref": "#/$defs/uuid" },
+    "stage": { "$ref": "#/$defs/stage" },
+    "occurred_at": { "$ref": "#/$defs/utcTimestamp" },
+    "tenant": { "$ref": "#/$defs/tenant" },
+    "actor": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/actor" }
+      ]
+    },
+    "correlation_id": { "$ref": "#/$defs/uuid" },
+    "idempotency_id": { "$ref": "#/$defs/uuid" },
+    "payload": { "type": "object" },
+    "payload_sha256": { "$ref": "#/$defs/digest" },
+    "policy": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/policyProvenance" }
+      ]
+    },
+    "brain": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/brainProvenance" }
+      ]
+    },
+    "causal_predecessor": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/causalPredecessor" }
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{3,9})?Z$"
+    },
+    "tenant": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "operation.intent",
+        "execution.authorization",
+        "execution.started",
+        "execution.completed",
+        "execution.failed",
+        "execution.uncertain",
+        "credential.released",
+        "transition.committed",
+        "observation.recorded"
+      ]
+    },
+    "service": {
+      "type": "string",
+      "enum": [
+        "assurance",
+        "deep-review",
+        "demo-mint",
+        "hil",
+        "identity",
+        "ledger",
+        "lite",
+        "policy-engine",
+        "proxy",
+        "sdk",
+        "simulator"
+      ]
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spiffe_id", "credential_fingerprint"],
+      "properties": {
+        "spiffe_id": {
+          "type": "string",
+          "pattern": "^spiffe://[A-Za-z0-9.-]+/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$"
+        },
+        "credential_fingerprint": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "workload"],
+      "properties": {
+        "service": { "$ref": "#/$defs/service" },
+        "workload": { "$ref": "#/$defs/workload" }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "issuer", "authentication_method", "credential_id_sha256"],
+      "properties": {
+        "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "issuer": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "authentication_method": {
+          "type": "string",
+          "enum": ["oidc", "webauthn", "workload", "system"]
+        },
+        "credential_id_sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "policyProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "bundle_sha256"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "bundle_sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "brainProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "evidence_sha256"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "evidence_sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "causalPredecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["producer", "event_id", "stage", "payload_sha256"],
+      "properties": {
+        "producer": { "$ref": "#/$defs/service" },
+        "event_id": { "$ref": "#/$defs/uuid" },
+        "stage": { "$ref": "#/$defs/stage" },
+        "payload_sha256": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}
