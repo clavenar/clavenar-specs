@@ -4649,6 +4649,48 @@ chain v3 emission, warn-mode `ServerCertVerifier` in the
 client side of the helper, NATS-client `add_client_certificate`
 sourced from `current.load()`.
 
+### 10. Least-privilege NATS authorization (`clavenar.nats-authorization/v1`)
+
+The canonical machine contract is
+[`contracts/nats-authorization-v1.schema.json`](contracts/nats-authorization-v1.schema.json),
+with the exact production/development inventory in
+[`contracts/nats-authorization-v1.fixture.json`](contracts/nats-authorization-v1.fixture.json).
+It is the sole authority for NATS certificate users, application subjects,
+durable consumers, JetStream streams, KV buckets, request/reply inboxes,
+profile publication, and broker-network membership.
+
+NATS 2.x `verify_and_map` selects certificate email SANs, then DNS SANs,
+then the RFC 2253 certificate subject; it does not select the SPIFFE URI SAN.
+Clavenar therefore maps the unique service DNS SAN and independently requires
+that the same CA-validated leaf contain the fixture's exact paired SPIFFE URI.
+No certificate-subject fallback user is configured. A certificate with an
+unknown DNS SAN, a DNS/SPIFFE mismatch, an unknown CA, or a stale/superseded
+leaf receives no broker user.
+
+Every mapped user has allow-only publish and subscribe permissions. The
+service-specific `_INBOX.clavenar.<service>.>` prefix is the only reply
+subscription; the global `_INBOX.>` namespace is never granted. Application
+subjects are directional. JetStream API subjects name the exact managed
+stream or `KV_<bucket>`, and KV data permissions name only
+`$KV.<bucket>.>`. `$SYS.>`, broad `$JS.API.>`, broad `$KV.>`, bare `>`,
+other services' inboxes, stream deletion, and unknown subjects are absent and
+therefore denied.
+
+PROD has no host publication. Compose places NATS and only the declared
+clients on an internal `broker` network; unrelated default/edge/observability
+peers cannot resolve or connect. DEV retains its loopback-only port for the
+checked-in host development runners but uses the same certificate/subject
+authorization. Both profiles persist `/data/jetstream` on `nats-data`; broker
+recreation must preserve stream sequence, durable consumer state, KV
+revisions, and actor-token replay reservations.
+
+The Helm bundled-broker profile renders the same users and permissions,
+persistent JetStream volume, and an ingress NetworkPolicy whose source pod
+selectors equal the fixture client set. An external broker is an operator
+boundary: the chart requires an explicit assertion that equivalent identity,
+authorization, persistence, backup, and restore controls exist and makes no
+claim that it configured them.
+
 ---
 
 ## Egress Inspector

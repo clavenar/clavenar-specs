@@ -15,7 +15,7 @@ guardrail that lets an enterprise run autonomous agents at full speed.
 | Doc | Role |
 |---|---|
 | **`README.md`** (this) | The system: problem, architecture, per-layer behaviour, what ships. |
-| [`TECH_SPEC.md`](TECH_SPEC.md) | Every wire contract — the source of truth. |
+| [`TECH_SPEC.md`](TECH_SPEC.md) | Every wire contract — the source of truth, including `clavenar.nats-authorization/v1`. |
 | [`FEATURES.md`](FEATURES.md) | Per-feature claims with copy-paste verification commands. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | C4 context + container view, deployment topology, demo-prefix flow, trust chain. |
 

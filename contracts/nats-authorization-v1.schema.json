@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.clavenar.com/contracts/nats-authorization-v1.schema.json",
+  "title": "Clavenar least-privilege NATS authorization contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contract", "denyUnknownIdentity", "denyUnknownSubject", "certificateMapping", "profiles", "subjects", "kvBuckets", "clients", "forbiddenSubjects"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "contract": {"const": "clavenar.nats-authorization/v1"},
+    "denyUnknownIdentity": {"const": true},
+    "denyUnknownSubject": {"const": true},
+    "certificateMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "requireSingleMappedUser", "requirePairedSpiffeUri", "allowCertificateSubjectFallback", "allowSharedCredential"],
+      "properties": {
+        "selector": {"const": "dns-san"},
+        "requireSingleMappedUser": {"const": true},
+        "requirePairedSpiffeUri": {"const": true},
+        "allowCertificateSubjectFallback": {"const": false},
+        "allowSharedCredential": {"const": false}
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prod", "dev"],
+      "properties": {
+        "prod": {"$ref": "#/$defs/profile"},
+        "dev": {"$ref": "#/$defs/profile"}
+      }
+    },
+    "subjects": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/subject"}},
+    "kvBuckets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/bucket"}},
+    "clients": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/client"}},
+    "forbiddenSubjects": {"type": "array", "minItems": 5, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  },
+  "$defs": {
+    "service": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostPublication", "brokerNetwork", "brokerNetworkInternal", "jetstreamStore", "persistentVolumeRequired"],
+      "properties": {
+        "hostPublication": {"oneOf": [{"const": false}, {"type": "string", "pattern": "^127\\.0\\.0\\.1:[0-9]{1,5}$"}]},
+        "brokerNetwork": {"const": "broker"},
+        "brokerNetworkInternal": {"const": true},
+        "jetstreamStore": {"const": "/data/jetstream"},
+        "persistentVolumeRequired": {"const": true}
+      }
+    },
+    "consumer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "name"],
+      "properties": {"service": {"$ref": "#/$defs/service"}, "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"}}
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "stream", "streamManager", "publishers", "subscribers", "durableConsumers"],
+      "properties": {
+        "subject": {"type": "string", "pattern": "^clavenar\\.[a-z0-9.-]+$"},
+        "stream": {"type": ["string", "null"]},
+        "streamManager": {"oneOf": [{"$ref": "#/$defs/service"}, {"type": "null"}]},
+        "publishers": {"type": "array", "items": {"$ref": "#/$defs/service"}, "uniqueItems": true},
+        "subscribers": {"type": "array", "items": {"$ref": "#/$defs/service"}, "uniqueItems": true},
+        "durableConsumers": {"type": "array", "items": {"$ref": "#/$defs/consumer"}}
+      }
+    },
+    "bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bucket", "manager", "readers", "writers"],
+      "properties": {
+        "bucket": {"type": "string", "pattern": "^clavenar_[a-z0-9_]+$"},
+        "manager": {"$ref": "#/$defs/service"},
+        "readers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/service"}, "uniqueItems": true},
+        "writers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/service"}, "uniqueItems": true}
+      }
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "dnsSan", "spiffeId", "inboxPrefix"],
+      "properties": {
+        "service": {"$ref": "#/$defs/service"},
+        "dnsSan": {"$ref": "#/$defs/service"},
+        "spiffeId": {"type": "string", "pattern": "^spiffe://clavenar\\.local/service/[a-z][a-z0-9-]{0,63}$"},
+        "inboxPrefix": {"type": "string", "pattern": "^_INBOX\\.clavenar\\.[a-z][a-z0-9-]{0,63}$"}
+      }
+    }
+  }
+}
