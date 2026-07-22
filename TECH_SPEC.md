@@ -54,7 +54,7 @@ authoritative wire-contract detail still lives in those sections.
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
 | 9a | [Policy exchange](#policy-exchange) | install/verify shipped; production issuance redesign required | v1.3.0 | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
-| 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, and transactional Ledger uniqueness shipped | v1.163.0–v1.167.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-shared` |
+| 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3360,7 +3360,8 @@ Install is **fail-closed**: an unsigned pack, a signature mismatch, a file-hash 
 **Module status:** envelope contract shipped in release 1.163.0; transactional
 producer custody shipped in release 1.164.0; acknowledged JetStream delivery
 shipped in release 1.166.0; transactional Ledger uniqueness shipped in release
-1.167.0. The strict schema and
+1.170.0; crash reconciliation and delivery-health telemetry shipped in release
+1.171.0. The strict schema and
 positive corpus are
 [`contracts/forensic-event-v1.schema.json`](contracts/forensic-event-v1.schema.json)
 and
@@ -3371,8 +3372,8 @@ The exact delivery contract is
 [`contracts/forensic-delivery-v1.json`](contracts/forensic-delivery-v1.json).
 The exact consumer transaction is
 [`contracts/forensic-ledger-ingest-v1.json`](contracts/forensic-ledger-ingest-v1.json).
-Crash reconciliation remains a separate rollout stage and must not be inferred
-from either a broker acknowledgement or a retained Ledger tuple.
+The exact reconciliation and telemetry boundary is
+[`contracts/forensic-reconciliation-v1.json`](contracts/forensic-reconciliation-v1.json).
 
 ### Envelope
 
@@ -3497,10 +3498,40 @@ survive broker outage, disconnect, missing stream, acknowledgement loss,
 metadata-write failure, process crash, and restart; acknowledged history is not
 deleted. Workers scan bounded ordered batches and apply deterministic per-message
 jitter to exponential retry delays capped at five minutes. The stream retains
-seven days of events and an explicit 24-hour broker
-duplicate window. Transactional Ledger uniqueness beyond that window is owned
-by WP-09.4, and effect reconciliation plus complete delivery telemetry is owned
-by WP-09.5.
+seven days of events and an explicit 24-hour broker duplicate window.
+Transactional Ledger uniqueness beyond that window is owned by the Ledger tuple
+claim described above.
+
+### Crash reconciliation and delivery health
+
+Reconciliation is evidence lookup, never effect retry. A retained intent may
+advance to `resolved` only when exact authoritative local evidence proves the
+bound effect and its terminal record. Exact evidence that no effect occurred
+may produce an explicit failed terminal outcome. When neither fact can be
+proved, the row advances after the five-minute grace period to durable
+`uncertain`; automatic credential issuance, signing, upstream execution,
+transition, and mutation remain forbidden. Timeout, retry count, JetStream
+acknowledgement, and Ledger retention are not evidence that an effect occurred.
+
+HIL transitions, Policy mutations, and Identity lifecycle changes need no
+post-effect oracle because their domain mutation and forensic obligation commit
+in one local transaction. Identity authority releases and selected Proxy/Lite
+execution do cross an external-effect boundary. They retain explicit
+reconciliation state and attempt metadata; absent an atomically retained exact
+result, an interrupted operation remains non-executable uncertainty. SDK
+execution stores expose the same outcome to their embedding application.
+Existing pre-contract rows retain `legacy` state and are never relabeled as
+success or counted as current missing stages.
+
+Each broker-backed producer exports the same low-cardinality Prometheus family:
+ready/retry/terminal outbox depth, oldest ready age, retry-attempt and terminal-
+failure counters, reconciliation outcomes and pending depth, and grace-bounded
+missing required stages. Labels are restricted to the fixed state, outcome,
+family, and stage vocabularies; tenant, workload, event, request, correlation,
+idempotency, and tuple identifiers are forbidden. The Ledger separately
+retains exact-duplicate and tuple-conflict counters and derives missing-stage
+gauges from immutable versioned claims. A late valid terminal stage clears its
+gauge without deleting a counter or any forensic row.
 
 ### Existing execution contract mapping
 

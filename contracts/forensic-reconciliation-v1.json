@@ -1,0 +1,184 @@
+{
+  "contract": "clavenar.forensic-reconciliation/v1",
+  "forensicEventContract": "clavenar.forensic-event/v1",
+  "effectInventoryContract": "clavenar.forensic-effect-inventory/v1",
+  "reconciliationGraceSeconds": 300,
+  "outcomes": {
+    "resolved": "Authoritative evidence proves the exact bound effect and its required terminal record exists.",
+    "failed": "Authoritative evidence proves the bound effect did not occur and an explicit failure terminal record exists.",
+    "uncertain": "Available evidence cannot prove occurrence or non-occurrence; automatic effect execution is forbidden.",
+    "not-required": "The effect and terminal forensic obligation commit in one local transaction.",
+    "legacy": "The record predates this contract and receives no fabricated outcome."
+  },
+  "invariants": [
+    "Reconciliation may inspect authoritative evidence but never repeats a governed effect, authority release, signature, credential mint, transition, or mutation.",
+    "A terminal forensic stage is created only from exact authoritative evidence bound to the retained intent.",
+    "Ambiguous evidence becomes durable uncertainty and never becomes success by timeout, retry count, broker acknowledgement, or Ledger retention.",
+    "Concurrent and restart reconciliation is idempotent and preserves immutable event bytes.",
+    "Historical rows are retained as legacy and are excluded from current missing-stage gauges."
+  ],
+  "families": [
+    {
+      "id": "sdk.client-execution",
+      "owner": "sdk",
+      "oracle": "application DurableExecutionStore result",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["execution.completed", "execution.failed", "execution.uncertain"],
+      "telemetryOwner": "embedding application"
+    },
+    {
+      "id": "proxy.server-execution",
+      "owner": "proxy",
+      "oracle": "atomically retained upstream response",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["execution.completed", "execution.uncertain"],
+      "telemetryOwner": "proxy"
+    },
+    {
+      "id": "lite.server-execution",
+      "owner": "lite",
+      "oracle": "atomically retained upstream response",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["execution.completed", "execution.uncertain"],
+      "telemetryOwner": "lite"
+    },
+    {
+      "id": "policy.lifecycle-transition",
+      "owner": "policy-engine",
+      "oracle": "policy state and outbox committed in one SQLite transaction",
+      "interruptedOutcome": "not-required",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["transition.committed"],
+      "telemetryOwner": "policy-engine"
+    },
+    {
+      "id": "identity.agent-lifecycle-transition",
+      "owner": "identity",
+      "oracle": "agent state and pending chain emission committed in one SQLite transaction",
+      "interruptedOutcome": "not-required",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["transition.committed"],
+      "telemetryOwner": "identity"
+    },
+    {
+      "id": "hil.pending-create",
+      "owner": "hil",
+      "oracle": "pending row and paired forensic stages committed in one SQLite transaction",
+      "interruptedOutcome": "not-required",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["transition.committed"],
+      "telemetryOwner": "hil"
+    },
+    {
+      "id": "hil.pending-decision",
+      "owner": "hil",
+      "oracle": "pending row and paired forensic stages committed in one SQLite transaction",
+      "interruptedOutcome": "not-required",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["transition.committed"],
+      "telemetryOwner": "hil"
+    },
+    {
+      "id": "hil.pending-quorum",
+      "owner": "hil",
+      "oracle": "pending row and paired forensic stages committed in one SQLite transaction",
+      "interruptedOutcome": "not-required",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["transition.committed"],
+      "telemetryOwner": "hil"
+    },
+    {
+      "id": "hil.pending-modification",
+      "owner": "hil",
+      "oracle": "pending row and paired forensic stages committed in one SQLite transaction",
+      "interruptedOutcome": "not-required",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["transition.committed"],
+      "telemetryOwner": "hil"
+    },
+    {
+      "id": "hil.pending-expiry",
+      "owner": "hil",
+      "oracle": "pending row and paired forensic stages committed in one SQLite transaction",
+      "interruptedOutcome": "not-required",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["transition.committed"],
+      "telemetryOwner": "hil"
+    },
+    {
+      "id": "identity.svid-release",
+      "owner": "identity",
+      "oracle": "exact locally retained issuance result",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["credential.released"],
+      "telemetryOwner": "identity"
+    },
+    {
+      "id": "identity.grant-release",
+      "owner": "identity",
+      "oracle": "exact locally retained grant result",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["credential.released"],
+      "telemetryOwner": "identity"
+    },
+    {
+      "id": "identity.actor-token-release",
+      "owner": "identity",
+      "oracle": "no trustworthy post-crash result oracle",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["credential.released"],
+      "telemetryOwner": "identity"
+    },
+    {
+      "id": "identity.action-signature-release",
+      "owner": "identity",
+      "oracle": "no trustworthy post-crash result oracle",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["credential.released"],
+      "telemetryOwner": "identity"
+    },
+    {
+      "id": "identity.blob-signature-release",
+      "owner": "identity",
+      "oracle": "no trustworthy post-crash result oracle",
+      "interruptedOutcome": "uncertain",
+      "automaticEffectRetry": false,
+      "requiredTerminalStages": ["credential.released"],
+      "telemetryOwner": "identity"
+    }
+  ],
+  "telemetry": {
+    "labels": {
+      "outboxState": ["ready", "retry", "terminal"],
+      "reconciliationOutcome": ["resolved", "failed", "uncertain"],
+      "missingFamily": ["hil", "identity", "proxy", "policy-engine"],
+      "missingStage": ["credential.released", "execution.completed", "execution.uncertain", "transition.committed"]
+    },
+    "forbiddenLabels": ["tenant", "workload", "event_id", "idempotency_id", "correlation_id", "tuple", "request"],
+    "metrics": [
+      {"name": "clavenar_forensic_outbox_depth", "type": "gauge", "labels": ["state"]},
+      {"name": "clavenar_forensic_outbox_oldest_age_seconds", "type": "gauge", "labels": []},
+      {"name": "clavenar_forensic_outbox_retry_attempts_total", "type": "counter", "labels": []},
+      {"name": "clavenar_forensic_outbox_terminal_failures_total", "type": "counter", "labels": []},
+      {"name": "clavenar_forensic_reconciliation_total", "type": "counter", "labels": ["outcome"]},
+      {"name": "clavenar_forensic_reconciliation_pending", "type": "gauge", "labels": []},
+      {"name": "clavenar_forensic_missing_stages", "type": "gauge", "labels": ["family", "stage"]},
+      {"name": "clavenar_ledger_forensic_stage_retained_total", "type": "counter", "labels": []},
+      {"name": "clavenar_ledger_forensic_stage_conflict_total", "type": "counter", "labels": []}
+    ]
+  },
+  "missingStageBoundary": {
+    "eligible": "versioned rows created under this contract",
+    "graceSeconds": 300,
+    "delayedCompletionClearsGauge": true,
+    "immutableHistoryDeleted": false,
+    "historicalIntentReconstruction": false
+  }
+}

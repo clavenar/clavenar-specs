@@ -1496,6 +1496,40 @@ cargo test
 cargo test --features postgres --test storage_equivalence
 ```
 
+### 8.2.4 Crash reconciliation and delivery-health telemetry
+
+**Concept.** A durable intent proves only that an effect was admitted. After a
+process dies at the external-effect boundary, success must come from exact
+authoritative evidence, not elapsed time or a retry. When occurrence cannot be
+proved either way, the only safe terminal posture is explicit, non-executable
+uncertainty. Operators also need a bounded view of delayed forensic custody and
+missing required stages without event- or tenant-cardinality labels.
+
+**Implementation.** The byte-identical
+[`contracts/forensic-reconciliation-v1.json`](contracts/forensic-reconciliation-v1.json)
+classifies all 15 effect families, their authoritative oracle, interrupted
+outcome, required terminal stages, and telemetry owner. HIL, Policy, and
+Identity lifecycle effects retain their atomic no-reconciliation boundary.
+Identity authority intents and selected Proxy/Lite executions persist
+reconciliation state; after the five-minute grace period an unproved external
+effect becomes `uncertain` and is never invoked again. Existing rows remain
+`legacy`. Broker-backed services export ready/retry/terminal depth, oldest age,
+retry/terminal counters, reconciliation status, and missing-stage gauges using
+only fixed state/outcome/family/stage labels. Ledger derives missing HIL and
+Identity terminals from immutable strict claims and retains its duplicate and
+conflict counters.
+
+**Verify.** The assembled checker compares the public and packaged contracts,
+certifies each source boundary and fixed metric vocabulary, rejects forbidden
+identifier labels, and runs owner crash/migration/cardinality tests. The live
+receipt holds delivery long enough to raise age/retry/missing-stage signals,
+restores it, and proves gauges drain while counters and immutable rows remain.
+
+```bash
+cd ../clavenar-e2e
+python3 scripts/check_forensic_reconciliation_contract.py --require-source
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
