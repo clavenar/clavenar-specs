@@ -1408,6 +1408,38 @@ cd ../clavenar-e2e
 python3 scripts/check_forensic_event_contract.py --require-source
 ```
 
+### 8.2.1 Transactional forensic intent and terminal outboxes
+
+**Concept.** A broker publish after a database write is not a durable audit
+boundary: a crash between the two can erase the only evidence that an effect
+or credential release occurred. Each effect owner must first retain intent in
+its own database and must retain the successful terminal stage before it
+reports success.
+
+**Implementation.** The reviewed
+[`contracts/forensic-effect-inventory-v1.json`](contracts/forensic-effect-inventory-v1.json)
+classifies all 15 reachable effect families. Existing SDK, selected
+Proxy/Lite execution, Policy lifecycle, and Identity lifecycle stores remain
+mandatory. HIL atomically commits intent + pending transition + terminal for
+create, decide, quorum, modify, and expiry. Identity commits intent before
+CA/Vault for SVID, grant, actor-token, action-signature, and blob-signature
+authority, then commits `credential.released` before returning bytes. Both
+append-only SQLite outboxes retain canonical v1 envelopes with the current
+producer workload credential. Delivery remains exactly `local` until WP-09.3.
+
+**Verify.** The assembled checker enforces the byte-identical inventory,
+source ownership, transaction ordering, immutable schemas, selected-execution
+boundary, current workload fingerprint binding, and absence of an early
+publisher. The canonical production smoke snapshots SQLite plus WAL while each
+owner is paused, validates every retained digest and causal pair, and requires
+live HIL create/decide/modify plus Identity SVID/grant/actor-token/action-signature
+release evidence.
+
+```bash
+cd ../clavenar-e2e
+python3 scripts/check_forensic_outbox_contract.py --require-source
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.

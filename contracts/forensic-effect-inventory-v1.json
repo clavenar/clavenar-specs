@@ -1,0 +1,158 @@
+{
+  "contract": "clavenar.forensic-effect-inventory/v1",
+  "forensicEventContract": "clavenar.forensic-event/v1",
+  "schemaSha256": "2498c5f6acde60691abcdeaaadeac2bf94ca06adcb4b43bb01cb91751360d250",
+  "deliveryBoundary": "local-only",
+  "effects": [
+    {
+      "id": "sdk.client-execution",
+      "owner": "sdk",
+      "operation": "governed client effect",
+      "durableBoundary": "application DurableExecutionStore",
+      "intentStage": "execution.intent",
+      "terminalStage": "execution.completed|execution.failed|execution.uncertain",
+      "migration": "existing-certified",
+      "source": "clavenar-sdk/src/execution.rs"
+    },
+    {
+      "id": "proxy.server-execution",
+      "owner": "proxy",
+      "operation": "selected server-side upstream effect",
+      "durableBoundary": "server_executions + server_execution_outbox",
+      "intentStage": "execution.intent",
+      "terminalStage": "execution.completed|execution.uncertain",
+      "migration": "existing-certified",
+      "source": "clavenar-proxy/src/server_execution.rs"
+    },
+    {
+      "id": "lite.server-execution",
+      "owner": "lite",
+      "operation": "selected server-side upstream effect",
+      "durableBoundary": "server_executions + server_execution_outbox",
+      "intentStage": "execution.intent",
+      "terminalStage": "execution.completed|execution.uncertain",
+      "migration": "existing-certified",
+      "source": "clavenar-lite/src/ledger.rs"
+    },
+    {
+      "id": "policy.lifecycle-transition",
+      "owner": "policy-engine",
+      "operation": "policy create/update/activate/delete lifecycle transition",
+      "durableBoundary": "policy state + policy_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "transition.committed",
+      "migration": "existing-certified",
+      "source": "clavenar-policy-engine/src/write_api.rs"
+    },
+    {
+      "id": "identity.agent-lifecycle-transition",
+      "owner": "identity",
+      "operation": "agent lifecycle transition",
+      "durableBoundary": "agent state + pending_chain_emissions transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "transition.committed",
+      "migration": "existing-certified",
+      "source": "clavenar-identity/src/agents_ledger.rs"
+    },
+    {
+      "id": "hil.pending-create",
+      "owner": "hil",
+      "operation": "pending.create",
+      "durableBoundary": "pending_requests + forensic_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "transition.committed",
+      "migration": "new-local-outbox",
+      "source": "clavenar-hil/src/handler/lifecycle.rs"
+    },
+    {
+      "id": "hil.pending-decision",
+      "owner": "hil",
+      "operation": "pending.decide",
+      "durableBoundary": "pending_requests + forensic_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "transition.committed",
+      "migration": "new-local-outbox",
+      "source": "clavenar-hil/src/decision.rs"
+    },
+    {
+      "id": "hil.pending-quorum",
+      "owner": "hil",
+      "operation": "pending.quorum",
+      "durableBoundary": "pending_requests + forensic_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "transition.committed",
+      "migration": "new-local-outbox",
+      "source": "clavenar-hil/src/decision.rs"
+    },
+    {
+      "id": "hil.pending-modification",
+      "owner": "hil",
+      "operation": "pending.modify",
+      "durableBoundary": "pending_requests + forensic_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "transition.committed",
+      "migration": "new-local-outbox",
+      "source": "clavenar-hil/src/decision.rs"
+    },
+    {
+      "id": "hil.pending-expiry",
+      "owner": "hil",
+      "operation": "pending.expire",
+      "durableBoundary": "pending_requests + forensic_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "transition.committed",
+      "migration": "new-local-outbox",
+      "source": "clavenar-hil/src/decision.rs"
+    },
+    {
+      "id": "identity.svid-release",
+      "owner": "identity",
+      "operation": "svid.issue",
+      "durableBoundary": "issuance state + forensic_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "credential.released",
+      "migration": "new-local-outbox",
+      "source": "clavenar-identity/src/svid.rs"
+    },
+    {
+      "id": "identity.grant-release",
+      "owner": "identity",
+      "operation": "grant.issue",
+      "durableBoundary": "grants + forensic_outbox transaction",
+      "intentStage": "operation.intent",
+      "terminalStage": "credential.released",
+      "migration": "new-local-outbox",
+      "source": "clavenar-identity/src/grant.rs"
+    },
+    {
+      "id": "identity.actor-token-release",
+      "owner": "identity",
+      "operation": "actor-token.issue",
+      "durableBoundary": "forensic_outbox",
+      "intentStage": "operation.intent",
+      "terminalStage": "credential.released",
+      "migration": "new-local-outbox",
+      "source": "clavenar-identity/src/actor_token.rs"
+    },
+    {
+      "id": "identity.action-signature-release",
+      "owner": "identity",
+      "operation": "action-signature.issue",
+      "durableBoundary": "forensic_outbox",
+      "intentStage": "operation.intent",
+      "terminalStage": "credential.released",
+      "migration": "new-local-outbox",
+      "source": "clavenar-identity/src/sign.rs"
+    },
+    {
+      "id": "identity.blob-signature-release",
+      "owner": "identity",
+      "operation": "blob-signature.issue",
+      "durableBoundary": "forensic_outbox",
+      "intentStage": "operation.intent",
+      "terminalStage": "credential.released",
+      "migration": "new-local-outbox",
+      "source": "clavenar-identity/src/sign_blob.rs"
+    }
+  ]
+}
