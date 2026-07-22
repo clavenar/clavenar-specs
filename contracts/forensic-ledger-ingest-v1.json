@@ -1,0 +1,82 @@
+{
+  "contract": "clavenar.forensic-ledger-ingest/v1",
+  "inputContract": "clavenar.forensic-event/v1",
+  "subject": "clavenar.forensic",
+  "identity": {
+    "tuple": [
+      "producer.service",
+      "event_id",
+      "stage"
+    ],
+    "immutable": true,
+    "correlationIsIdentity": false
+  },
+  "validation": {
+    "maximumEnvelopeBytes": 1048576,
+    "requireExactContract": true,
+    "requireCanonicalJson": "clavenar.canonical-json/v1",
+    "requireExactTopLevelFields": true,
+    "rejectUnknownFields": true,
+    "recomputePayloadSha256": true,
+    "envelopeSha256Over": "exact-received-bytes"
+  },
+  "transaction": {
+    "store": "forensic_stages",
+    "atomicWithChainAppend": true,
+    "claimFields": [
+      "producer_service",
+      "event_id",
+      "stage",
+      "envelope_sha256",
+      "payload_sha256",
+      "envelope_json",
+      "entry_id",
+      "entry_seq",
+      "entry_hash",
+      "entry_json",
+      "created_at"
+    ],
+    "claimUpdate": "forbidden",
+    "claimDelete": "forbidden",
+    "outcomes": {
+      "absentTuple": "append-one-chain-row-and-claim",
+      "identicalTupleAndBytes": "return-retained-entry-without-append",
+      "sameTupleChangedBytes": "conflict-without-append",
+      "storageFailure": "rollback-row-and-claim"
+    }
+  },
+  "chainBinding": {
+    "chainVersion": "existing-version-selection",
+    "committedField": "policy_decision.forensic_identity",
+    "committedValues": [
+      "contract",
+      "producer_service",
+      "event_id",
+      "stage",
+      "envelope_sha256",
+      "payload_sha256"
+    ],
+    "historicalHashesRewritten": false
+  },
+  "consumerDisposition": {
+    "created": "ack",
+    "retained": "ack",
+    "conflict": "term-and-increment-conflict-counter",
+    "invalid": "term-and-increment-invalid-counter",
+    "storageFailure": "leave-unacknowledged-for-redelivery"
+  },
+  "migration": {
+    "sqlite": "forward-only-create-table-and-immutable-triggers",
+    "postgres": "forward-only-create-table-and-immutable-triggers",
+    "historicalRows": "remain-unchanged-without-fabricated-tuples",
+    "legacyLogRequest": "retained-compatible-path-without-forensic-stage-claim"
+  },
+  "invariants": [
+    "One strict producer/event/stage tuple links to at most one chain row.",
+    "An exact redelivery returns the original entry identity, sequence, and hash.",
+    "A conflicting or invalid envelope appends no chain row.",
+    "A stage claim and its chain row become visible in the same transaction.",
+    "Tuple claims remain authoritative after the hot chain row moves to retained cold storage."
+  ]
+}
+

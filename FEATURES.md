@@ -1466,6 +1466,36 @@ cd ../clavenar-e2e
 python3 scripts/check_forensic_delivery_contract.py --require-source
 ```
 
+### 8.2.3 Transactional Ledger stage uniqueness
+
+**Concept.** Broker-window deduplication cannot stop a later redelivery from
+growing the hash chain. The consumer therefore owns one permanent identity for
+each strict producer/event/stage and decides duplicate versus conflict inside
+the same transaction as the chain append.
+
+**Implementation.** The byte-identical
+[`contracts/forensic-ledger-ingest-v1.json`](contracts/forensic-ledger-ingest-v1.json)
+defines strict canonical-envelope validation and the SQLite/PostgreSQL
+`forensic_stages` claim. A first tuple appends one row and claim; exact replay
+returns the retained entry ID, sequence, and hash; changed bytes conflict and
+append nothing. The existing chain shape commits a compact
+`policy_decision.forensic_identity` containing the tuple plus payload and exact
+envelope digests. Historical rows remain untouched and receive no invented
+identity.
+
+**Verify.** Run the assembled checker, then the Ledger owner tests. The source
+gate checks the three exact contract copies, strict decoder, both migrations,
+transactional insert/lookup, immutable claims, explicit JetStream dispositions,
+and adversarial owner coverage.
+
+```bash
+cd ../clavenar-e2e
+python3 scripts/check_forensic_ledger_ingest_contract.py --require-source
+cd ../clavenar-ledger
+cargo test
+cargo test --features postgres --test storage_equivalence
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
