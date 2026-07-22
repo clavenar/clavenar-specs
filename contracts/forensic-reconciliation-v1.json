@@ -158,7 +158,7 @@
     "labels": {
       "outboxState": ["ready", "retry", "terminal"],
       "reconciliationOutcome": ["resolved", "failed", "uncertain"],
-      "missingFamily": ["hil", "identity", "proxy", "policy-engine"],
+      "missingFamily": ["hil", "identity", "proxy", "lite", "policy-engine"],
       "missingStage": ["credential.released", "execution.completed", "execution.uncertain", "transition.committed"]
     },
     "forbiddenLabels": ["tenant", "workload", "event_id", "idempotency_id", "correlation_id", "tuple", "request"],
