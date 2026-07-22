@@ -430,12 +430,15 @@ chain version — verifiers dispatch per row, and v1 rows keep verifying forever
 
 ### Write paths and storage
 
-NATS JetStream (`clavenar.forensic`) is the **primary write path**; four publishers
-land here — proxy (v1/v2), policy engine (v1), HIL (v1 + sandbox metadata),
-identity (v3 via a durable outbox). The subject is captured by the
+NATS JetStream (`clavenar.forensic`) is the **primary broker write path**.
+Broker-backed durable boundaries in proxy, policy engine, HIL, and identity
+retain exact payload bytes and retry one stable `Nats-Msg-Id` until the exact
+stream returns a nonzero acknowledgement sequence; SDK receipt delivery and
+Lite's embedded ledger are explicitly non-broker sinks. The subject is captured by the
 `clavenar-forensic` JetStream stream and the ledger consumes it through a
 **durable pull consumer with explicit acks** — events published while the
-ledger is down replay on reconnect instead of vanishing, an append failure
+ledger is down replay on reconnect, a 24-hour duplicate window suppresses
+acknowledgement-loss retries, an append failure
 leaves the message unacked for redelivery, and deny/pend verdict rows are
 published with a required stream ack (bounded retry + a loud
 `*_forensic_publish_failed_total` counter on exhaustion). `POST /log` is a

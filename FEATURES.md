@@ -1425,7 +1425,7 @@ create, decide, quorum, modify, and expiry. Identity commits intent before
 CA/Vault for SVID, grant, actor-token, action-signature, and blob-signature
 authority, then commits `credential.released` before returning bytes. Both
 append-only SQLite outboxes retain canonical v1 envelopes with the current
-producer workload credential. Delivery remains exactly `local` until WP-09.3.
+producer workload credential. Every row begins in the exact `local` state.
 
 **Verify.** The assembled checker enforces the byte-identical inventory,
 source ownership, transaction ordering, immutable schemas, selected-execution
@@ -1438,6 +1438,32 @@ release evidence.
 ```bash
 cd ../clavenar-e2e
 python3 scripts/check_forensic_outbox_contract.py --require-source
+```
+
+### 8.2.2 Acknowledged durable forensic delivery
+
+**Concept.** A successful core-NATS send proves neither persistence nor which
+stream accepted the bytes. A durable publisher must retain its local row until
+the exact persistent stream acknowledges the exact stable message identity.
+
+**Implementation.** The byte-identical
+[`contracts/forensic-delivery-v1.json`](contracts/forensic-delivery-v1.json)
+classifies seven durable boundaries. HIL, Identity authority and lifecycle,
+Policy lifecycle, and Proxy selected server execution publish exact retained
+bytes with stable `Nats-Msg-Id` values, require `clavenar-forensic`, wait for
+the second-phase acknowledgement, and retain its nonzero sequence. Retry
+workers use bounded ordered batches and bounded exponential stable jitter. SDK receipt
+delivery and Lite's embedded ledger remain non-broker durable sinks. Failed or
+lost acknowledgements retry indefinitely without deleting local custody; the
+stream has an explicit 24-hour duplicate window.
+
+**Verify.** The assembled checker validates the public mirror, shared publisher,
+service schemas and workers, in-place migrations, exact stream configuration,
+and least-privilege stream-update authority.
+
+```bash
+cd ../clavenar-e2e
+python3 scripts/check_forensic_delivery_contract.py --require-source
 ```
 
 ### 8.3 UUIDv4 `correlation_id`

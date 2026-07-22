@@ -3358,15 +3358,18 @@ Install is **fail-closed**: an unsigned pack, a signature mismatch, a file-hash 
 ## Forensic event envelope
 
 **Module status:** envelope contract shipped in release 1.163.0; transactional
-producer custody shipped in release 1.164.0. The strict schema and
+producer custody shipped in release 1.164.0; acknowledged JetStream delivery
+shipped in release 1.165.0. The strict schema and
 positive corpus are
 [`contracts/forensic-event-v1.schema.json`](contracts/forensic-event-v1.schema.json)
 and
 [`contracts/forensic-event-v1.fixture.json`](contracts/forensic-event-v1.fixture.json).
 The complete governed-effect classification is
 [`contracts/forensic-effect-inventory-v1.json`](contracts/forensic-effect-inventory-v1.json).
-Acknowledged JetStream delivery, Ledger uniqueness, and crash reconciliation
-remain separate rollout stages and must not be inferred from local outbox rows.
+The exact delivery contract is
+[`contracts/forensic-delivery-v1.json`](contracts/forensic-delivery-v1.json).
+Ledger uniqueness and crash reconciliation remain separate rollout stages and
+must not be inferred from a broker acknowledgement.
 
 ### Envelope
 
@@ -3445,9 +3448,31 @@ Both tables retain canonical envelope bytes and their SHA-256, exact producer
 SPIFFE ID and current credential fingerprint, event/stage identity, stable
 tenant/correlation/idempotency bindings, payload commitment, causal predecessor,
 and delivery state. Immutable event fields cannot be updated and rows cannot be
-deleted. Release 1.164.0 permits only `delivery_state=local`: these modules do
-not publish, retry, acknowledge, or mark delivery. Those state changes begin
-only with the WP-09.3 JetStream acknowledgement contract.
+deleted. Release 1.164.0 created rows as `delivery_state=local`; release 1.165.0
+migrates those rows without changing envelope bytes and advances a row to
+`acknowledged` only after the exact persistent stream returns a nonzero sequence.
+
+### Acknowledged JetStream delivery
+
+Every broker-backed durable boundary publishes the retained payload bytes to
+`clavenar.forensic` with `Nats-Msg-Id` equal to
+`clavenar.forensic.v1:{producer}:{durable_id}:{stage}` and
+`Nats-Expected-Stream: clavenar-forensic`. The publisher waits at most five
+seconds for the second-phase `PublishAck`, then verifies the exact stream name
+and a nonzero sequence before committing acknowledgement metadata. HIL and
+Identity v1 envelopes, Identity lifecycle rows, Policy lifecycle rows, and
+Proxy selected server-execution rows use this boundary. SDK receipt delivery
+and Lite's embedded authoritative ledger remain classified non-broker sinks.
+
+Retries reuse the identical subject, message ID, and payload bytes. Local rows
+survive broker outage, disconnect, missing stream, acknowledgement loss,
+metadata-write failure, process crash, and restart; acknowledged history is not
+deleted. Workers scan bounded ordered batches and apply deterministic per-message
+jitter to exponential retry delays capped at five minutes. The stream retains
+seven days of events and an explicit 24-hour broker
+duplicate window. Transactional Ledger uniqueness beyond that window is owned
+by WP-09.4, and effect reconciliation plus complete delivery telemetry is owned
+by WP-09.5.
 
 ### Existing execution contract mapping
 

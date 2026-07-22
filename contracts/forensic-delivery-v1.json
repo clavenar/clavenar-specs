@@ -1,0 +1,103 @@
+{
+  "contract": "clavenar.forensic-delivery/v1",
+  "forensicEventContract": "clavenar.forensic-event/v1",
+  "subject": "clavenar.forensic",
+  "stream": {
+    "name": "clavenar-forensic",
+    "storage": "file",
+    "maxAgeSeconds": 604800,
+    "duplicateWindowSeconds": 86400
+  },
+  "publication": {
+    "messageIdHeader": "Nats-Msg-Id",
+    "expectedStreamHeader": "Nats-Expected-Stream",
+    "messageIdFormat": "clavenar.forensic.v1:{producer}:{durable_id}:{stage}",
+    "maxMessageIdBytes": 196,
+    "ackTimeoutMilliseconds": 5000,
+    "requireSecondPhaseAck": true,
+    "requireExactStream": true,
+    "requireNonzeroSequence": true,
+    "retryExactPayloadBytes": true,
+    "retryUntilAcknowledged": true,
+    "retryBackoff": "bounded-exponential-stable-jitter",
+    "maxRetryDelayMilliseconds": 300000
+  },
+  "deliveryState": {
+    "pending": "local",
+    "terminal": "acknowledged",
+    "retainedFields": [
+      "nats_msg_id",
+      "delivery_attempts",
+      "last_attempt_at",
+      "last_error",
+      "jetstream_sequence",
+      "jetstream_duplicate",
+      "acknowledged_at",
+      "delivered_at"
+    ],
+    "deleteAfterAck": false
+  },
+  "boundaries": [
+    {
+      "id": "sdk.client-execution",
+      "producer": "sdk",
+      "durableStore": "application DurableExecutionStore",
+      "transport": "application-receipt-delivery",
+      "brokerBacked": false,
+      "source": "clavenar-sdk/src/execution.rs"
+    },
+    {
+      "id": "lite.server-execution",
+      "producer": "lite",
+      "durableStore": "server_execution_outbox + embedded ledger",
+      "transport": "embedded-authoritative-ledger",
+      "brokerBacked": false,
+      "source": "clavenar-lite/src/ledger.rs"
+    },
+    {
+      "id": "hil.transitions",
+      "producer": "hil",
+      "durableStore": "forensic_outbox",
+      "transport": "acknowledged-jetstream",
+      "brokerBacked": true,
+      "source": "clavenar-hil/src/forensic_outbox.rs"
+    },
+    {
+      "id": "identity.authority-releases",
+      "producer": "identity",
+      "durableStore": "forensic_outbox",
+      "transport": "acknowledged-jetstream",
+      "brokerBacked": true,
+      "source": "clavenar-identity/src/forensic_outbox.rs"
+    },
+    {
+      "id": "identity.lifecycle-transitions",
+      "producer": "identity",
+      "durableStore": "pending_chain_emissions",
+      "transport": "acknowledged-jetstream",
+      "brokerBacked": true,
+      "source": "clavenar-identity/src/agents_ledger.rs"
+    },
+    {
+      "id": "policy.lifecycle-transitions",
+      "producer": "policy-engine",
+      "durableStore": "policy_outbox",
+      "transport": "acknowledged-jetstream",
+      "brokerBacked": true,
+      "source": "clavenar-policy-engine/src/outbox_worker.rs"
+    },
+    {
+      "id": "proxy.server-execution",
+      "producer": "proxy",
+      "durableStore": "server_execution_outbox",
+      "transport": "acknowledged-jetstream",
+      "brokerBacked": true,
+      "source": "clavenar-proxy/src/server_execution.rs"
+    }
+  ],
+  "failureInvariant": "Broker outage, disconnect, missing stream, acknowledgement loss, metadata-write failure, process crash, and restart may delay acknowledgement but cannot erase durable local custody or roll back an already-recorded governed effect.",
+  "deferred": {
+    "ledgerTupleUniqueness": "WP-09.4",
+    "effectReconciliationAndCompleteTelemetry": "WP-09.5"
+  }
+}
