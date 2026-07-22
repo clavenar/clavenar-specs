@@ -18,7 +18,7 @@
       "authorities": [
         {"service": "identity", "store": "sqlite", "resource": "agents.state", "durability": "retained", "role": "suspension source of truth"}
       ],
-      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_revocation:agent.<tenant>.<agent_name>", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 64, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
+      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_revocation:agent.<tenant>.<agent_name>", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 1, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
       "canonicalKey": "lowercase tenant plus NUL plus registered agent name",
       "ordering": "the committed Identity lifecycle transition precedes projection",
       "expiry": "only an explicit committed unsuspend removes the control",
@@ -34,7 +34,7 @@
       "authorities": [
         {"service": "identity", "store": "sqlite", "resource": "decoys", "durability": "retained", "role": "registered decoy source of truth"}
       ],
-      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_decoys:sha256(tenant NUL name)", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 64, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
+      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_decoys:sha256(tenant NUL name)", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 1, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
       "canonicalKey": "SHA-256 of tenant plus NUL plus decoy name",
       "ordering": "the committed Identity decoy mutation precedes projection",
       "expiry": "only an explicit committed retirement removes the catalog item",
@@ -50,7 +50,7 @@
       "authorities": [
         {"service": "identity", "store": "sqlite", "resource": "decoys", "durability": "retained", "role": "registered decoy source of truth"}
       ],
-      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_decoys:sha256(tenant NUL name)", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 64, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
+      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_decoys:sha256(tenant NUL name)", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 1, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
       "canonicalKey": "SHA-256 of tenant plus NUL plus decoy name",
       "ordering": "the committed Identity decoy mutation precedes projection",
       "expiry": "only an explicit committed retirement removes enforcement",
@@ -66,7 +66,7 @@
       "authorities": [
         {"service": "identity", "store": "sqlite", "resource": "force_hil_controls", "durability": "retained", "role": "versioned containment source of truth"}
       ],
-      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_revocation:force_hil.<tenant>.<agent_name>", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 64, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
+      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_revocation:force_hil.<tenant>.<agent_name>", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 1, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
       "canonicalKey": "lowercase tenant plus NUL plus registered agent name",
       "ordering": "strictly increasing mutation_version per key; replication never extends expires_at",
       "expiry": "the authoritative expires_at instant or a higher-version explicit clear",
@@ -98,7 +98,7 @@
       "authorities": [
         {"service": "identity", "store": "sqlite", "resource": "grants.revoked_at", "durability": "retained", "role": "grant revocation source of truth"}
       ],
-      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_revocation:grant.<jti>", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 64, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
+      "replication": {"mechanism": "jetstream-kv-watch", "resource": "clavenar_revocation:grant.<jti>", "writer": "identity", "readers": ["proxy"], "durability": "retained", "storage": "file", "history": 1, "maxAgeSeconds": null, "replicasEnvironment": "CLAVENAR_CONTROL_STATE_REPLICAS"},
       "canonicalKey": "verified grant jti",
       "ordering": "the committed revoked_at mutation precedes projection",
       "expiry": "the signed grant expiry permits projection cleanup but never renewed authority",
