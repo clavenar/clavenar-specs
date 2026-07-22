@@ -18,6 +18,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
 - [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
 - [Forensic event envelope](#forensic-event-envelope) — stable producer/event/stage identity, payload commitments, and explicit causal predecessors
+- [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
@@ -55,6 +56,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
 | 9a | [Policy exchange](#policy-exchange) | install/verify shipped; production issuance redesign required | v1.3.0 | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
 | 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
+| 9c | [Distributed control state](#distributed-control-state) | contract shipped; readiness and outage enforcement follow separately | v1.173.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3553,6 +3555,42 @@ normative test vectors. Implementations must reject digest mismatch,
 non-canonical identity/time, unknown producer/stage, missing workload or tenant,
 partial provenance, exact self-predecessors, conflicting tuple reuse, and
 unknown fields before publication or append.
+
+---
+
+## Distributed control state
+
+The strict inventory is
+[`contracts/distributed-control-state-v1.fixture.json`](contracts/distributed-control-state-v1.fixture.json),
+validated by
+[`contracts/distributed-control-state-v1.schema.json`](contracts/distributed-control-state-v1.schema.json).
+It is deny-unknown and records seven exact control rows. Agent suspension,
+grant revocation, an unexpired force-HIL flag, a configured spend quota, a
+signed grant use limit, and invocation of a registered decoy are mandatory.
+Decoy catalog advertisement is advisory because it changes presentation but
+cannot authorize a decoy invocation.
+
+Identity SQLite is authoritative for suspension, grant revocation, force-HIL,
+tenant budgets, and decoys. Ledger's retained entries are authoritative for
+monthly spend. The retained file-backed `clavenar_grant_usage` JetStream KV
+counter is authoritative for admitted grant uses. NATS KV watches and bounded
+HTTP caches are replicated enforcement projections, not alternate sources of
+truth. Every KV row pins history, retention, file storage, and the validated
+`CLAVENAR_CONTROL_STATE_REPLICAS` count; a process default cannot silently
+change that contract.
+
+Force-HIL authority carries a strictly increasing per-agent mutation version.
+Reconciliation reproduces only exact unexpired, uncleared SQLite rows and never
+extends an expiry. Revocation and decoy reconciliation likewise replaces the
+owned projection namespaces from SQLite truth. Grant-use CAS can only increase
+the retained count. Quota cache replacement requires one complete budget/spend
+pair and expires on its deadline or UTC month rollover.
+
+This contract defines state and replication. Initial mandatory synchronization,
+partition behavior, maximum signed-snapshot age, rollback protection, and
+recovery gating are a subsequent enforcement layer; an implementation must not
+infer permission merely because those mechanics have not yet attached to an
+inventory row.
 
 ---
 

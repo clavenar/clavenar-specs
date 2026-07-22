@@ -1530,6 +1530,32 @@ cd ../clavenar-e2e
 python3 scripts/check_forensic_reconciliation_contract.py --require-source
 ```
 
+### 8.2.5 Durable distributed control-state inventory
+
+**Concept.** A remote cache cannot safely become authority merely because its
+source is unavailable. Every distributed gate needs one explicit
+mandatory/advisory class and one recoverable durable state boundary before
+readiness and outage behavior can be enforced consistently.
+
+**Implementation.** The strict
+[`contracts/distributed-control-state-v1.fixture.json`](contracts/distributed-control-state-v1.fixture.json)
+inventory covers agent and grant revocation, force-HIL containment, configured
+tenant quota, grant use counts, decoy invocation, and decoy advertisement.
+Identity and Ledger databases or the retained grant-use KV are authoritative;
+KV watches and bounded HTTP caches are projections. Every KV contract pins file
+storage, history, retention, and a validated replica count. Force-HIL state is
+versioned in Identity SQLite and reconciliation cannot extend its expiry.
+
+**Verify.** Validate the public schema and semantic invariants, then run the
+assembled mirror/source checker.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_distributed_control_state_contract
+cd ../clavenar-e2e
+python3 scripts/check_distributed_control_state.py --require-source
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
