@@ -353,6 +353,7 @@
         {"topology": "compose-single-host", "resource": "compose-volume:operator-secrets", "persistence": "retained"},
         {"topology": "compose-single-host", "resource": "compose-volume:simulator-secrets", "persistence": "retained"},
         {"topology": "compose-single-host", "resource": "compose-secret-class:application", "persistence": "external"},
+        {"topology": "compose-single-host", "resource": "compose-bind-class:application-secrets", "persistence": "external"},
         {"topology": "helm-single-writer", "resource": "helm-secret-class:application", "persistence": "external"}
       ],
       "objectiveProfile": "zero-loss-critical",
