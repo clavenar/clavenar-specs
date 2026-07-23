@@ -872,10 +872,11 @@ key material, fingerprint mismatch, invalid key lifecycle, and row timestamps
 before key activation.
 
 Every complete signing shape on historical v2-v5 rows is verified with its
-exact retained Ed25519 key. Required or partially populated signing shapes fail;
-only rows with no signing shape are classified as unsigned. This verification
-uses the frozen canonical bytes for the row's chain version—field presence is
-never a cryptographic verdict.
+exact retained Ed25519 key. Required or partially populated signature/key
+shapes fail. `agent_spiffe` attribution alone does not claim a signature; an
+optional-signature row with both `signature` and `key_id` absent is classified
+as unsigned. This verification uses the frozen canonical bytes for the row's
+chain version—field presence is never a cryptographic verdict.
 
 The one bounded position exception is a forged signature on a frozen
 non-execution lifecycle row produced before the signed-position wire existed.

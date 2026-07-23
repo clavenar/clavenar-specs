@@ -2239,7 +2239,8 @@ evidence.
 Ed25519 lineage at workload-mTLS `GET /ledger-verification-keys`; generated
 capabilities grant that read only to Ledger. Ledger rejects freshness,
 rollback, lineage, fingerprint, lifecycle, timestamp, and signature failures
-across signed v2-v5 rows. It independently re-verifies stored RFC 3161 responses
+across signed v2-v5 rows. Attribution-only rows with no signature/key pair
+remain explicitly unsigned. It independently re-verifies stored RFC 3161 responses
 against pinned public CA and signer files, with an exact message imprint over
 the anchored chain hash. `/verify` emits
 `clavenar.cryptographic-verification/v2` and withholds a complete chain

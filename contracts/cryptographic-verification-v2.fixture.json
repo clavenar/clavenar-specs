@@ -37,6 +37,7 @@
     "only forged non-execution lifecycle signatures from chain-v3 or chain-v5 seq 416970..442530 with policy_decision=null and key clavenar-identity:v35/v36 may be classified identity_lifecycle_position_not_retained",
     "frozen chain-v4 verdicts receive a bounded second verification attempt only after removing one enumerated post-sign egress audit suffix",
     "new verdict signatures cover the exact final persisted reasoning including any egress audit suffix",
+    "agent_spiffe attribution without signature and key fields is explicitly unsigned on optional-signature chain versions",
     "legacy-unverifiable rows receive no cryptographic or compliance count credit",
     "new lifecycle emissions transmit an exact signed UUID and timestamp under clavenar.lifecycle-signed-position/v1",
     "missing, partial, malformed, substituted, execution, non-legacy chain-v5, key, and TSA failures remain invalid",

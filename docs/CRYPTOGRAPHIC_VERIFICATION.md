@@ -45,7 +45,9 @@ A signed row is valid only when its exact `kid` exists, has state `active` or
 `historical_trusted`, its row timestamp is not before `activated_at`, and its
 signature verifies with that Ed25519 public key. A missing, `retired`, or
 `untrusted` key is a verification failure, not an unsigned-row classification.
-Partially populated signing fields also fail. Truly unsigned row shapes remain
+Partially populated signature/key fields also fail. `agent_spiffe` is
+independently committed attribution and does not create a signing shape when
+both `signature` and `key_id` are absent. Such optional-signature rows remain
 explicitly unsigned hash-chain evidence.
 
 ### Bounded legacy lifecycle classification
