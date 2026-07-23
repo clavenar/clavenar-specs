@@ -1,0 +1,45 @@
+{
+  "contract": "clavenar.cryptographic-verification/v1",
+  "positive": {
+    "contract": "clavenar.cryptographic-verification/v1",
+    "status": "verified",
+    "key_set": {
+      "issuer": "spiffe://clavenar.local/service/identity",
+      "audience": "spiffe://clavenar.local/service/ledger",
+      "sequence": 2,
+      "generated_at": "2026-07-23T10:00:00Z",
+      "expires_at": "2026-07-23T10:02:00Z",
+      "lineage_sha256": "sha256:fa1841025abb11ba932e4f1be58d49eca43731562ef04017e473cfbfd1907095"
+    },
+    "signed_rows": 19,
+    "verified_signed_rows": 19,
+    "unsigned_rows": 81,
+    "first_failure": null,
+    "tsa": {
+      "required": true,
+      "anchors_observed": 2,
+      "rfc3161_observed": 2,
+      "verified": 2,
+      "failed": 0,
+      "trust_bundle_sha256": "sha256:fb0860e852ca2fe5a6c3c17617397369bbf6f6355b5857ed5a80ef0f51bd924e",
+      "first_failure": null
+    }
+  },
+  "invariants": [
+    "status=verified requires first_failure=null",
+    "status=verified requires signed_rows=verified_signed_rows",
+    "status=verified with tsa.required=true requires tsa.verified>0 and tsa.failed=0",
+    "a complete verified-chain commitment is published only with status=verified",
+    "generic webhook anchors never increment tsa.verified",
+    "compliance signed metrics consume verified_signed_rows, never field presence"
+  ],
+  "adversarial": [
+    { "name": "field-presence-only", "mutation": "signed_rows_positive_verified_signed_rows_zero", "status": "invalid" },
+    { "name": "key-unavailable", "mutation": "key_set_null", "status": "unavailable" },
+    { "name": "forged-row", "mutation": "first_failure_signature_forged", "status": "invalid" },
+    { "name": "retired-row-key", "mutation": "first_failure_key_retired", "status": "invalid" },
+    { "name": "forged-tsa", "mutation": "tsa_failed_positive", "status": "invalid" },
+    { "name": "webhook-only", "mutation": "tsa_required_true_rfc3161_observed_zero", "status": "invalid" },
+    { "name": "missing-tsa-trust", "mutation": "tsa_trust_bundle_sha256_null", "status": "unavailable" }
+  ]
+}

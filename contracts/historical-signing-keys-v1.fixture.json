@@ -1,0 +1,50 @@
+{
+  "contract": "clavenar.historical-signing-keys/v1",
+  "canonicalLineageFields": [
+    "issuer",
+    "audience",
+    "sequence",
+    "keys"
+  ],
+  "positive": {
+    "contract": "clavenar.historical-signing-keys/v1",
+    "issuer": "spiffe://clavenar.local/service/identity",
+    "audience": "spiffe://clavenar.local/service/ledger",
+    "sequence": 2,
+    "generated_at": "2026-07-23T10:00:00Z",
+    "expires_at": "2026-07-23T10:02:00Z",
+    "lineage_sha256": "sha256:fa1841025abb11ba932e4f1be58d49eca43731562ef04017e473cfbfd1907095",
+    "keys": [
+      {
+        "kid": "clavenar-identity:v2",
+        "algorithm": "Ed25519",
+        "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\n-----END PUBLIC KEY-----\n",
+        "public_key_sha256": "sha256:7b8c3acd670b296bccbbce13e2c4126ae8652bf3b6a46ccbf924c8a46945937d",
+        "activated_at": "2026-07-22T10:00:00Z",
+        "state": "active"
+      },
+      {
+        "kid": "clavenar-identity:v1",
+        "algorithm": "Ed25519",
+        "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=\n-----END PUBLIC KEY-----\n",
+        "public_key_sha256": "sha256:7b8c3acd670b296bccbbce13e2c4126ae8652bf3b6a46ccbf924c8a46945937d",
+        "activated_at": "2026-07-21T10:00:00Z",
+        "state": "historical_trusted"
+      }
+    ]
+  },
+  "adversarial": [
+    { "name": "stale-response", "mutation": "expires_at_not_after_evaluation", "result": "reject" },
+    { "name": "wrong-audience", "mutation": "audience_service_proxy", "result": "reject" },
+    { "name": "lineage-rollback", "mutation": "sequence_less_than_last_accepted", "result": "reject" },
+    { "name": "lineage-digest-drift", "mutation": "key_changed_without_lineage_sha256", "result": "reject" },
+    { "name": "duplicate-kid", "mutation": "keys_duplicate_kid", "result": "reject" },
+    { "name": "multiple-active", "mutation": "two_keys_state_active", "result": "reject" },
+    { "name": "retired-key", "mutation": "referenced_key_state_retired", "result": "reject" },
+    { "name": "untrusted-key", "mutation": "referenced_key_state_untrusted", "result": "reject" },
+    { "name": "removed-history", "mutation": "signed_row_kid_absent", "result": "reject" },
+    { "name": "future-key", "mutation": "row_timestamp_before_activated_at", "result": "reject" },
+    { "name": "substituted-key", "mutation": "public_key_sha256_mismatch", "result": "reject" },
+    { "name": "private-material", "mutation": "private_key_pem_supplied", "result": "reject" }
+  ]
+}

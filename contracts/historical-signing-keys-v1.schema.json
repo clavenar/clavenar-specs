@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/historical-signing-keys-v1.schema.json",
+  "title": "Clavenar historical signing key set v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "issuer",
+    "audience",
+    "sequence",
+    "generated_at",
+    "expires_at",
+    "lineage_sha256",
+    "keys"
+  ],
+  "properties": {
+    "contract": { "const": "clavenar.historical-signing-keys/v1" },
+    "issuer": {
+      "type": "string",
+      "pattern": "^spiffe://[a-z0-9.-]+/service/identity$"
+    },
+    "audience": {
+      "type": "string",
+      "pattern": "^spiffe://[a-z0-9.-]+/service/ledger$"
+    },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "lineage_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": { "$ref": "#/$defs/key" }
+    }
+  },
+  "$defs": {
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kid",
+        "algorithm",
+        "public_key_pem",
+        "public_key_sha256",
+        "activated_at",
+        "state"
+      ],
+      "properties": {
+        "kid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]+:v[1-9][0-9]*$"
+        },
+        "algorithm": { "const": "Ed25519" },
+        "public_key_pem": {
+          "type": "string",
+          "minLength": 80,
+          "maxLength": 4096,
+          "pattern": "^-----BEGIN PUBLIC KEY-----\\n"
+        },
+        "public_key_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "activated_at": { "type": "string", "format": "date-time" },
+        "state": {
+          "enum": [
+            "active",
+            "historical_trusted",
+            "retired",
+            "untrusted"
+          ]
+        }
+      }
+    }
+  }
+}

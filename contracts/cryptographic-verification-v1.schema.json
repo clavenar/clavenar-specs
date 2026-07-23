@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/cryptographic-verification-v1.schema.json",
+  "title": "Clavenar cryptographic verification result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "status",
+    "key_set",
+    "signed_rows",
+    "verified_signed_rows",
+    "unsigned_rows",
+    "first_failure",
+    "tsa"
+  ],
+  "properties": {
+    "contract": { "const": "clavenar.cryptographic-verification/v1" },
+    "status": { "enum": ["verified", "unavailable", "invalid"] },
+    "key_set": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/keySetSummary" }
+      ]
+    },
+    "signed_rows": { "type": "integer", "minimum": 0 },
+    "verified_signed_rows": { "type": "integer", "minimum": 0 },
+    "unsigned_rows": { "type": "integer", "minimum": 0 },
+    "first_failure": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/failure" }
+      ]
+    },
+    "tsa": { "$ref": "#/$defs/tsa" }
+  },
+  "$defs": {
+    "keySetSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "audience",
+        "sequence",
+        "generated_at",
+        "expires_at",
+        "lineage_sha256"
+      ],
+      "properties": {
+        "issuer": { "type": "string" },
+        "audience": { "type": "string" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "lineage_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "reason"],
+      "properties": {
+        "seq": { "type": ["integer", "null"], "minimum": 1 },
+        "reason": {
+          "enum": [
+            "key_set_unavailable",
+            "key_set_stale",
+            "key_set_rollback",
+            "key_missing",
+            "key_retired",
+            "key_untrusted",
+            "key_not_yet_active",
+            "key_substituted",
+            "signature_malformed",
+            "signature_forged",
+            "partial_signature",
+            "tsa_trust_unavailable",
+            "tsa_missing",
+            "tsa_proof_digest_mismatch",
+            "tsa_response_malformed",
+            "tsa_signature_invalid",
+            "tsa_chain_untrusted",
+            "tsa_imprint_mismatch"
+          ]
+        }
+      }
+    },
+    "tsa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "anchors_observed",
+        "rfc3161_observed",
+        "verified",
+        "failed",
+        "trust_bundle_sha256",
+        "first_failure"
+      ],
+      "properties": {
+        "required": { "type": "boolean" },
+        "anchors_observed": { "type": "integer", "minimum": 0 },
+        "rfc3161_observed": { "type": "integer", "minimum": 0 },
+        "verified": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "trust_bundle_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "first_failure": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/failure" }
+          ]
+        }
+      }
+    }
+  }
+}

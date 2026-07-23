@@ -852,6 +852,44 @@ head. This slice establishes content integrity only: trusted historical-key
 lookup, TSA validation, and cryptographic compliance derivation are separate
 requirements and are not inferred from v5.
 
+#### 7.5 Historical-key and RFC 3161 verification
+
+The normative machine contracts are
+[`contracts/historical-signing-keys-v1.schema.json`](contracts/historical-signing-keys-v1.schema.json)
+and
+[`contracts/cryptographic-verification-v1.schema.json`](contracts/cryptographic-verification-v1.schema.json),
+with valid examples in their matching fixture files. The readable companion is
+[`docs/CRYPTOGRAPHIC_VERIFICATION.md`](docs/CRYPTOGRAPHIC_VERIFICATION.md).
+
+Identity exposes `GET /ledger-verification-keys` only on its workload-mTLS
+listener. The route requires `identity.verification-keys.read`, granted only to
+the exact Ledger SPIFFE workload. Its response is bound to the exact Identity
+issuer and Ledger audience, expires within 120 seconds, orders retained key
+versions strictly descending, identifies exactly one active version, and
+commits the complete lineage with `lineage_sha256`. Ledger rejects stale or
+rolled-back sequences, same-sequence lineage substitution, malformed or private
+key material, fingerprint mismatch, invalid key lifecycle, and row timestamps
+before key activation.
+
+Every complete signing shape on historical v2-v5 rows is verified with its
+exact retained Ed25519 key. Required or partially populated signing shapes fail;
+only rows with no signing shape are classified as unsigned. This verification
+uses the frozen canonical bytes for the row's chain version—field presence is
+never a cryptographic verdict.
+
+Every stored `rfc3161` anchor is re-verified from its DER response bytes against
+the configured pinned root and timestamp signer. Proof digest, CMS signature,
+timestamp-signing EKU and chain, certificate time, and exact SHA-256 message
+imprint must all verify. Webhook references never count as TSA evidence. When
+TSA verification is required, at least one verified RFC 3161 response and zero
+failed responses are mandatory.
+
+`GET /verify` adds `clavenar.cryptographic-verification/v1`. A complete
+`clavenar.verified-chain/v1` commitment is withheld unless required historical
+signatures and RFC 3161 trust have status `verified`. Key-lineage changes force
+a complete historical walk rather than carrying an incremental checkpoint
+across different trust.
+
 ### 8. Authentication for human callers
 
 #### 8.1 Transport
@@ -1995,11 +2033,11 @@ The ledger never deletes chain rows by default — cold-tier export *copies* row
 
 A live projection of the audit chain into an **EU AI Act Article 14/15 + SOC 2 / ISO 27001** evidence register. Where [Regulatory export](#regulatory-export) covers Articles 11 + 12 (technical documentation + automatic logging) as a signed bundle, this module *auto-derives* the human-oversight and accuracy/robustness controls — plus the operational-monitoring controls auditors ask about under SOC 2 / ISO 27001 — from facts the chain already carries. No operator prose required, no new chain version.
 
-**Module status:** **shipped (v1.3.0).** Lives in `clavenar-ledger` (derivation engine + `POST /compliance/evidence`), `clavenar-sdk` (`compliance_evidence`), `clavenar-console` (`/compliance`), `clavenar-ctl` (`regulatory export --include-compliance`). No chain-version change.
+**Module status:** **shipped (v1.3.0; cryptographic derivation v1.176.0).** Lives in `clavenar-ledger` (derivation engine + `POST /compliance/evidence`), `clavenar-sdk` (`compliance_evidence`), `clavenar-console` (`/compliance`), `clavenar-ctl` (`regulatory export --include-compliance`). No chain-version change.
 
 ### 1. Why auto-derive
 
-Article 11/12 are document + log facts the chain *is*. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), and the SOC 2 / ISO 27001 monitoring controls, are *also* answerable from the chain — who approved a Yellow-tier request, the distribution of deny signals, whether the chain still verifies, how many denials carry a clavenar-issued signature. Deriving them turns "write me a paragraph" into "show me the rows." The register is **evidence projection, not a conformity assessment** — every register carries that disclaimer on the wire.
+Article 11/12 are document + log facts the chain *is*. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), and the SOC 2 / ISO 27001 monitoring controls, are *also* answerable from the chain — who approved a Yellow-tier request, the distribution of deny signals, whether the chain and required TSA trust verify, and how many denials have verified issuer signatures. A non-null signature or key ID is never evidence by itself. Deriving these facts turns "write me a paragraph" into "show me the rows." The register is **evidence projection, not a conformity assessment** — every register carries that disclaimer on the wire.
 
 ### 2. Control catalog
 
@@ -2008,16 +2046,16 @@ The catalog is the static source of truth in `clavenar-ledger/src/compliance.rs`
 | Control | Framework | Derived from | `satisfied` when |
 |---|---|---|---|
 | `EU-AI-Act-Article-14` | EU AI Act | HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) + channel provenance (`policy_decision.approver_provenance`) | every recorded human decision rode an **attested** channel — provenance `webauthn` / `oidc` / `saml`. An assertion alone never satisfies (a forged session or auth-disabled bypass can mint one); `system` and `auth-disabled` rows are excluded from the human count entirely and tagged in `provenance_summary` |
-| `EU-AI-Act-Article-15` | EU AI Act | deny-signal distribution + chain-verify pass + signed-denial coverage | chain verifies and every denial is signed |
+| `EU-AI-Act-Article-15` | EU AI Act | deny-signal distribution + hash-chain, historical-key, and RFC 3161 verification + verified signed-denial coverage | required cryptography verifies and every denial has a verified issuer signature |
 | `EU-AI-Act-Article-50` | EU AI Act | interaction-logging substrate (chain validity + row count) | every agent interaction recorded on a verified chain (the logging Art 50 disclosures rely on) |
 | `ISO-27001-8.13` | ISO/IEC 27001 | chain continuity + overlapping cold-tier export snapshots | chain verifies and ≥1 export overlaps the window |
 | `SOC2-CC7.2` | SOC 2 | deny-signal distribution non-empty + verdict rows present | requests monitored and ≥1 anomaly signal seen |
 | `SOC2-CC7.3` | SOC 2 | presence of HIL human-review rows | ≥1 security event reached human evaluation |
 | `SOC2-CC6.1` | SOC 2 | chain-anchored `agent.envelope_narrowed` events (Blast-Radius Autopilot's apply path) | ≥1 scope-envelope narrowing recorded (absence is `no_data`, not failure — an already-minimal envelope needs none) |
-| `NIST-AI-RMF-MEASURE-2.7` | NIST AI RMF | continuous inspection on a verified chain (Article-15 substrate) | chain verifies with verdict rows in the window |
+| `NIST-AI-RMF-MEASURE-2.7` | NIST AI RMF | continuous inspection on a cryptographically verified chain (Article-15 substrate) | required cryptography verifies with verdict rows in the window |
 | `NIST-AI-RMF-MANAGE-4.1` | NIST AI RMF | risk-response actions: denials + human evaluations + privilege reductions | ≥1 response action recorded (`partial` when traffic exists but no response) |
 | `NIST-AI-RMF-GOVERN-1.2` | NIST AI RMF | attested human-oversight decisions (Article-14 substrate) | every human oversight decision rode an attested channel |
-| `NIST-GenAI-Profile-Content-Provenance` | NIST GenAI Profile | per-primitive provenance commitments on a verified chain: rows hashing the request payload (`payload_sha256`), committing the Brain's deterministic verdict inputs (`brain_evidence_sha256`), and ed25519-signed | chain verifies and ≥1 provenance commitment present (`partial` when traffic exists but none carries a commitment). GenAI-Profile incident disclosure (MANAGE 4.3) rides the shipped Art-73 authority-notification pipeline + the MANAGE-4.1/4.3 risk-response control |
+| `NIST-GenAI-Profile-Content-Provenance` | NIST GenAI Profile | per-primitive provenance commitments on a verified chain: rows hashing the request payload (`payload_sha256`), committing the Brain's deterministic verdict inputs (`brain_evidence_sha256`), and verified Ed25519 signatures | required cryptography verifies and ≥1 provenance commitment is present (`partial` when traffic exists but none carries a commitment). GenAI-Profile incident disclosure (MANAGE 4.3) rides the shipped Art-73 authority-notification pipeline + the MANAGE-4.1/4.3 risk-response control |
 
 ### 3. Wire surface
 
@@ -2028,9 +2066,18 @@ The catalog is the static source of truth in `clavenar-ledger/src/compliance.rs`
 
 `/compliance/evidence` is the cheap live read the console `/compliance` page renders and re-polls. The `?include_compliance=true` flag on the existing bundle embeds the same register as a signed artifact (one signing path, one tamper-evident container) and widens `article_scope` to include Articles 14 + 15. Both go through one derivation function so the live view and the bundled artifact agree byte-for-byte for the same window. `/compliance/evidence` sits on the ledger's internal mTLS listener only (stripped from the plain `:8083` port exactly like `/export*`). Half-open window `[from, to)`; empty window → `200` with every control `no_data`; inverted/malformed window → `400`.
 
-### 4. Register schema (v2)
+### 4. Register schema (v3)
 
-Schema v2 (additive over v1): the Article-14 `metric` gains `attested`
+Schema v3 adds the aggregate cryptographic verdict and replaces
+field-presence signature counts with verified-signature counts. The embedded
+`chain_verify` includes `cryptographic_status`, global signed/verified row
+counts, and verified/failed RFC 3161 counts. Article 15 exposes
+`cryptographic_verified` and `verified_signed_denials`; the GenAI provenance
+control exposes `verified_signatures`. Missing, unavailable, or invalid
+cryptography leaves those counts at zero and cannot satisfy a control that
+claims cryptographic evidence.
+
+Schema v2 previously added the Article-14 `attested`
 and a `provenance_summary` map counting every decision row by its
 HIL-stamped channel provenance — `webauthn`, `oidc`, `saml`,
 `basic-admin`, `operator-mtls`, `demo-session`, `workload-mtls`, `teams-card`, `system`,
@@ -2047,11 +2094,20 @@ exposes it as the `CARGO_BUILD_FLAGS` build arg).
 
 ```jsonc
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "generated_at": "<RFC 3339 UTC>",
   "window": { "from": "...", "to": "..." },
   "row_count": 1234,
-  "chain_verify": { "valid": true, "entries_checked": 5000, "first_invalid_seq": null },
+  "chain_verify": {
+    "valid": true,
+    "entries_checked": 5000,
+    "first_invalid_seq": null,
+    "cryptographic_status": "verified",
+    "signed_rows": 4800,
+    "verified_signed_rows": 4800,
+    "tsa_verified": 12,
+    "tsa_failed": 0
+  },
   "controls": [
     {
       "control_id": "EU-AI-Act-Article-15",
@@ -2059,7 +2115,8 @@ exposes it as the `CARGO_BUILD_FLAGS` build arg).
       "title": "Accuracy, robustness and cybersecurity",
       "status": "satisfied",                // satisfied | partial | no_data
       "metric": { "total_requests": 1234, "denied": 12, "deny_signal_distribution": {…},
-                  "chain_valid": true, "signed_denials": 12 },
+                  "chain_valid": true, "cryptographic_verified": true,
+                  "verified_signed_denials": 12 },
       "sample_seqs": [4001, 4002],
       "narrative": "Chain verified; 12 of 1234 requests denied; 12 of 12 denials carry a clavenar-issued signature."
     }
@@ -2072,7 +2129,7 @@ exposes it as the `CARGO_BUILD_FLAGS` build arg).
 
 ### 5. Placement
 
-Derivation lives in **clavenar-ledger**, not the console, for three reasons: (1) the register must be embeddable in the signed bundle for offline auditor verification, which only works if the ledger computes it before signing; (2) the ledger already owns the chain-integrity primitive (`verify_chain`) that Article 15 depends on — duplicating it in the console would be a parallel abstraction; (3) the console is a display-only read surface. The console maps each control to a status badge + narrative and prints the `clavenarctl regulatory export --include-compliance` command for the signed download (the bundle endpoint is mTLS-internal, so there is no browser link).
+Derivation lives in **clavenar-ledger**, not the console, for three reasons: (1) the register must be embeddable in the signed bundle for offline auditor verification, which only works if the ledger computes it before signing; (2) the ledger already owns the complete hash-chain, historical-key, and RFC 3161 verification that Article 15 depends on—duplicating it in the console would create a weaker parallel abstraction; (3) the console is a display-only read surface. The live register uses the request-path verifier and regulatory export performs a blocking full cryptographic walk before bundle signing. The console maps each control to a status badge + narrative and prints the `clavenarctl regulatory export --include-compliance` command for the signed download (the bundle endpoint is mTLS-internal, so there is no browser link).
 
 ---
 

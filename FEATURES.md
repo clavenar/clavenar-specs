@@ -2204,7 +2204,7 @@ is deterministic and SHA-256-bound to both source matrices. Compose and the
 the shared `clavenar-shared` gate after mTLS identity extraction and before
 handlers. Startup refuses missing/stale bytes, wrong service identity, unknown
 callers, and malformed or ambiguous templates. The v1.124.2 inventory contains
-11 service identities, four services, 54 capability families, and 118 exact
+11 service identities, four services, 61 capability families, and 125 exact
 route records. Simulator receives only the three route-specific bootstrap
 grants needed for demo agent registration, upstream registration, and grant
 minting; recovery, envelope/lifecycle mutation, and upstream retirement remain
@@ -2226,6 +2226,36 @@ python3 -m unittest \
 The canonical dev and production stack smokes additionally derive every
 forbidden service-certificate/route pair from the bundle and require the live
 listener to return the exact 403 denial before retaining a digest-bound receipt.
+
+### 13.9 Historical signing keys and RFC 3161 trust
+
+**Concept.** A valid SHA-256 chain proves content continuity, but it does not by
+itself prove which historical issuer key signed each row or whether an external
+timestamp is trusted. Ledger publishes a separate fail-closed cryptographic
+verdict so consumers cannot confuse populated signature fields with verified
+evidence.
+
+**Implementation.** Identity serves the complete bounded-fresh retained
+Ed25519 lineage at workload-mTLS `GET /ledger-verification-keys`; generated
+capabilities grant that read only to Ledger. Ledger rejects freshness,
+rollback, lineage, fingerprint, lifecycle, timestamp, and signature failures
+across signed v2-v5 rows. It independently re-verifies stored RFC 3161 responses
+against pinned public CA and signer files, with an exact message imprint over
+the anchored chain hash. `/verify` emits
+`clavenar.cryptographic-verification/v1` and withholds a complete chain
+commitment when required cryptography is unavailable or invalid. Compliance
+register schema v3 counts only verified signatures and cannot satisfy Article
+15 from field presence.
+
+**Verify.**
+
+```bash
+# In an assembled stack checkout, validate public wire examples, mirrors,
+# pinned trust, and owner wiring, then run the live boundary gate.
+cd ../clavenar-e2e
+python3 scripts/check_cryptographic_verification_contract.py --source-root ..
+prod/run-stack-smoke.sh
+```
 
 ---
 

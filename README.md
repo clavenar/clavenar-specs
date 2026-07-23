@@ -18,6 +18,7 @@ guardrail that lets an enterprise run autonomous agents at full speed.
 | [`TECH_SPEC.md`](TECH_SPEC.md) | Every wire contract — the source of truth, including `clavenar.nats-authorization/v1`. |
 | [`FEATURES.md`](FEATURES.md) | Per-feature claims with copy-paste verification commands. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | C4 context + container view, deployment topology, demo-prefix flow, trust chain. |
+| [`docs/CRYPTOGRAPHIC_VERIFICATION.md`](docs/CRYPTOGRAPHIC_VERIFICATION.md) | Historical signing-key, RFC 3161 trust, aggregate verification, and compliance derivation contract. |
 
 ### Glossary
 
