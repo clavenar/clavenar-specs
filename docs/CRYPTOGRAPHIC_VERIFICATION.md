@@ -50,15 +50,19 @@ explicitly unsigned hash-chain evidence.
 
 ### Bounded legacy lifecycle classification
 
-The historical chain-v3 Identity lifecycle publisher generated the UUID and
-timestamp used in its signature but omitted both from the request. Ledger
-therefore retained different values, and the original signed position is not
+The historical Identity lifecycle publisher generated the UUID and timestamp
+used in its signature but omitted both from the request. Ledger therefore
+retained different values, and the original signed position is not
 recoverable. A forged-signature result is classified
-`identity_v3_position_not_retained` only for this frozen chain-v3,
-non-execution lifecycle shape. Its count and first/last sequence are explicit.
-It receives no verified-signature or compliance credit. Hash-chain failure,
-malformed or partial signing fields, execution rows, key failures, and every
-chain-v5 lifecycle failure remain invalid.
+`identity_lifecycle_position_not_retained` only for a frozen chain-v3
+non-execution lifecycle row or an early chain-v5 non-execution lifecycle row
+whose sequence is within the closed interval `416970..442530`, committed
+`policy_decision` is exactly null, and key is exactly
+`clavenar-identity:v35` or `clavenar-identity:v36`. Its count and first/last
+sequence are explicit. It receives no verified-signature or compliance
+credit. Hash-chain failure, malformed or partial signing fields, execution
+rows, key failures, and every chain-v5 row outside that exact frozen producer
+epoch remain invalid.
 
 New non-execution lifecycle requests carry this exact object under the
 chain-committed `policy_decision` field:
@@ -74,6 +78,26 @@ chain-committed `policy_decision` field:
 Identity signs those exact values and Ledger uses them as the retained row
 position. Omission, partial fields, unknown fields, malformed values, or use on
 another signing shape fails before append.
+
+### Frozen pre-egress verdict projection
+
+One frozen chain-v4 epoch signed the complete verdict reasoning immediately
+before Proxy appended its egress audit note. The verifier always attempts the
+exact stored verdict first. A forged chain-v4 result receives one additional
+attempt only when the final delimiter is exactly ` | egress: `, the retained
+signed prefix is nonempty, and the suffix is one of:
+
+- `egress policy sanitize: [SSN=sanitize,CREDIT_CARD=sanitize,EMAIL=sanitize] (confidence 0.85)`
+- `egress policy: sanitized [SSN=sanitize,CREDIT_CARD=sanitize,EMAIL=sanitize] (confidence 0.85)`
+- `egress policy sanitize: [EMAIL=sanitize] (confidence 0.55)`
+- `egress policy: sanitized [EMAIL=sanitize] (confidence 0.55)`
+
+The retained prefix must then verify under the row's temporally valid
+historical key. Unknown or changed suffixes remain forged. This is a
+verification of the exact historical signing projection, not an exception:
+the row increments `verified_signed_rows`. New verdict emissions sign the
+final reasoning including the egress suffix, so this projection is never used
+for current rows.
 
 ## RFC 3161 timestamps
 

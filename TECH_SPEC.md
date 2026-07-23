@@ -877,17 +877,31 @@ only rows with no signing shape are classified as unsigned. This verification
 uses the frozen canonical bytes for the row's chain version—field presence is
 never a cryptographic verdict.
 
-The one bounded exception is a forged signature on a frozen chain-v3
-non-execution lifecycle row. That legacy Identity publisher signed an
-issuer-generated UUID and timestamp but did not transmit either value; Ledger
-then retained replacements, so the signed bytes cannot be reconstructed.
-These rows are reported as `identity_v3_position_not_retained`, receive no
-cryptographic or compliance credit, and do not hide malformed, partial,
-execution, key, TSA, chain-v5, or hash-chain failures. New lifecycle emissions
-carry the exact signed UUID and timestamp in a
+The one bounded position exception is a forged signature on a frozen
+non-execution lifecycle row produced before the signed-position wire existed.
+It covers chain-v3 rows and chain-v5 rows only within sequence
+`416970..442530`, with committed `policy_decision` exactly null and key exactly
+`clavenar-identity:v35` or `clavenar-identity:v36`. That legacy Identity
+publisher signed an issuer-generated UUID and timestamp but did not transmit
+either value; Ledger then retained replacements, so the signed bytes cannot be
+reconstructed.
+These rows are reported as `identity_lifecycle_position_not_retained`, receive
+no cryptographic or compliance credit, and do not hide malformed, partial,
+execution, key, TSA, hash-chain, or any other chain-v5 failure. In particular,
+a chain-v5 row carrying a signed-position object never qualifies for the
+exception. New lifecycle emissions carry the exact signed UUID and timestamp in a
 `clavenar.lifecycle-signed-position/v1` object committed under
 `policy_decision`; Ledger rejects a signed non-execution lifecycle append
 without that exact object.
+
+One older chain-v4 verdict epoch signed the complete verdict reasoning before
+Proxy appended a deterministic egress audit suffix. The verifier first checks
+the exact stored verdict. Only if that check is forged may it remove one of the
+four frozen canonical suffix values documented by
+`clavenar.cryptographic-verification/v2` and verify the retained signing-time
+prefix. A valid prefix signature counts as verified; an unknown, changed, or
+empty-prefix suffix remains forged. New Proxy verdict signatures include the
+final persisted reasoning and therefore require no historical projection.
 
 Every stored `rfc3161` anchor is re-verified from its DER response bytes against
 the configured pinned root and timestamp signer. Proof digest, CMS signature,
@@ -900,7 +914,7 @@ failed responses are mandatory.
 `clavenar.verified-chain/v1` commitment is withheld unless required historical
 signatures and RFC 3161 trust have status `verified` or
 `verified_with_legacy_exceptions`. The latter requires every signed row to be
-either cryptographically verified or in the bounded chain-v3 class, with no
+either cryptographically verified or in the bounded missing-position class, with no
 other failure. Key-lineage changes force a complete historical walk rather
 than carrying an incremental checkpoint across different trust.
 

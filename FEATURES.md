@@ -2244,14 +2244,18 @@ against pinned public CA and signer files, with an exact message imprint over
 the anchored chain hash. `/verify` emits
 `clavenar.cryptographic-verification/v2` and withholds a complete chain
 commitment when required cryptography is unavailable or invalid. Frozen
-chain-v3 non-execution lifecycle signatures whose issuer-generated position
-was never retained are explicitly counted as
-`identity_v3_position_not_retained`; they receive no cryptographic or
-compliance credit. Every new lifecycle emission transmits its exact signed UUID
-and timestamp in a committed `clavenar.lifecycle-signed-position/v1` object,
-and omission fails append. Compliance register schema v3 counts only verified
-signatures and cannot satisfy Article 15 from field presence or the legacy
-exception count.
+chain-v3 and exact chain-v5 sequence `416970..442530` non-execution lifecycle
+signatures with `policy_decision=null` and key `clavenar-identity:v35` or
+`clavenar-identity:v36`, whose issuer-generated position was never retained,
+are explicitly counted as `identity_lifecycle_position_not_retained`; they
+receive no cryptographic or compliance credit. A bounded chain-v4 verifier projection
+also validates retained verdict prefixes signed before one of four canonical
+egress audit suffixes was appended; unknown suffixes remain forged. Every new
+lifecycle emission transmits its exact signed UUID and timestamp in a committed
+`clavenar.lifecycle-signed-position/v1` object, omission fails append, and new
+verdict signatures cover the final persisted reasoning. Compliance register
+schema v3 counts only verified signatures and cannot satisfy Article 15 from
+field presence or the legacy exception count.
 
 **Verify.**
 
