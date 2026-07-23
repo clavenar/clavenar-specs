@@ -20,6 +20,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Forensic event envelope](#forensic-event-envelope) — stable producer/event/stage identity, payload commitments, and explicit causal predecessors
 - [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) — immutable complete row evidence plus verified head and length
 - [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
+- [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
@@ -59,6 +60,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
 | 9c | [Distributed control state](#distributed-control-state) | inventory shipped; fail-closed readiness and outage policy specified | v1.173.0–v1.174.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 9d | [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) | contract shipped; Ledger implementation pending | v1.175.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e` |
+| 9e | [State recovery inventory](#state-recovery-inventory) | requirements and inventory contract shipped; backup, restore, DR, and upgrade execution pending | v1.181.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3759,6 +3761,48 @@ This release does not authorize from a last-known-good snapshot. The
 must reject startup. A future signed-snapshot mode requires a new contract that
 binds signer, release, generation, completeness, maximum age, and rollback
 protection; it cannot weaken these bytes in place.
+
+---
+
+## State recovery inventory
+
+The approved, deny-unknown inventory is
+[`contracts/state-recovery-inventory-v1.fixture.json`](contracts/state-recovery-inventory-v1.fixture.json),
+validated by
+[`contracts/state-recovery-inventory-v1.schema.json`](contracts/state-recovery-inventory-v1.schema.json).
+It enumerates 20 state classes across the supported single-host Compose and
+single-writer Helm topologies. The inventory covers signed release and
+configuration inputs, Vault recovery and key metadata, application and
+attestation secrets, operator and workload trust, JetStream, Identity, Policy,
+Ledger, HIL, Proxy execution, current credentials, Caddy, and observability.
+Every retained Compose volume and required secret or bind class has one
+inventory owner; Helm persistent and external-custody boundaries use the same
+state identifiers.
+
+Each state selects explicit owner, authority role, criticality,
+confidentiality, topology locations, consistency mechanism, numeric RPO and
+RTO, bounded retention and deletion triggers, legal-hold and tenant-erasure
+behavior, encryption custodian, protection disposition, restore dependencies,
+and integrity plus functional verification. Profile references are closed over
+the document. State and profile identifiers and locations are unique, restore
+dependencies must exist and form an acyclic order, RPO cannot exceed RTO,
+retention cannot be unbounded, and every state requires encryption at rest.
+Secret private material must use separately held recovery custody or an
+explicit no-private-key-backup reissue path.
+
+The topology declaration is deliberately honest about current availability:
+Compose is a retained single-node deployment, while Helm runs each SQLite
+writer as one `Recreate` writer and treats broker and Vault durability as
+operator-supplied or bundled boundaries. Neither topology claims whole-stack
+high availability.
+
+Approval covers the requirements and inventory only. Signed release inputs
+already provide a redeployment source, and current workload credentials are
+explicitly reconstructible without copying private keys. All other protection
+rows remain marked `pending-wp-10.5`; every restore proof, disaster-recovery
+claim, and upgrade-safety claim remains marked for WP-10.6, WP-10.7, and
+WP-10.11 respectively. This contract does not assert that scheduled backups,
+isolated restores, disaster recovery, or upgrade safety have shipped.
 
 ---
 

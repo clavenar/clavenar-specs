@@ -1603,6 +1603,38 @@ cd ../clavenar-specs
 python3 -m unittest tests.test_distributed_control_resilience_contract
 ```
 
+### 8.2.7 Complete state and recovery inventory
+
+**Concept.** Recovery cannot be tested or approved until every authoritative,
+credential, trust, observability, configuration, and recovery state has an
+owner, an objective, a lifecycle, a custody rule, and a dependency-ordered
+verification target. Unlisted volumes, secrets, or required configuration
+mounts are an implicit data-loss path.
+
+**Implementation.** The strict
+[`contracts/state-recovery-inventory-v1.fixture.json`](contracts/state-recovery-inventory-v1.fixture.json)
+enumerates 20 state classes for the supported single-host Compose and
+single-writer Helm topologies. Reusable profiles bind numeric RPO/RTO,
+consistency checkpoints, bounded retention, deletion and tenant-erasure
+behavior, encryption custody, and protection disposition. Every row has
+topology locations, a restore dependency order, and integrity plus functional
+verification. Private credentials may be reconstructible only through explicit
+reissue without private-key backup. The contract records current topology
+limits and explicitly withholds scheduled-backup, isolated-restore, DR, and
+upgrade-safety claims until their dedicated work packages ship.
+
+**Verify.** Validate the public schema and semantic closure, then run the
+assembled checker that accounts for every official Compose volume, secret, and
+required bind class; Helm persistence boundary; exact mirror; dependency; and
+source-evidence reference.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_state_recovery_inventory_contract
+cd ../clavenar-e2e
+python3 scripts/check_state_recovery_inventory.py --require-source
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
