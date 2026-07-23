@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/regulatory-bundle-signing-v1.schema.json",
+  "title": "Clavenar regulatory bundle verified-chain binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "commitment",
+    "cryptographic_contract",
+    "cryptographic_status",
+    "historical_key_lineage_sha256",
+    "signed_rows",
+    "verified_signed_rows",
+    "legacy_unverifiable_rows",
+    "tsa_required",
+    "tsa_verified",
+    "tsa_trust_bundle_sha256"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.regulatory-bundle-signing/v1"
+    },
+    "commitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "head_hash", "length"],
+      "properties": {
+        "contract": {
+          "const": "clavenar.verified-chain/v1"
+        },
+        "head_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tail_chain_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "cryptographic_contract": {
+      "const": "clavenar.cryptographic-verification/v2"
+    },
+    "cryptographic_status": {
+      "enum": ["verified", "verified_with_legacy_exceptions"]
+    },
+    "historical_key_lineage_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "signed_rows": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "verified_signed_rows": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "legacy_unverifiable_rows": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tsa_required": {
+      "type": "boolean"
+    },
+    "tsa_verified": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tsa_trust_bundle_sha256": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

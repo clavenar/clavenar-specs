@@ -1,0 +1,40 @@
+{
+  "positive": {
+    "contract": "clavenar.regulatory-bundle-signing/v1",
+    "commitment": {
+      "contract": "clavenar.verified-chain/v1",
+      "head_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "length": 120599,
+      "tail_chain_version": 5
+    },
+    "cryptographic_contract": "clavenar.cryptographic-verification/v2",
+    "cryptographic_status": "verified",
+    "historical_key_lineage_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "signed_rows": 18649,
+    "verified_signed_rows": 18649,
+    "legacy_unverifiable_rows": 0,
+    "tsa_required": true,
+    "tsa_verified": 4,
+    "tsa_trust_bundle_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "adversarial": {
+    "missing_lineage": {
+      "contract": "clavenar.regulatory-bundle-signing/v1",
+      "commitment": {
+        "contract": "clavenar.verified-chain/v1",
+        "head_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "length": 120599,
+        "tail_chain_version": 5
+      },
+      "cryptographic_contract": "clavenar.cryptographic-verification/v2",
+      "cryptographic_status": "verified",
+      "historical_key_lineage_sha256": null,
+      "signed_rows": 18649,
+      "verified_signed_rows": 18649,
+      "legacy_unverifiable_rows": 0,
+      "tsa_required": true,
+      "tsa_verified": 4,
+      "tsa_trust_bundle_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  }
+}

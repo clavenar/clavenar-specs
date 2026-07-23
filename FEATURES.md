@@ -1252,7 +1252,7 @@ clavenarctl regulatory export --from ... --to ... --output bundle.tar.gz
 tar -xzf bundle.tar.gz && cat README.txt    # 7-step recipe
 ```
 
-### 7.2 Manifest schema v6
+### 7.2 Manifest schema v7
 
 **Concept.** Self-describing. The manifest tells the auditor what's in the bundle and how to verify it. `chain_state` carries `prev_hash_at_window_start` and `entry_hash_at_window_end` so the auditor can verify chain continuity without fetching anything outside the bundle. `signature` is an envelope referencing the detached `manifest.sig` sidecar. Every optional block (`technical_documentation`, `parquet_pointers`, `compliance_register`, `anchors`, `annex_iv`, `post_market_monitoring_plan`) is signed transitively (the signature commits to the canonical manifest) and declared in a pinned order, so a bundle with a block unpopulated is byte-identical to the prior schema version apart from `schema_version`.
 
@@ -1260,12 +1260,25 @@ tar -xzf bundle.tar.gz && cat README.txt    # 7-step recipe
 
 ```jsonc
 {
-  "schema_version": "6",
+  "schema_version": "7",
   "generated_at": "...",
   "window": { "from": "...", "to": "..." },
   "row_count": 1234,
   "seq_lo": 5000, "seq_hi": 6233,
   "chain_state": { "prev_hash_at_window_start": "...", "entry_hash_at_window_end": "..." },
+  "verified_chain": {
+    "contract": "clavenar.regulatory-bundle-signing/v1",
+    "commitment": { "contract": "clavenar.verified-chain/v1", "head_hash": "...", "length": 120599, "tail_chain_version": 5 },
+    "cryptographic_contract": "clavenar.cryptographic-verification/v2",
+    "cryptographic_status": "verified",
+    "historical_key_lineage_sha256": "sha256:...",
+    "signed_rows": 18649,
+    "verified_signed_rows": 18649,
+    "legacy_unverifiable_rows": 0,
+    "tsa_required": true,
+    "tsa_verified": 4,
+    "tsa_trust_bundle_sha256": "sha256:..."
+  },
   "ndjson_sha256": "...",
   "article_scope": ["EU-AI-Act-Article-11", "EU-AI-Act-Article-12"], // widened to 14/15/Annex-IV/72 by the optional blocks
   "signature": { "sidecar": "manifest.sig", "algorithm": "ed25519", "digest_alg": "sha256", "key_id": "...", "signed_at": "..." },
@@ -1289,7 +1302,7 @@ jq . manifest.json
 
 **Concept.** Embedded signatures are byte-fragile — any whitespace difference between writer and verifier breaks them. Detached signatures keep the manifest byte-stable across implementations. The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so the auditor blanks the `signature` field, re-serializes pretty-printed, sha256s, and runs `ed25519_verify`. Tampering with `technical_documentation` or `parquet_pointers` (which the manifest carries hashes of) breaks both the signature verification and a cheap recompute.
 
-**Implementation.** `clavenar-ledger::identity_client::HttpManifestSigner` calls `clavenar-identity` `POST /sign/blob` with the canonical-manifest digest and exact export-scope tenant, local ledger audience, regulatory purpose/operation, and 300-second binding. Caller authority comes only from the verified Ledger mTLS certificate. Response signature is appended as `manifest.sig` (128 hex chars + LF). Fail-closed: signing errors → 503 `signing_unavailable`.
+**Implementation.** `clavenar-ledger::identity_client::HttpManifestSigner` calls `clavenar-identity` `POST /sign/blob` with the canonical-manifest digest and exact export-scope tenant, local ledger audience, regulatory purpose/operation, and 300-second binding. Caller authority comes only from the verified Ledger mTLS certificate. Official Compose and Helm profiles require signing at startup. Before signing, Ledger performs a fresh complete hash/signature/TSA walk and commits its exact authority under `verified_chain`; after signing, Ledger fetches the bounded-fresh historical lineage independently, verifies the Ed25519 response, and rejects a lineage race. Missing identity/key/CA/verifier, signing failure, wrong key, invalid signature, or incomplete chain verification produces 503 and no bundle bytes.
 
 **Verify.**
 
@@ -1299,7 +1312,8 @@ tar -xzf bundle.tar.gz
 # Step 5–6 of the auditor recipe:
 jq '.signature = null' manifest.json | jq -S . > unsigned.json
 openssl dgst -sha256 -binary unsigned.json | xxd -p -c 256
-# Compare digest with what manifest.sig signs (use ed25519 verify against JWKS)
+# Or run the implementation-independent archive + lineage + Ed25519 verifier:
+python3 scripts/verify_regulatory_bundle.py --bundle bundle.tar.gz --key-set historical-keys.json
 ```
 
 ### 7.4 Operator-supplied prose
@@ -1354,7 +1368,7 @@ cat README.txt
 
 **Concept.** The Article 11/12 bundle covers documentation + logging. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), plus the operational-monitoring controls auditors ask about under SOC 2 / ISO 27001, are *auto-derived from the chain* — no operator prose required. A live JSON register the operator renders at `/compliance` and downloads as a signed pack. It is evidence projection, not a legal conformity assessment, and says so on the wire.
 
-**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of five seed controls (`EU-AI-Act-Article-14`, `-15`, `ISO-27001-8.13`, `SOC2-CC7.2`, `SOC2-CC7.3`), each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v2: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, representative `sample_seqs`, and a narrative). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (manifest **v6**, committed by sha256, `article_scope` widened to 14 + 15) — both go through one derivation function so the live view and the bundled artifact agree. The derivation is backend-agnostic (it runs through the `LedgerStore` trait), so `/compliance/evidence` and the bundled register work on Postgres too. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) **and their channel provenance** — Satisfied demands every human decision rode an attested channel (`webauthn` / `oidc` / `saml`, stamped server-side by HIL from the verified principal); demo sessions, plain bearer stamps, and auth-disabled bypasses never count, system/auto decisions are excluded from the human count entirely, and the `provenance_summary` metric tags every decision channel so an auditor sees exactly what decided. Article 15 derives from deny-signal distribution + `verify_chain` pass + signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
+**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of five seed controls (`EU-AI-Act-Article-14`, `-15`, `ISO-27001-8.13`, `SOC2-CC7.2`, `SOC2-CC7.3`), each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v2: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, representative `sample_seqs`, and a narrative). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (current manifest **v7**, block introduced in v4, committed by sha256, `article_scope` widened to 14 + 15) — both go through one derivation function so the live view and the bundled artifact agree. The derivation is backend-agnostic (it runs through the `LedgerStore` trait), so `/compliance/evidence` and optional-signing regulatory exports work on Postgres too; official required-signing profiles use SQLite. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) **and their channel provenance** — Satisfied demands every human decision rode an attested channel (`webauthn` / `oidc` / `saml`, stamped server-side by HIL from the verified principal); demo sessions, plain bearer stamps, and auth-disabled bypasses never count, system/auto decisions are excluded from the human count entirely, and the `provenance_summary` metric tags every decision channel so an auditor sees exactly what decided. Article 15 derives from deny-signal distribution + `verify_chain` pass + signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
 
 **Verify.**
 
@@ -1363,7 +1377,7 @@ cat README.txt
 clavenarctl regulatory export --from <RFC3339> --to <RFC3339> \
   --include-compliance --output pack.tar.gz
 tar -xzf pack.tar.gz && cat clavenar-regulatory-bundle-*/compliance_register.json
-# manifest.json: schema_version "6", article_scope includes 14 + 15
+# manifest.json: schema_version "7", article_scope includes 14 + 15
 ```
 
 ---
