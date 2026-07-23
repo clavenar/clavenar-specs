@@ -21,6 +21,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) — immutable complete row evidence plus verified head and length
 - [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
 - [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
+- [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
@@ -60,7 +61,8 @@ authoritative wire-contract detail still lives in those sections.
 | 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
 | 9c | [Distributed control state](#distributed-control-state) | inventory shipped; fail-closed readiness and outage policy specified | v1.173.0–v1.174.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 9d | [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) | contract shipped; Ledger implementation pending | v1.175.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e` |
-| 9e | [State recovery inventory](#state-recovery-inventory) | requirements and inventory contract shipped; backup, restore, DR, and upgrade execution pending | v1.181.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9e | [State recovery inventory](#state-recovery-inventory) | inventory and scheduled encrypted offsite backup shipped; isolated restore, DR, and upgrade execution pending | v1.181.0–v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9f | [Scheduled backup sets](#scheduled-backup-sets) | scheduled encrypted offsite backup shipped; isolated restore pending | v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3796,13 +3798,57 @@ writer as one `Recreate` writer and treats broker and Vault durability as
 operator-supplied or bundled boundaries. Neither topology claims whole-stack
 high availability.
 
-Approval covers the requirements and inventory only. Signed release inputs
-already provide a redeployment source, and current workload credentials are
-explicitly reconstructible without copying private keys. All other protection
-rows remain marked `pending-wp-10.5`; every restore proof, disaster-recovery
-claim, and upgrade-safety claim remains marked for WP-10.6, WP-10.7, and
-WP-10.11 respectively. This contract does not assert that scheduled backups,
-isolated restores, disaster recovery, or upgrade safety have shipped.
+Approval covers the requirements, inventory, and the scheduled-backup
+protection delivered by [Scheduled backup sets](#scheduled-backup-sets).
+Signed release inputs provide a redeployment source, current workload
+credentials remain explicitly reconstructible without copying private keys,
+and offline operator private material remains in separate custody rather than
+the deployment backup. Protection rows now distinguish scheduled backup,
+separate custody, signed source, and reconstructible state. Every restore
+proof, disaster-recovery claim, and upgrade-safety claim remains marked for
+WP-10.6, WP-10.7, and WP-10.11 respectively.
+
+---
+
+## Scheduled backup sets
+
+The deny-unknown
+[`contracts/backup-set-manifest-v1.schema.json`](contracts/backup-set-manifest-v1.schema.json)
+defines the sanitized receipt for one scheduled backup. The companion
+[`contracts/backup-set-manifest-v1.fixture.json`](contracts/backup-set-manifest-v1.fixture.json)
+partitions all 20 inventory states into captured, separately custodied,
+reconstructible, and signed-source sets. Captured states appear in exactly one
+capture row. Current workload and simulator private identities are always
+reissued and must not enter a backup.
+
+The Compose implementation runs every five minutes under an exclusive
+nonblocking lock. SQLite stores use the online backup API and must pass
+`quick_check`; JetStream, Vault file storage, Caddy, and enabled observability
+stores use bounded stopped-writer snapshots whose cleanup path restarts every
+writer. Restricted files use an exact allowlist. The capture is committed to a
+local restic repository v2 before upload, so chunking, compression,
+authenticated encryption, and deduplication occur before any offsite transfer.
+Only encrypted repository deltas and a sanitized receipt may leave the host.
+
+Each offsite object is named by an immutable OCI or versioned-object digest and
+links its predecessor. A successful receipt binds the exact inventory and
+operational-plan digests, release, capture methods, per-capture byte counts and
+commitments, encryption-key identifier, restic snapshot, encrypted delta,
+offsite object version, and verification time. Success requires a digest
+qualified remote object, separate recovery custody, authenticated encryption,
+zero plaintext upload, object existence, and descriptor or independent
+full-read verification.
+
+Backup age, duration, plaintext size, encrypted-delta size, upload size, and
+capture/upload/verification failures are exported for monitoring. Missing
+scope, overlap, a failed checkpoint, a writer that cannot be restarted,
+unsafe file inclusion, encryption failure, upload failure, stale age, invalid
+size, a mutable reference, or remote verification failure cannot produce a
+passing receipt.
+
+This contract establishes scheduled encrypted offsite capture only. It does
+not assert that an isolated complete restore, disaster-recovery failover, or
+stateful upgrade rollback has passed.
 
 ---
 

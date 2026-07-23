@@ -1635,6 +1635,41 @@ cd ../clavenar-e2e
 python3 scripts/check_state_recovery_inventory.py --require-source
 ```
 
+### 8.2.8 Scheduled encrypted offsite backup
+
+**Concept.** A backup is delivered only when every protected inventory state
+is captured through its approved consistency boundary, encrypted before
+transfer, published as a content-addressed offsite object, and measured. A
+timer recipe, local archive, or successful upload without exact object
+verification is not a delivered backup.
+
+**Implementation.** The strict
+[`contracts/backup-set-manifest-v1.fixture.json`](contracts/backup-set-manifest-v1.fixture.json)
+partitions all 20 inventory states and binds one passing capture to the exact
+inventory, release, operational plan, encryption key identifier, restic
+snapshot, encrypted repository delta, and immutable offsite digest. Compose
+runs an overlap-safe persistent five-minute schedule. SQLite uses online
+backup plus `quick_check`; non-SQLite writers use bounded snapshot/restart
+handling; restricted material is allowlisted; reconstructible workload
+private identities are excluded. Authenticated restic encryption and
+deduplication happen before an encrypted delta is uploaded. Helm exposes the
+same state partition and requires an operator-owned repository credential
+without embedding it in the chart.
+
+**Verify.** Validate the public schema and partition, then run the assembled
+plan checker and adversarial runner tests. A production acceptance run also
+requires the scheduled timer, a digest-qualified remote object, encrypted
+delta verification, fresh metrics, a sanitized receipt, and unchanged
+canonical stack smoke.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_backup_set_manifest_contract
+cd ../clavenar-e2e
+python3 scripts/check_scheduled_backup.py --require-source
+python3 -m unittest tests.test_scheduled_backup
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.

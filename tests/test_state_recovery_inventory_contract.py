@@ -47,7 +47,6 @@ class StateRecoveryInventoryContractTests(unittest.TestCase):
         self.validate(self.fixture)
         self.assertEqual(
             {
-                "scheduled-backup",
                 "isolated-restore",
                 "disaster-recovery",
                 "upgrade-safety",
@@ -55,7 +54,7 @@ class StateRecoveryInventoryContractTests(unittest.TestCase):
             set(self.fixture["approval"]["doesNotAssert"]),
         )
         self.assertEqual(
-            "requirements-and-inventory-only", self.fixture["approval"]["scope"]
+            "inventory-and-scheduled-backup", self.fixture["approval"]["scope"]
         )
         self.assertTrue(
             all(not topology["wholeStackHaClaim"] for topology in self.fixture["topologies"])
@@ -155,7 +154,8 @@ class StateRecoveryInventoryContractTests(unittest.TestCase):
                 {
                     "available-signed-source",
                     "not-applicable-reconstructible",
-                    "pending-wp-10.5",
+                    "scheduled-backup-available",
+                    "separate-custody-available",
                 },
             )
             self.assertEqual("pending-wp-10.6", protection["restoreProofStatus"])
@@ -174,7 +174,7 @@ class StateRecoveryInventoryContractTests(unittest.TestCase):
             self.validate(unbounded)
 
         delivered = copy.deepcopy(self.fixture)
-        delivered["states"][1]["protection"]["backupStatus"] = "available"
+        delivered["states"][1]["protection"]["backupStatus"] = "pending-wp-10.5"
         with self.assertRaises(jsonschema.ValidationError):
             self.validate(delivered)
 
