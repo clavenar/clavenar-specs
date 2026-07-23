@@ -53,7 +53,8 @@ explicitly unsigned hash-chain evidence.
 Every retained `rfc3161` anchor is re-verified from its stored response bytes.
 Verification requires:
 
-1. the stored `proof_sha256` equals the response bytes;
+1. the stored `proof_sha256` equals the response bytes (retained lowercase
+   64-hex values and the explicit `sha256:`-prefixed form are both verified);
 2. the response is a granted RFC 3161 `TimeStampResp`;
 3. the CMS signature and ESS signer binding verify;
 4. the timestamp certificate has the time-stamping extended-key purpose and
