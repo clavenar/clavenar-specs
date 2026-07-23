@@ -1670,6 +1670,39 @@ python3 scripts/check_scheduled_backup.py --require-source
 python3 -m unittest tests.test_scheduled_backup
 ```
 
+### 8.2.9 Isolated complete restore
+
+**Concept.** Backup confidence requires a complete restore from the immutable
+offsite chain into a namespace that cannot read or affect production. Each
+inventory state must meet its declared recovery objective and pass a
+state-native functional check.
+
+**Implementation.** The strict
+[`contracts/isolated-restore-receipt-v1.fixture.json`](contracts/isolated-restore-receipt-v1.fixture.json)
+binds the exact release, backup head, predecessor chain, restic snapshot,
+inventory and backup plan. The restore owner rejects missing or substituted
+objects, unsafe archive entries, plaintext, cycles, rollback, and release or
+snapshot mismatch before starting an isolated stack. All 20 state classes are
+restored, reconstructed, supplied from separate custody, or verified from
+signed source according to the existing inventory. Production volumes,
+networks, DNS, ports, and bind paths are prohibited. Runtime checks cover the
+five SQLite authorities, JetStream, Vault and Transit history, restricted
+authorities, trust, Caddy, observability, current identity reissue, readiness,
+and a representative governed transaction.
+
+**Verify.** Validate the public receipt contract and run the assembled
+adversarial restore owner. Production acceptance additionally consumes a real
+private offsite chain, boots the exact protected release without builds, and
+leaves the canonical production stack unchanged.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_isolated_restore_receipt_contract
+cd ../clavenar-e2e
+python3 scripts/check_isolated_restore.py --require-source
+python3 -m unittest tests.test_isolated_restore
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.

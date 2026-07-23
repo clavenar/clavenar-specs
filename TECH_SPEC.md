@@ -22,6 +22,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
 - [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
+- [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
@@ -61,8 +62,9 @@ authoritative wire-contract detail still lives in those sections.
 | 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
 | 9c | [Distributed control state](#distributed-control-state) | inventory shipped; fail-closed readiness and outage policy specified | v1.173.0–v1.174.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 9d | [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) | contract shipped; Ledger implementation pending | v1.175.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e` |
-| 9e | [State recovery inventory](#state-recovery-inventory) | inventory and scheduled encrypted offsite backup shipped; isolated restore, DR, and upgrade execution pending | v1.181.0–v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
-| 9f | [Scheduled backup sets](#scheduled-backup-sets) | scheduled encrypted offsite backup shipped; isolated restore pending | v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9e | [State recovery inventory](#state-recovery-inventory) | inventory, scheduled encrypted offsite backup, and isolated complete restore shipped; DR and upgrade execution pending | v1.181.0–v1.183.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9f | [Scheduled backup sets](#scheduled-backup-sets) | scheduled encrypted offsite backup shipped | v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9g | [Isolated complete restore](#isolated-complete-restore) | authenticated isolated restore shipped; DR failover/failback pending | v1.183.0 | `clavenar-specs`, `clavenar-e2e` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3849,6 +3851,47 @@ passing receipt.
 This contract establishes scheduled encrypted offsite capture only. It does
 not assert that an isolated complete restore, disaster-recovery failover, or
 stateful upgrade rollback has passed.
+
+---
+
+## Isolated complete restore
+
+The deny-unknown
+[`contracts/isolated-restore-receipt-v1.schema.json`](contracts/isolated-restore-receipt-v1.schema.json)
+defines the sanitized receipt for one complete isolated restore. The companion
+[`contracts/isolated-restore-receipt-v1.fixture.json`](contracts/isolated-restore-receipt-v1.fixture.json)
+covers every state in the exact recovery inventory without changing the
+inventory bytes already committed by scheduled backup objects.
+
+Restoration begins from a digest-qualified offsite head. It follows every
+`previousObject` link to the repository origin, rejects cycles and mutable or
+wrong-repository links, authenticates each metadata object and encrypted delta,
+and admits only regular repository files whose exact path set matches the
+metadata. Traversal, links, devices, duplicates, unexpected plaintext, a
+missing predecessor, release/inventory/plan substitution, or snapshot rollback
+fails before restic may restore content. A passing run requires `restic check`
+and the exact head snapshot plus its backup and release tags.
+
+The target is a fresh Compose project with fresh volume names, no host
+publications, no shared network, and no production bind, volume, container, or
+DNS reference. The owner records the production container set before and after
+the drill and requires it to be unchanged. Captured restricted paths are
+remapped below the restore root. Current workload and Simulator private
+identities are never copied; they are reconstructed through the inventory's
+explicit signed one-use reissue path.
+
+Every one of the 20 inventory states has one result bound to its exact
+objective profile. A passing result records its disposition, content
+commitment, loss and restore windows, and successful integrity and functional
+checks. Runtime validation covers all five SQLite databases, the mutated tenant
+policy version, HIL and Identity state, Ledger chain plus current and historical
+signatures and TSA trust, JetStream streams/consumers/KV sequences and
+authorization, Vault storage/Transit/recovery history, restricted authorities
+and trust history, Caddy and enabled observability state, exact release images,
+service readiness, and one representative governed transaction.
+
+This receipt proves restoration in an isolated non-production namespace. It
+does not assert disaster-recovery failover/failback or stateful upgrade safety.
 
 ---
 
