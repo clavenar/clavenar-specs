@@ -56,7 +56,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
 | 9a | [Policy exchange](#policy-exchange) | install/verify shipped; production issuance redesign required | v1.3.0 | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
 | 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
-| 9c | [Distributed control state](#distributed-control-state) | contract shipped; readiness and outage enforcement follow separately | v1.173.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
+| 9c | [Distributed control state](#distributed-control-state) | inventory shipped; fail-closed readiness and outage policy specified | v1.173.0–v1.174.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3586,11 +3586,29 @@ owned projection namespaces from SQLite truth. Grant-use CAS can only increase
 the retained count. Quota cache replacement requires one complete budget/spend
 pair and expires on its deadline or UTC month rollover.
 
-This contract defines state and replication. Initial mandatory synchronization,
-partition behavior, maximum signed-snapshot age, rollback protection, and
-recovery gating are a subsequent enforcement layer; an implementation must not
-infer permission merely because those mechanics have not yet attached to an
-inventory row.
+The exact inventory bytes are bound by
+[`contracts/distributed-control-resilience-v1.fixture.json`](contracts/distributed-control-resilience-v1.fixture.json),
+validated by
+[`contracts/distributed-control-resilience-v1.schema.json`](contracts/distributed-control-resilience-v1.schema.json).
+Every mandatory row selects fail-closed outage behavior. Revocation, force-HIL,
+grant-revocation, decoy enforcement, and the retained grant-use store must
+complete initial process synchronization before readiness. An applicable quota
+key completes one exact budget/spend fetch before authorization and may use
+that complete pair for no more than 300 seconds or until month rollover.
+
+Cold, disconnected, partial, stale, ambiguous, and failed mandatory state is
+unavailable, never permission. Suspension, force-HIL, grant revocation, and
+quota are rechecked after HIL before execution. Recovery admits work only after
+a complete authority resync, complete authority-pair refetch, or retained
+monotonic CAS operation. Decoy catalog advertisement may disappear while its
+mirror is degraded because it is advisory; a concrete invocation still fails
+closed until the mandatory decoy projection is current.
+
+This release does not authorize from a last-known-good snapshot. The
+`CLAVENAR_CONTROL_STATE_SNAPSHOT_PATH` input is reserved and any present value
+must reject startup. A future signed-snapshot mode requires a new contract that
+binds signer, release, generation, completeness, maximum age, and rollback
+protection; it cannot weaken these bytes in place.
 
 ---
 

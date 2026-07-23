@@ -1556,6 +1556,35 @@ cd ../clavenar-e2e
 python3 scripts/check_distributed_control_state.py --require-source
 ```
 
+### 8.2.6 Fail-closed distributed control readiness and recovery
+
+**Concept.** A mandatory projection is usable only after its exact initial
+synchronization and while its required authority path remains current. A
+reachable process or retained stale cache does not prove that safety controls
+are enforceable.
+
+**Implementation.** The strict
+[`contracts/distributed-control-resilience-v1.fixture.json`](contracts/distributed-control-resilience-v1.fixture.json)
+binds the exact inventory digest and selects fail-closed behavior for all six
+mandatory controls. Process-wide KV mirrors and the grant-use store gate
+readiness; tenant quota state synchronously fetches a complete budget/spend pair
+per applicable key. Post-HIL suspension, force-HIL, grant-revocation, and quota
+rechecks prevent a pending approval from crossing an outage. Decoy
+advertisement remains non-authorizing advisory state.
+
+No snapshot authorizes work in this version. A present
+`CLAVENAR_CONTROL_STATE_SNAPSHOT_PATH` is a startup error, so unsigned, stale,
+wrong-release, partial, or rollbacked local state cannot become an implicit
+fallback.
+
+**Verify.** Validate the public schema, exact inventory binding, mandatory-row
+coverage, fail-closed posture, and snapshot rejection.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_distributed_control_resilience_contract
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
