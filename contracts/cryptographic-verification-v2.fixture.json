@@ -1,0 +1,55 @@
+{
+  "contract": "clavenar.cryptographic-verification/v2",
+  "positive": {
+    "contract": "clavenar.cryptographic-verification/v2",
+    "status": "verified_with_legacy_exceptions",
+    "key_set": {
+      "issuer": "spiffe://clavenar.local/service/identity",
+      "audience": "spiffe://clavenar.local/service/ledger",
+      "sequence": 2,
+      "generated_at": "2026-07-23T10:00:00Z",
+      "expires_at": "2026-07-23T10:02:00Z",
+      "lineage_sha256": "sha256:fa1841025abb11ba932e4f1be58d49eca43731562ef04017e473cfbfd1907095"
+    },
+    "signed_rows": 21,
+    "verified_signed_rows": 19,
+    "legacy_unverifiable": {
+      "reason": "identity_v3_position_not_retained",
+      "rows": 2,
+      "first_seq": 1,
+      "last_seq": 7
+    },
+    "unsigned_rows": 81,
+    "first_failure": null,
+    "tsa": {
+      "required": true,
+      "anchors_observed": 2,
+      "rfc3161_observed": 2,
+      "verified": 2,
+      "failed": 0,
+      "trust_bundle_sha256": "sha256:fb0860e852ca2fe5a6c3c17617397369bbf6f6355b5857ed5a80ef0f51bd924e",
+      "first_failure": null
+    }
+  },
+  "invariants": [
+    "status=verified requires legacy_unverifiable=null and signed_rows=verified_signed_rows",
+    "status=verified_with_legacy_exceptions requires signed_rows=verified_signed_rows+legacy_unverifiable.rows",
+    "only forged chain-v3 non-execution lifecycle signatures may be classified identity_v3_position_not_retained",
+    "legacy-unverifiable rows receive no cryptographic or compliance count credit",
+    "new lifecycle emissions transmit an exact signed UUID and timestamp under clavenar.lifecycle-signed-position/v1",
+    "missing, partial, malformed, substituted, chain-v5, execution, key, and TSA failures remain invalid",
+    "a complete verified-chain commitment is published only with a verified status and first_failure=null",
+    "generic webhook anchors never increment tsa.verified",
+    "compliance signed metrics consume verified_signed_rows, never field presence or legacy-unverifiable rows"
+  ],
+  "adversarial": [
+    { "name": "field-presence-only", "mutation": "signed_rows_positive_verified_and_legacy_zero", "status": "invalid" },
+    { "name": "new-lifecycle-position-omitted", "mutation": "chain_v5_lifecycle_missing_signed_position", "status": "invalid" },
+    { "name": "execution-forgery", "mutation": "execution_signature_forged", "status": "invalid" },
+    { "name": "key-unavailable", "mutation": "key_set_null", "status": "unavailable" },
+    { "name": "retired-row-key", "mutation": "first_failure_key_retired", "status": "invalid" },
+    { "name": "forged-tsa", "mutation": "tsa_failed_positive", "status": "invalid" },
+    { "name": "webhook-only", "mutation": "tsa_required_true_rfc3161_observed_zero", "status": "invalid" },
+    { "name": "missing-tsa-trust", "mutation": "tsa_trust_bundle_sha256_null", "status": "unavailable" }
+  ]
+}

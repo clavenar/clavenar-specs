@@ -2242,10 +2242,16 @@ rollback, lineage, fingerprint, lifecycle, timestamp, and signature failures
 across signed v2-v5 rows. It independently re-verifies stored RFC 3161 responses
 against pinned public CA and signer files, with an exact message imprint over
 the anchored chain hash. `/verify` emits
-`clavenar.cryptographic-verification/v1` and withholds a complete chain
-commitment when required cryptography is unavailable or invalid. Compliance
-register schema v3 counts only verified signatures and cannot satisfy Article
-15 from field presence.
+`clavenar.cryptographic-verification/v2` and withholds a complete chain
+commitment when required cryptography is unavailable or invalid. Frozen
+chain-v3 non-execution lifecycle signatures whose issuer-generated position
+was never retained are explicitly counted as
+`identity_v3_position_not_retained`; they receive no cryptographic or
+compliance credit. Every new lifecycle emission transmits its exact signed UUID
+and timestamp in a committed `clavenar.lifecycle-signed-position/v1` object,
+and omission fails append. Compliance register schema v3 counts only verified
+signatures and cannot satisfy Article 15 from field presence or the legacy
+exception count.
 
 **Verify.**
 

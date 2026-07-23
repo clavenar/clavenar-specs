@@ -1,6 +1,6 @@
 # Cryptographic verification profile
 
-`clavenar.cryptographic-verification/v1` is the fail-closed verification
+`clavenar.cryptographic-verification/v2` is the fail-closed verification
 profile layered on `clavenar.ledger-chain/v5`. It distinguishes a valid
 unkeyed hash walk from evidence whose historical signatures and RFC 3161
 timestamps have also been verified against explicit trust.
@@ -9,8 +9,8 @@ The machine-readable sources are:
 
 - `contracts/historical-signing-keys-v1.schema.json`
 - `contracts/historical-signing-keys-v1.fixture.json`
-- `contracts/cryptographic-verification-v1.schema.json`
-- `contracts/cryptographic-verification-v1.fixture.json`
+- `contracts/cryptographic-verification-v2.schema.json`
+- `contracts/cryptographic-verification-v2.fixture.json`
 
 ## Historical signing keys
 
@@ -48,6 +48,33 @@ signature verifies with that Ed25519 public key. A missing, `retired`, or
 Partially populated signing fields also fail. Truly unsigned row shapes remain
 explicitly unsigned hash-chain evidence.
 
+### Bounded legacy lifecycle classification
+
+The historical chain-v3 Identity lifecycle publisher generated the UUID and
+timestamp used in its signature but omitted both from the request. Ledger
+therefore retained different values, and the original signed position is not
+recoverable. A forged-signature result is classified
+`identity_v3_position_not_retained` only for this frozen chain-v3,
+non-execution lifecycle shape. Its count and first/last sequence are explicit.
+It receives no verified-signature or compliance credit. Hash-chain failure,
+malformed or partial signing fields, execution rows, key failures, and every
+chain-v5 lifecycle failure remain invalid.
+
+New non-execution lifecycle requests carry this exact object under the
+chain-committed `policy_decision` field:
+
+```json
+{
+  "contract": "clavenar.lifecycle-signed-position/v1",
+  "id": "018f57f0-d9c8-7b35-8f80-7b28ac5bf342",
+  "timestamp": "2026-07-23T10:00:00Z"
+}
+```
+
+Identity signs those exact values and Ledger uses them as the retained row
+position. Omission, partial fields, unknown fields, malformed values, or use on
+another signing shape fails before append.
+
 ## RFC 3161 timestamps
 
 Every retained `rfc3161` anchor is re-verified from its stored response bytes.
@@ -72,18 +99,20 @@ reported as an external reference but never counts as a verified TSA anchor.
 ## Aggregate and compliance rules
 
 `GET /verify` may return a complete `clavenar.verified-chain/v1` commitment only
-when the required cryptographic profile has status `verified`. That status
-requires every signed row to verify, a fresh accepted key lineage, no failed
-RFC 3161 response, and at least one verified RFC 3161 response when timestamp
-trust is required. A changed key lineage or trust profile invalidates the
-incremental checkpoint and forces a historical walk.
+when the required cryptographic profile has status `verified` or
+`verified_with_legacy_exceptions`. The second status requires every
+non-excepted signed row to verify, a fresh accepted key lineage, no failed RFC
+3161 response, and at least one verified RFC 3161 response when timestamp trust
+is required. A changed key lineage or trust profile invalidates the incremental
+checkpoint and forces a historical walk.
 
 Compliance derivation consumes the cryptographic result. A non-null
 `signature` or `key_id` is never itself evidence that a row is signed.
-Signature-backed metrics count a row only when the aggregate walk verified all
-signed rows under the accepted lineage. Timestamp-backed controls count only
-cryptographically verified RFC 3161 responses. `unavailable` or `invalid`
-cryptography yields partial or no evidence and cannot satisfy Article 15.
+Signature-backed metrics count only rows in `verified_signed_rows`; the
+`legacy_unverifiable.rows` count is never credited. Timestamp-backed controls
+count only cryptographically verified RFC 3161 responses. `unavailable` or
+`invalid` cryptography yields partial or no evidence and cannot satisfy Article
+15.
 
 This profile is evidence verification, not a conformity assessment or legal
 conclusion.

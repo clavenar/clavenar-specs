@@ -857,7 +857,7 @@ requirements and are not inferred from v5.
 The normative machine contracts are
 [`contracts/historical-signing-keys-v1.schema.json`](contracts/historical-signing-keys-v1.schema.json)
 and
-[`contracts/cryptographic-verification-v1.schema.json`](contracts/cryptographic-verification-v1.schema.json),
+[`contracts/cryptographic-verification-v2.schema.json`](contracts/cryptographic-verification-v2.schema.json),
 with valid examples in their matching fixture files. The readable companion is
 [`docs/CRYPTOGRAPHIC_VERIFICATION.md`](docs/CRYPTOGRAPHIC_VERIFICATION.md).
 
@@ -877,6 +877,18 @@ only rows with no signing shape are classified as unsigned. This verification
 uses the frozen canonical bytes for the row's chain version—field presence is
 never a cryptographic verdict.
 
+The one bounded exception is a forged signature on a frozen chain-v3
+non-execution lifecycle row. That legacy Identity publisher signed an
+issuer-generated UUID and timestamp but did not transmit either value; Ledger
+then retained replacements, so the signed bytes cannot be reconstructed.
+These rows are reported as `identity_v3_position_not_retained`, receive no
+cryptographic or compliance credit, and do not hide malformed, partial,
+execution, key, TSA, chain-v5, or hash-chain failures. New lifecycle emissions
+carry the exact signed UUID and timestamp in a
+`clavenar.lifecycle-signed-position/v1` object committed under
+`policy_decision`; Ledger rejects a signed non-execution lifecycle append
+without that exact object.
+
 Every stored `rfc3161` anchor is re-verified from its DER response bytes against
 the configured pinned root and timestamp signer. Proof digest, CMS signature,
 timestamp-signing EKU and chain, certificate time, and exact SHA-256 message
@@ -884,11 +896,13 @@ imprint must all verify. Webhook references never count as TSA evidence. When
 TSA verification is required, at least one verified RFC 3161 response and zero
 failed responses are mandatory.
 
-`GET /verify` adds `clavenar.cryptographic-verification/v1`. A complete
+`GET /verify` adds `clavenar.cryptographic-verification/v2`. A complete
 `clavenar.verified-chain/v1` commitment is withheld unless required historical
-signatures and RFC 3161 trust have status `verified`. Key-lineage changes force
-a complete historical walk rather than carrying an incremental checkpoint
-across different trust.
+signatures and RFC 3161 trust have status `verified` or
+`verified_with_legacy_exceptions`. The latter requires every signed row to be
+either cryptographically verified or in the bounded chain-v3 class, with no
+other failure. Key-lineage changes force a complete historical walk rather
+than carrying an incremental checkpoint across different trust.
 
 ### 8. Authentication for human callers
 
