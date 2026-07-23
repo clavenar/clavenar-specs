@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "contract": "clavenar.ledger-chain/v5",
+  "currentWriterChainVersion": 5,
+  "historicalChainVersions": [1, 2, 3, 4],
+  "canonicalization": {
+    "serializer": "serde-json-struct-order/v1",
+    "objectFieldOrder": "fieldOrder",
+    "optionalEncoding": "explicit-null",
+    "timestampEncoding": "chrono-rfc3339-utc"
+  },
+  "hash": {
+    "algorithm": "sha256",
+    "input": "prev_hash || 0x7c || canonical_json(hashable_v5)",
+    "output": "lowercase-hex-64",
+    "genesisPrevHash": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "fieldOrder": [
+    "chain_version",
+    "id",
+    "timestamp",
+    "seq",
+    "prev_hash",
+    "agent_id",
+    "method",
+    "intent_category",
+    "authorized",
+    "reasoning",
+    "policy_decision",
+    "correlation_id",
+    "source",
+    "signal",
+    "approver_assertion",
+    "agent_spiffe",
+    "signature",
+    "key_id",
+    "event_kind",
+    "tenant",
+    "agent_name",
+    "actor_sub",
+    "actor_idp",
+    "payload_sha256",
+    "agent_kind",
+    "cost_micros",
+    "brain_evidence_sha256",
+    "brain_scores",
+    "tool_params_sha256",
+    "credential_fingerprint",
+    "upstream_id",
+    "tool_name"
+  ],
+  "requiredValueFields": [
+    "chain_version",
+    "id",
+    "timestamp",
+    "seq",
+    "prev_hash",
+    "agent_id",
+    "method",
+    "intent_category",
+    "authorized",
+    "reasoning"
+  ],
+  "nullableFields": [
+    "policy_decision",
+    "correlation_id",
+    "source",
+    "signal",
+    "approver_assertion",
+    "agent_spiffe",
+    "signature",
+    "key_id",
+    "event_kind",
+    "tenant",
+    "agent_name",
+    "actor_sub",
+    "actor_idp",
+    "payload_sha256",
+    "agent_kind",
+    "cost_micros",
+    "brain_evidence_sha256",
+    "brain_scores",
+    "tool_params_sha256",
+    "credential_fingerprint",
+    "upstream_id",
+    "tool_name"
+  ],
+  "excludedState": [
+    {
+      "name": "entry_hash",
+      "classification": "derived-chain-head",
+      "integrity": "derived-from-hashable-v5"
+    },
+    {
+      "name": "deleted_at",
+      "classification": "mutable-visibility-state",
+      "integrity": "separate-data-lifecycle-boundary"
+    },
+    {
+      "name": "entry_payloads.payload_json",
+      "classification": "sidecar-canonical-bytes",
+      "integrity": "payload-digest-in-hashable-v5"
+    },
+    {
+      "name": "entry_masked_params.masked_json",
+      "classification": "purgeable-payload",
+      "integrity": "tool-params-digest-in-hashable-v5"
+    },
+    {
+      "name": "entry_masked_params.retention_class",
+      "classification": "purge-policy",
+      "integrity": "separate-data-lifecycle-boundary"
+    }
+  ],
+  "payloadIntegrity": {
+    "storage": "entry_payloads.payload_json",
+    "modes": [
+      {
+        "digestField": "payload_sha256",
+        "canonicalBytesSource": "payload_canonical_json"
+      },
+      {
+        "digestField": "brain_evidence_sha256",
+        "canonicalBytesSource": "brain_evidence_canonical_json"
+      }
+    ],
+    "dualPayloadBehavior": "reject-append",
+    "missingPairBehavior": "reject-append"
+  },
+  "verifiedCommitment": {
+    "contract": "clavenar.verified-chain/v1",
+    "headHash": "last-verified-entry-hash-or-genesis",
+    "length": "last-verified-seq",
+    "tailChainVersion": "last-verified-row-version-or-null",
+    "invalidWalkBehavior": "omit-commitment"
+  },
+  "adversarialMutations": [
+    {"id": "omit-field", "expected": "verification-fails"},
+    {"id": "reorder-fields", "expected": "verification-fails"},
+    {"id": "mutate-committed-value", "expected": "verification-fails"},
+    {"id": "mutate-null-presence", "expected": "verification-fails"},
+    {"id": "mutate-sequence", "expected": "verification-fails"},
+    {"id": "mutate-predecessor", "expected": "verification-fails"},
+    {"id": "delete-row", "expected": "verification-fails"},
+    {"id": "reorder-rows", "expected": "verification-fails"},
+    {"id": "unknown-version", "expected": "verification-fails"},
+    {"id": "dual-payload", "expected": "reject-append"},
+    {"id": "mutate-payload-bytes", "expected": "verification-fails"}
+  ]
+}

@@ -419,14 +419,18 @@ stays cumulative), a full re-walk runs automatically every ten minutes, and
 walk on a public route is otherwise a denial-of-service lever). The hot store
 runs SQLite with `journal_mode=WAL` + `synchronous=FULL`, and the
 post-export vacuum commits its cursor row and physical delete in one
-transaction, so a crash can never leave deleted rows without a verify seed. `CURRENT_CHAIN_VERSION = 4` — four coexisting hashable shapes,
+transaction, so a crash can never leave deleted rows without a verify seed. `CURRENT_CHAIN_VERSION = 5` — five coexisting hashable shapes,
 each row carrying its `chain_version`: **v1** (pre-signing verdicts), **v2**
 (adds `agent_spiffe` + identity-issued `signature` + `key_id`, themselves
 hashable so a signature can't be stripped without breaking the chain), **v3**
 (identity lifecycle events with content-hashed payloads), **v4** (reproducible
 Brain-evidence verdict rows for EU AI Act Art 12 — the v1 verdict shape plus a
-hashable `brain_evidence_sha256`). Field order *is* the
-chain version — verifiers dispatch per row, and v1 rows keep verifying forever.
+hashable `brain_evidence_sha256`), **v5** (one complete 32-field nullable
+evidence shape that also commits the explicit version, exact position, and
+predecessor). Field order *is* the chain version — verifiers dispatch per row,
+v1-v4 rows keep verifying forever, and every new row uses v5. A successful
+complete walk publishes the exact verified head hash, length, and tail version;
+invalid walks publish no complete commitment.
 
 ### Write paths and storage
 

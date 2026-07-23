@@ -182,20 +182,24 @@ curl http://localhost:8083/verify
 
 Console `/audit` is the human-readable view; `clavenarctl regulatory export` produces the auditor-grade artifact.
 
-### 1.7 Four coexisting chain versions
+### 1.7 Five coexisting chain versions
 
-**Concept.** The hash chain has evolved four times. v1 was the original verdict-only shape. v2 added per-action cryptographic signatures (`agent_spiffe`, `signature`, `key_id`). v3 added lifecycle-event row anchoring (a different hashable shape entirely, keyed on `event_kind` + `payload_sha256`). v4 added reproducible Brain-evidence verdict rows (EU AI Act Art 12): the v1 verdict shape plus a hashable `brain_evidence_sha256` content-hashing the Brain's deterministic inputs (the canonical evidence JSON rides `entry_payloads`). All four coexist in the same SQLite table; the verifier dispatches per-row based on a version marker. This avoids retroactive re-signing — a row written under v1 verifies under v1 forever. A v4 verdict row commits to the evidence in place of the v2 signature (the signature column still persists and stays JWKS-verifiable; Art 12 is record-keeping, not non-repudiation).
+**Concept.** The hash chain has evolved five times. v1 was the original verdict-only shape. v2 added per-action cryptographic signatures (`agent_spiffe`, `signature`, `key_id`). v3 added lifecycle-event row anchoring (a different hashable shape entirely, keyed on `event_kind` + `payload_sha256`). v4 added reproducible Brain-evidence verdict rows (EU AI Act Art 12). v5 is the forward-only complete evidence shape: every new row commits one fixed 32-field canonical object containing the explicit version, position and predecessor plus every current immutable evidence and attribution column. All optional fields serialize as explicit `null`, so removing a value and changing absence into presence are both detectable. Historical v1-v4 rows retain their exact semantics and bytes.
 
-**Implementation.** `CURRENT_CHAIN_VERSION = 4` constant in `clavenar-ledger`. `recompute_for_version` is the dispatch function; each version has its own `HashableEntryV<N>` struct. The field order **is** the chain version — reordering silently invalidates every existing entry, which is why CLAUDE.md flags the order as locked. Adding a new shape means adding `HashableEntryV<N>` + a new `recompute_for_version` arm, never editing older variants. An unknown version surfaces as the `unsupported_chain_version` signal.
+**Implementation.** `CURRENT_CHAIN_VERSION = 5` in `clavenar-ledger`. `recompute_for_version` dispatches each stored row to its immutable `HashableEntryV<N>`. SQLite and PostgreSQL stamp every new append v5 regardless of optional-field population and produce byte-identical hashes. V5 rejects ambiguous dual lifecycle/Brain payloads and missing digest/byte pairs. A successful complete walk returns a `clavenar.verified-chain/v1` commitment containing the verified head hash, length/last sequence, and tail version; an invalid walk returns no commitment.
 
-**Verify.** Mixed v1/v2/v3 export verification:
+**Verify.** Mixed v1-v5 verification:
 
 ```bash
-./repos/clavenar-e2e/dev/run.sh        # produces a chain with all three versions
-curl -s http://localhost:8083/verify | jq .valid    # true
+./repos/clavenar-e2e/dev/run.sh
+curl -s 'http://localhost:8083/verify?full=true' |
+  jq '{valid, commitment}'
 ```
 
-The e2e runner specifically covers mixed-version export to assert the dispatch is wired correctly across boundaries.
+The owner suite mutates every v5 field and null boundary, deletes/reorders rows,
+changes the predecessor and sequence, tampers with sidecar bytes, and verifies
+SQLite/PostgreSQL parity. The deployment receipt compares the full-walk
+commitment to the exact live database tail and count.
 
 ### 1.8 Append-only `chain_vacuum_cursor`
 

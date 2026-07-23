@@ -18,6 +18,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
 - [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
 - [Forensic event envelope](#forensic-event-envelope) — stable producer/event/stage identity, payload commitments, and explicit causal predecessors
+- [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) — immutable complete row evidence plus verified head and length
 - [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
@@ -57,6 +58,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9a | [Policy exchange](#policy-exchange) | install/verify shipped; production issuance redesign required | v1.3.0 | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
 | 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
 | 9c | [Distributed control state](#distributed-control-state) | inventory shipped; fail-closed readiness and outage policy specified | v1.173.0–v1.174.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
+| 9d | [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) | contract shipped; Ledger implementation pending | v1.175.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -312,7 +314,7 @@ This is the highest-value bullet — non-repudiation is what unlocks the §15 "t
 ```mermaid
 flowchart LR
   Row[Ledger row N — id, timestamp, agent_id, agent_spiffe, method, intent_category, authorized, reasoning, policy_decision, signature, key_id, seq, prev_hash]
-  Hashable[Canonical JSON — hashable subset, dispatched by chain_version v1 or v2 or v3 or v4]
+  Hashable[Canonical JSON — hashable subset, dispatched by chain_version v1 through v5]
   Hash[SHA-256]
   Entry[entry_hash N]
   Next[Row N+1 — prev_hash = entry_hash N]
@@ -755,7 +757,10 @@ The signal vocabulary on the forensic event uses `unregistered_agent` (consisten
 
 ### 7. Chain v3 — lifecycle row anchoring
 
-`CURRENT_CHAIN_VERSION = 3` after this lands. v1 (verdict, no signature), v2 (verdict + signature), and v3 (lifecycle event) coexist in the chain; verifier dispatches per-row. No retroactive re-signing. *(A later increment added **v4** — verdict rows carrying the Brain's deterministic evidence (`brain_evidence_sha256`, EU AI Act Art 12; see [Layer 2 — clavenar-brain](#layer-2--clavenar-brain)). `CURRENT_CHAIN_VERSION = 4` today; a v4 verdict row commits to the evidence in place of the v2 signature, which still persists and stays JWKS-verifiable. Art 12 is record-keeping, not non-repudiation.)*
+`CURRENT_CHAIN_VERSION = 3` after this lands. v1 (verdict, no signature), v2
+(verdict + signature), and v3 (lifecycle event) coexist in the chain; verifier
+dispatches per-row. No retroactive re-signing. Later increments added v4
+Brain-evidence verdict rows and the complete nullable-field v5 shape below.
 
 #### 7.1 Two-tier hashable
 
@@ -807,6 +812,45 @@ payload_sha256 = sha256( canonical_json(payload) )
 - **`actor_sub` is always a real human.** No `system:`, no `tofu:*`. Migration-CLI runs publish `actor_sub = "system:migration:<operator_oidc_sub>"` — the operator who ran the migration is recorded; never anonymous.
 - **The outer hashable is locked.** New event kinds add only payload schemas. New optional outer fields are forbidden; if it matters enough to put outside the payload, it warrants a v4 bump.
 - **Adding event kinds is free.** Specifically, future spec follow-ons (capability-change request flow, transfer-pending, etc.) add new payloads only — no chain version bump.
+
+#### 7.4 Chain v5 — complete evidence commitment
+
+The normative machine contract is
+[`contracts/ledger-chain-v5.schema.json`](contracts/ledger-chain-v5.schema.json),
+with the exact policy and adversarial matrix in
+[`contracts/ledger-chain-v5.fixture.json`](contracts/ledger-chain-v5.fixture.json).
+`CURRENT_CHAIN_VERSION = 5`; all new rows use v5, while historical v1-v4 rows
+keep their original bytes and verifier paths.
+
+V5 is one fixed 32-field struct for verdict, lifecycle, execution, and control
+rows. It commits the explicit version, id, timestamp, sequence and predecessor;
+all verdict and policy fields; correlation, source, signal, and approver
+attribution; workload signature/key identity; lifecycle tenant/actor/payload
+identity; and ingress, cost, Brain evidence/scores, params, credential,
+upstream, and tool attribution. Every optional field is present in the
+canonical JSON as `null` when absent. Field order is normative and immutable.
+
+```
+entry_hash[n] =
+  sha256(prev_hash[n] || "|" || serde_json_struct_order(hashable_v5[n]))
+```
+
+`entry_hash` is the derived output, not an input. `deleted_at` remains mutable
+visibility state owned by the data-lifecycle boundary. Canonical lifecycle or
+Brain bytes remain in `entry_payloads`; their digest is in v5 and verification
+re-hashes the sidecar. A row cannot carry both payload modes, and a digest
+without its exact canonical bytes is rejected before append. Purgeable masked
+parameters stay outside the chain while their `tool_params_sha256` commitment
+remains inside it.
+
+A successful complete walk returns `clavenar.verified-chain/v1` with the exact
+verified tail hash, last sequence as chain length, and tail chain version.
+Empty chains commit the genesis hash at length zero. A vacuum-only tail has a
+known hash and length but a null historical version. Invalid or unsupported
+walks omit the commitment rather than presenting a valid prefix as the chain
+head. This slice establishes content integrity only: trusted historical-key
+lookup, TSA validation, and cryptographic compliance derivation are separate
+requirements and are not inferred from v5.
 
 ### 8. Authentication for human callers
 
