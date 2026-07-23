@@ -543,7 +543,8 @@
         "functionalVerification": "verify retained evidence against current and historical trust without restoring retired private keys"
       },
       "sources": [
-        "clavenar-e2e/scripts/project-workload-tls.sh"
+        "clavenar-e2e/scripts/rotate-compose-trust.sh",
+        "clavenar-e2e/scripts/check-compose-trust-rotation.py"
       ]
     },
     {
