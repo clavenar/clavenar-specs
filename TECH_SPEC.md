@@ -4023,7 +4023,10 @@ acceptance boundaries.
 
 ## Transactional deployment promotion
 
-**Module status:** implementation acceptance in progress.
+**Module status:** **shipped 2026-07-24** in release `1.197.1`
+(`sha256:87709335aadc0742cbe46f6e4ce0c41e9fac0e86c7a06cc21793b126eb0db494`;
+BOM
+`sha256:24a823334efd8483445ac05ca843e94dcbd60e8428714a0c6d546bb4a8bf0165`).
 
 The deny-unknown
 [`contracts/deployment-promotion-v1.schema.json`](contracts/deployment-promotion-v1.schema.json)
@@ -4051,6 +4054,14 @@ Single-flight ownership and stale/missing prior-state rejection prevent
 overlapping or unbound mutations. Mutable references, omitted gates, release
 substitution, reset, and build fallback cannot produce a passing terminal
 receipt.
+
+Production acceptance injected candidate-readiness and representative-
+transaction failures, restored the exact prior `1.196.0` release in both
+cases, and proved rollback readiness, a fresh governed transaction, public-
+pointer retention, and Ledger-chain continuity. The subsequent no-fault
+transaction promoted `1.197.1` only after all 17 readiness checks and fresh
+policy, upstream, forensic, and chain evidence passed. The canonical
+production smoke then passed on the exact promoted digest.
 
 This contract does not assert delivered operational alerts or schema-safe
 stateful upgrades. Those remain separate acceptance boundaries.

@@ -1785,6 +1785,8 @@ python3 scripts/run_dependency_readiness_fault_matrix.py \
 and completes a fresh governed transaction. A failed candidate must restore
 the exact prior release automatically and prove the restored system works.
 
+**Status.** Shipped and production-accepted in `1.197.1`.
+
 **Implementation.** The strict
 [`contracts/deployment-promotion-v1.fixture.json`](contracts/deployment-promotion-v1.fixture.json)
 binds both immutable release and BOM digests, the prior and candidate public
