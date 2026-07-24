@@ -68,6 +68,8 @@ authoritative wire-contract detail still lives in those sections.
 | 9g | [Isolated complete restore](#isolated-complete-restore) | authenticated isolated restore shipped | v1.183.0 | `clavenar-specs`, `clavenar-e2e` |
 | 9h | [Passive failover and failback](#passive-failover-and-failback) | monitored encrypted passive synchronization and fenced failover/failback shipped | v1.184.0 | `clavenar-specs`, `clavenar-e2e` |
 | 9i | [Dependency-aware readiness](#dependency-aware-readiness) | shipped | v1.196.0 | `clavenar-specs`, `clavenar-shared`, all 11 governed application images, `clavenar-e2e`, `clavenar-charts` |
+| 9j | [Transactional deployment promotion](#transactional-deployment-promotion) | shipped | v1.197.1 | `clavenar-specs`, `clavenar-e2e` |
+| 9k | [Production alert delivery lifecycle](#production-alert-delivery-lifecycle) | shipped | v1.200.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -4063,14 +4065,19 @@ transaction promoted `1.197.1` only after all 17 readiness checks and fresh
 policy, upstream, forensic, and chain evidence passed. The canonical
 production smoke then passed on the exact promoted digest.
 
-This contract does not assert delivered operational alerts or schema-safe
-stateful upgrades. Those remain separate acceptance boundaries.
+The deployment receipt alone does not assert delivered operational alerts or
+schema-safe stateful upgrades. Alert delivery is proven separately by the
+production alert delivery lifecycle below; upgrade safety remains a separate
+acceptance boundary.
 
 ---
 
 ## Production alert delivery lifecycle
 
-**Module status:** implementation acceptance in progress.
+**Module status:** **shipped 2026-07-24** in release `1.200.0`
+(`sha256:6ecc7e9d35ff5b169528739510e9bb4d9c71aef5830fe7484d8fc3fb25838326`;
+BOM
+`sha256:eeb5354988e88d64c7a38ece63b8faa97217cc6d7a0d22859f6eab29f02af336`).
 
 The deny-unknown
 [`contracts/alert-delivery-lifecycle-v1.schema.json`](contracts/alert-delivery-lifecycle-v1.schema.json)
@@ -4092,6 +4099,14 @@ The contract describes portable evidence rather than selecting a vendor.
 Deployments may route to a durable operator incident inbox, paging service, or
 equivalent receiver, provided the receiver authenticates delivery and retains
 operator acknowledgement plus resolution evidence.
+
+Production acceptance loaded the synthetic critical rule and non-discard
+route, durably received the firing notification, recorded an authenticated
+operator acknowledgement, and durably received the distinct resolved
+notification. Independent runtime validation confirmed the required scrape
+targets, rule, route, receiver health, exact release/BOM binding, ordered
+lifecycle, and sanitized terminal receipt. The exact signed release then
+passed canonical production deployment and full smoke.
 
 This contract does not assert stateful schema upgrade safety.
 

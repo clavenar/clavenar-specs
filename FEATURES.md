@@ -1822,7 +1822,11 @@ acknowledges it, and the receiver records a distinct resolved notification.
 binds the exact release/BOM, critical alert identity, loaded rule and route,
 authenticated non-discard receiver, ordered firing/acknowledgement/resolution
 timestamps, durable notification identifiers, and terminal result. The
-contract is receiver-vendor-neutral.
+contract is receiver-vendor-neutral. Production requires Prometheus,
+Alertmanager, and an authenticated durable operator inbox, with complete
+required-service scraping and fail-closed readiness. The chart emits standard
+`PrometheusRule` and `AlertmanagerConfig` resources whose receiver authority is
+secret-backed.
 
 **Verify.** Validate the schema and semantic ordering, then fire a synthetic
 critical page through the deployed rule, router, authenticated receiver,
@@ -1830,6 +1834,11 @@ operator acknowledgement, and resolution path.
 
 ```bash
 python3 -m unittest tests.test_alert_delivery_lifecycle_contract
+cd ../clavenar-e2e
+python3 scripts/check_alert_delivery.py --require-source
+# Against a deployed stack and its sanitized terminal receipt:
+python3 scripts/check_alert_delivery.py --require-source --require-runtime \
+  --receipt prod/runtime-secrets/alert-delivery-live-receipt.json
 ```
 
 ### 8.3 UUIDv4 `correlation_id`
