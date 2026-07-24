@@ -67,7 +67,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9f | [Scheduled backup sets](#scheduled-backup-sets) | scheduled encrypted offsite backup shipped | v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9g | [Isolated complete restore](#isolated-complete-restore) | authenticated isolated restore shipped | v1.183.0 | `clavenar-specs`, `clavenar-e2e` |
 | 9h | [Passive failover and failback](#passive-failover-and-failback) | monitored encrypted passive synchronization and fenced failover/failback shipped | v1.184.0 | `clavenar-specs`, `clavenar-e2e` |
-| 9i | [Dependency-aware readiness](#dependency-aware-readiness) | contract shipped; complete runtime and deployment projection pending | v1.192.0 target | `clavenar-specs`; runtime rollout spans every required Compose service and the default Helm stack |
+| 9i | [Dependency-aware readiness](#dependency-aware-readiness) | shipped | v1.196.0 | `clavenar-specs`, `clavenar-shared`, all 11 governed application images, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3958,6 +3958,12 @@ rollback, delivered alert acknowledgement, or schema-safe stateful upgrades.
 
 ## Dependency-aware readiness
 
+**Module status:** **shipped** at `clavenar-internal-specs/VERSION` 1.196.0.
+The final signed 126-record release is
+`ghcr.io/clavenar/clavenar-stack-release@sha256:7d9f9aeed4362e11cead240e1f91b8001d3bd3b624b62b514e7d2accee2eea79`
+with BOM
+`sha256:ce4944b064963be3a2086ea5075a24f2441a365b9402a5ef32b7c13e7088a482`.
+
 The deny-unknown
 [`contracts/dependency-readiness-v1.schema.json`](contracts/dependency-readiness-v1.schema.json)
 and companion
@@ -3993,6 +3999,21 @@ Dependency graphs are topology-closed and acyclic. A deployment projection
 must match the exact inventory bytes; omitting a required service/check,
 substituting liveness, weakening an edge, changing a target, or introducing a
 cycle is contract drift.
+
+Every broker-backed application check performs an active bounded server
+round-trip rather than inspecting a cached client handle or merely flushing a
+socket buffer. Service-owned readiness also probes its direct dependencies,
+even when a transitive dependency has already withdrawn readiness.
+
+Production acceptance exercised all 11 declared dependency-failure scenarios
+without resetting state. Seventy contract checks split into 28 active remote
+checks and 42 service-owned local checks. Every directly dependent service
+returned an explicit failed check and every transitively dependent service
+withdrew readiness while all process-only liveness probes remained healthy.
+The same 17 container and volume fingerprints were retained throughout, and
+the valid Ledger chain advanced from 352,240 to 352,274 rows.
+The canonical v1.196.0 production smoke then repeated the governed restart and
+outage proof and retained a valid chain at 386,302 rows.
 
 The contract itself does not prove deployment promotion, automatic rollback,
 alert delivery, or stateful schema upgrade safety. Those remain separate

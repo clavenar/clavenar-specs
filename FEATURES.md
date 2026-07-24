@@ -1756,17 +1756,27 @@ readiness uses the common bounded `{status, checks}` response. External
 provider checks validate configuration without sending provider traffic.
 Compose requires healthy or completed predecessors; Helm renders the same
 edges into bounded startup gates plus distinct liveness/readiness probes.
+Broker-backed checks require an active bounded NATS server response, and every
+service reports its direct dependency failure explicitly rather than relying
+only on transitive withdrawal.
 
 **Verify.** Validate the public schema, exact service sets, dependency closure
 and acyclicity, liveness/readiness separation, provider posture, and critical
 check coverage. The assembled deployment verifier additionally binds the exact
 contract bytes to both rendered Compose environments and all Helm fixtures.
+The confirmed fault matrix pauses every remote dependency in turn, requires
+direct and transitive readiness withdrawal with liveness retained, restores
+forward, rejects unrelated withdrawal, and proves container, volume, and
+Ledger-chain continuity without a reset.
 
 ```bash
 cd ../clavenar-specs
 python3 -m unittest tests.test_dependency_readiness_contract
 cd ../clavenar-e2e
-python3 scripts/check_dependency_readiness.py --require-source
+python3 scripts/check_dependency_readiness.py --source-root .. --require-source
+python3 scripts/run_dependency_readiness_fault_matrix.py \
+  --environment prod \
+  --confirm readiness-fault-matrix
 ```
 
 ### 8.3 UUIDv4 `correlation_id`
