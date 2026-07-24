@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "contract": "clavenar.passive-dr-receipt/v1",
+  "drillId": "dr-20260724T120000Z-0123456789ab",
+  "release": {
+    "version": "1.184.0",
+    "reference": "ghcr.io/clavenar/clavenar-stack-release@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "bomSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "topology": {
+    "id": "compose-cold-active-passive",
+    "writerMode": "one-authenticated-monotonic-fence",
+    "dnsIsFence": false,
+    "partitionedPromotionAllowed": false,
+    "activeActiveAllowed": false
+  },
+  "recovery": {
+    "inventorySha256": "49c36d8f0db7ff86a9b5b2d0cfbe4f22016624fadb746f633de6e6de866e6f31",
+    "backupPlanSha256": "035343019d35656ffdb07296a2ae708547205bc653dce574750d6404294ae45f",
+    "passivePlanSha256": "cf15eca832f62cc751a135a9086d6032096073f23186fd1a094ff2981d9a4821",
+    "stateCount": 20,
+    "forwardPointId": "passive-backup-20260724T115500Z-aaaaaaaaaaaa",
+    "reversePointId": "passive-backup-20260724T121500Z-bbbbbbbbbbbb",
+    "plaintextCopied": false
+  },
+  "fence": {
+    "algorithm": "hmac-sha256",
+    "initialHostId": "primary-a",
+    "passiveHostId": "passive-b",
+    "finalHostId": "primary-a",
+    "initialGeneration": 1,
+    "finalGeneration": 5,
+    "transitions": [
+      {"action": "demote", "generation": 2, "activeHostId": null, "previousHostId": "primary-a", "operationId": "dr-1-demote-primary", "authenticated": true},
+      {"action": "promote", "generation": 3, "activeHostId": "passive-b", "previousHostId": "primary-a", "operationId": "dr-1-promote-passive", "authenticated": true},
+      {"action": "demote", "generation": 4, "activeHostId": null, "previousHostId": "passive-b", "operationId": "dr-1-demote-passive", "authenticated": true},
+      {"action": "promote", "generation": 5, "activeHostId": "primary-a", "previousHostId": "passive-b", "operationId": "dr-1-promote-primary", "authenticated": true}
+    ],
+    "doublePromotionRefused": true
+  },
+  "failover": {
+    "backupId": "backup-20260724T115500Z-aaaaaaaaaaaa",
+    "backupObject": "ghcr.io/clavenar/clavenar-prod-backups@sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "restoreId": "restore-20260724T120100Z-cccccccccccc",
+    "recoveryPoint": "2026-07-24T11:55:30Z",
+    "sourceAgeSeconds": 240,
+    "lossWindowSeconds": 240,
+    "restoreDurationSeconds": 620,
+    "withinRpo": true,
+    "withinRto": true,
+    "servicesReady": 11,
+    "representativeGovernedTransaction": true,
+    "stateCount": 20,
+    "chainValid": true
+  },
+  "failback": {
+    "backupId": "backup-20260724T121500Z-bbbbbbbbbbbb",
+    "backupObject": "ghcr.io/clavenar/clavenar-prod-backups@sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "restoreId": "restore-20260724T121700Z-dddddddddddd",
+    "recoveryPoint": "2026-07-24T12:15:30Z",
+    "sourceAgeSeconds": 90,
+    "lossWindowSeconds": 90,
+    "restoreDurationSeconds": 610,
+    "withinRpo": true,
+    "withinRto": true,
+    "servicesReady": 11,
+    "representativeGovernedTransaction": true,
+    "stateCount": 20,
+    "chainValid": true,
+    "continuity": {
+      "passiveLedgerRowsBefore": 1000,
+      "passiveLedgerRowsAfter": 1004,
+      "primaryLedgerRowsBefore": 1004,
+      "primaryLedgerRowsAfter": 1008,
+      "passiveTransactionRetained": true,
+      "chainValid": true
+    }
+  },
+  "timers": {
+    "backupEnabled": true,
+    "backupActive": true,
+    "passiveSyncEnabled": true,
+    "passiveSyncActive": true,
+    "writerFenceEnabled": true,
+    "writerFenceActive": true
+  },
+  "result": "pass"
+}

@@ -1620,8 +1620,9 @@ behavior, encryption custody, and protection disposition. Every row has
 topology locations, a restore dependency order, and integrity plus functional
 verification. Private credentials may be reconstructible only through explicit
 reissue without private-key backup. The contract records current topology
-limits and explicitly withholds scheduled-backup, isolated-restore, DR, and
-upgrade-safety claims until their dedicated work packages ship.
+limits. Scheduled backup, isolated restore, and passive DR now have separate
+accepted receipts; the inventory itself still does not inherit those claims.
+Upgrade safety remains separate.
 
 **Verify.** Validate the public schema and semantic closure, then run the
 assembled checker that accounts for every official Compose volume, secret, and
@@ -1701,6 +1702,41 @@ python3 -m unittest tests.test_isolated_restore_receipt_contract
 cd ../clavenar-e2e
 python3 scripts/check_isolated_restore.py --require-source
 python3 -m unittest tests.test_isolated_restore
+```
+
+### 8.2.10 Fenced passive failover and failback
+
+**Concept.** A passive is promotable only when it holds a fresh, completely
+verified encrypted recovery point and the previous writer is provably fenced.
+Routing convergence is not writer authority. Failback must carry every write
+made on the passive back to the original primary before it starts.
+
+**Implementation.** The strict
+[`contracts/passive-recovery-v1.fixture.json`](contracts/passive-recovery-v1.fixture.json)
+records one cold active/passive drill. Passive points reuse the exact 20-state
+backup partition, store only content-addressed encrypted restic objects, bind
+their parent and exact release/inventory/plans, and activate atomically.
+HMAC-SHA-256 fence state is separately custodied and advances monotonically
+through primary demotion, passive promotion, passive demotion, and primary
+promotion. Promotion requires the exact signed demotion generation and a fresh
+verified point; partitioned and double promotion fail.
+
+The drill restores the forward point, validates all state and a governed
+transaction, creates a new encrypted offsite backup from that promoted state,
+then restores its reverse point after failback. Ledger counts prove the passive
+transaction is the primary's failback baseline and the chain advances again.
+
+**Verify.** Validate the public schema and semantic transition order, then run
+the assembled source/adversarial owner checks. Production acceptance also
+requires the timed two-restore drill and enabled/active backup, sync, and fence
+timers.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_passive_recovery_contract
+cd ../clavenar-e2e
+python3 scripts/check_passive_recovery.py --require-source
+python3 -m unittest tests.test_passive_recovery tests.test_check_passive_recovery
 ```
 
 ### 8.3 UUIDv4 `correlation_id`

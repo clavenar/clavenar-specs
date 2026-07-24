@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/passive-recovery-v1.schema.json",
+  "title": "Clavenar passive failover and failback receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contract",
+    "drillId",
+    "release",
+    "topology",
+    "recovery",
+    "fence",
+    "failover",
+    "failback",
+    "timers",
+    "result"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "contract": {"const": "clavenar.passive-dr-receipt/v1"},
+    "drillId": {
+      "type": "string",
+      "pattern": "^dr-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "reference", "bomSha256"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "reference": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/clavenar/clavenar-stack-release@sha256:[a-f0-9]{64}$"
+        },
+        "bomSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "writerMode",
+        "dnsIsFence",
+        "partitionedPromotionAllowed",
+        "activeActiveAllowed"
+      ],
+      "properties": {
+        "id": {"const": "compose-cold-active-passive"},
+        "writerMode": {"const": "one-authenticated-monotonic-fence"},
+        "dnsIsFence": {"const": false},
+        "partitionedPromotionAllowed": {"const": false},
+        "activeActiveAllowed": {"const": false}
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventorySha256",
+        "backupPlanSha256",
+        "passivePlanSha256",
+        "stateCount",
+        "forwardPointId",
+        "reversePointId",
+        "plaintextCopied"
+      ],
+      "properties": {
+        "inventorySha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "backupPlanSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "passivePlanSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "stateCount": {"const": 20},
+        "forwardPointId": {
+          "type": "string",
+          "pattern": "^passive-backup-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+        },
+        "reversePointId": {
+          "type": "string",
+          "pattern": "^passive-backup-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+        },
+        "plaintextCopied": {"const": false}
+      }
+    },
+    "fence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "initialHostId",
+        "passiveHostId",
+        "finalHostId",
+        "initialGeneration",
+        "finalGeneration",
+        "transitions",
+        "doublePromotionRefused"
+      ],
+      "properties": {
+        "algorithm": {"const": "hmac-sha256"},
+        "initialHostId": {"$ref": "#/$defs/hostId"},
+        "passiveHostId": {"$ref": "#/$defs/hostId"},
+        "finalHostId": {"$ref": "#/$defs/hostId"},
+        "initialGeneration": {"type": "integer", "minimum": 1},
+        "finalGeneration": {"type": "integer", "minimum": 5},
+        "transitions": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/fenceTransition"}
+        },
+        "doublePromotionRefused": {"const": true}
+      }
+    },
+    "failover": {"$ref": "#/$defs/restorePhase"},
+    "failback": {
+      "allOf": [
+        {"$ref": "#/$defs/restorePhase"},
+        {
+          "type": "object",
+          "required": ["continuity"],
+          "properties": {
+            "continuity": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "passiveLedgerRowsBefore",
+                "passiveLedgerRowsAfter",
+                "primaryLedgerRowsBefore",
+                "primaryLedgerRowsAfter",
+                "passiveTransactionRetained",
+                "chainValid"
+              ],
+              "properties": {
+                "passiveLedgerRowsBefore": {"type": "integer", "minimum": 1},
+                "passiveLedgerRowsAfter": {"type": "integer", "minimum": 1},
+                "primaryLedgerRowsBefore": {"type": "integer", "minimum": 1},
+                "primaryLedgerRowsAfter": {"type": "integer", "minimum": 1},
+                "passiveTransactionRetained": {"const": true},
+                "chainValid": {"const": true}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "timers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backupEnabled", "backupActive", "passiveSyncEnabled", "passiveSyncActive", "writerFenceEnabled", "writerFenceActive"],
+      "properties": {
+        "backupEnabled": {"const": true},
+        "backupActive": {"const": true},
+        "passiveSyncEnabled": {"const": true},
+        "passiveSyncActive": {"const": true},
+        "writerFenceEnabled": {"const": true},
+        "writerFenceActive": {"const": true}
+      }
+    },
+    "result": {"const": "pass"}
+  },
+  "$defs": {
+    "hostId": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+    },
+    "fenceTransition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "generation", "activeHostId", "previousHostId", "operationId", "authenticated"],
+      "properties": {
+        "action": {"enum": ["demote", "promote"]},
+        "generation": {"type": "integer", "minimum": 2},
+        "activeHostId": {
+          "anyOf": [
+            {"$ref": "#/$defs/hostId"},
+            {"type": "null"}
+          ]
+        },
+        "previousHostId": {"$ref": "#/$defs/hostId"},
+        "operationId": {"type": "string", "minLength": 1, "maxLength": 160},
+        "authenticated": {"const": true}
+      }
+    },
+    "restorePhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backupId",
+        "backupObject",
+        "restoreId",
+        "recoveryPoint",
+        "sourceAgeSeconds",
+        "lossWindowSeconds",
+        "restoreDurationSeconds",
+        "withinRpo",
+        "withinRto",
+        "servicesReady",
+        "representativeGovernedTransaction",
+        "stateCount",
+        "chainValid"
+      ],
+      "properties": {
+        "backupId": {
+          "type": "string",
+          "pattern": "^backup-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+        },
+        "backupObject": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/clavenar/clavenar-prod-backups@sha256:[a-f0-9]{64}$"
+        },
+        "restoreId": {
+          "type": "string",
+          "pattern": "^restore-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+        },
+        "recoveryPoint": {"type": "string", "format": "date-time"},
+        "sourceAgeSeconds": {"type": "integer", "minimum": 0},
+        "lossWindowSeconds": {"type": "integer", "minimum": 0},
+        "restoreDurationSeconds": {"type": "integer", "minimum": 0},
+        "withinRpo": {"const": true},
+        "withinRto": {"const": true},
+        "servicesReady": {"const": 11},
+        "representativeGovernedTransaction": {"const": true},
+        "stateCount": {"const": 20},
+        "chainValid": {"const": true},
+        "continuity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "passiveLedgerRowsBefore",
+            "passiveLedgerRowsAfter",
+            "primaryLedgerRowsBefore",
+            "primaryLedgerRowsAfter",
+            "passiveTransactionRetained",
+            "chainValid"
+          ],
+          "properties": {
+            "passiveLedgerRowsBefore": {"type": "integer", "minimum": 1},
+            "passiveLedgerRowsAfter": {"type": "integer", "minimum": 1},
+            "primaryLedgerRowsBefore": {"type": "integer", "minimum": 1},
+            "primaryLedgerRowsAfter": {"type": "integer", "minimum": 1},
+            "passiveTransactionRetained": {"const": true},
+            "chainValid": {"const": true}
+          }
+        }
+      }
+    }
+  }
+}

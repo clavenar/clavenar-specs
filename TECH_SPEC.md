@@ -23,6 +23,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
+- [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
 - [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
 - [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
 - [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
@@ -62,9 +63,10 @@ authoritative wire-contract detail still lives in those sections.
 | 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
 | 9c | [Distributed control state](#distributed-control-state) | inventory shipped; fail-closed readiness and outage policy specified | v1.173.0–v1.174.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 9d | [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) | contract shipped; Ledger implementation pending | v1.175.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e` |
-| 9e | [State recovery inventory](#state-recovery-inventory) | inventory, scheduled encrypted offsite backup, and isolated complete restore shipped; DR and upgrade execution pending | v1.181.0–v1.183.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9e | [State recovery inventory](#state-recovery-inventory) | inventory, scheduled encrypted offsite backup, isolated complete restore, and passive DR shipped; upgrade execution pending | v1.181.0–v1.184.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9f | [Scheduled backup sets](#scheduled-backup-sets) | scheduled encrypted offsite backup shipped | v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
-| 9g | [Isolated complete restore](#isolated-complete-restore) | authenticated isolated restore shipped; DR failover/failback pending | v1.183.0 | `clavenar-specs`, `clavenar-e2e` |
+| 9g | [Isolated complete restore](#isolated-complete-restore) | authenticated isolated restore shipped | v1.183.0 | `clavenar-specs`, `clavenar-e2e` |
+| 9h | [Passive failover and failback](#passive-failover-and-failback) | monitored encrypted passive synchronization and fenced failover/failback shipped | v1.184.0 | `clavenar-specs`, `clavenar-e2e` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3807,8 +3809,10 @@ credentials remain explicitly reconstructible without copying private keys,
 and offline operator private material remains in separate custody rather than
 the deployment backup. Protection rows now distinguish scheduled backup,
 separate custody, signed source, and reconstructible state. Every restore
-proof, disaster-recovery claim, and upgrade-safety claim remains marked for
-WP-10.6, WP-10.7, and WP-10.11 respectively.
+proof, disaster-recovery claim, and upgrade-safety claim remains a separate
+receipt boundary. The first two now have dedicated accepted contracts below;
+the inventory document itself does not acquire those claims. Upgrade safety
+remains with its later contract.
 
 ---
 
@@ -3892,6 +3896,53 @@ service readiness, and one representative governed transaction.
 
 This receipt proves restoration in an isolated non-production namespace. It
 does not assert disaster-recovery failover/failback or stateful upgrade safety.
+
+---
+
+## Passive failover and failback
+
+The deny-unknown
+[`contracts/passive-recovery-v1.schema.json`](contracts/passive-recovery-v1.schema.json)
+defines the sanitized receipt for one timed cold-passive failover and reverse
+failback. The companion
+[`contracts/passive-recovery-v1.fixture.json`](contracts/passive-recovery-v1.fixture.json)
+binds the exact signed release, recovery inventory, scheduled-backup plan,
+passive plan, forward and reverse points, writer-fence transitions, both
+isolated restores, Ledger continuity, and required timer state.
+
+Passive synchronization consumes the verified encrypted restic repository
+produced by the scheduled backup owner. It takes a shared nonblocking source
+lock and an exclusive nonblocking target lock, validates the exact 20-state
+partitions and recovery-point age, hashes every encrypted repository object,
+and installs objects by content digest. A parent-bound authenticated manifest
+is activated atomically only after every object, path, size, digest, release,
+backup object, snapshot, inventory, and plan binding passes. Missing, stale,
+rollbacked, partial, plaintext, conflicting, or substituted state cannot
+advance the passive pointer.
+
+The supported topology is cold active/passive with one authenticated monotonic
+writer-fence generation. The authority is separately custodied from
+application state and recovery points. DNS and routing are never the fence.
+Promotion requires the exact current demotion receipt, no active writer, the
+expected generation and previous host, a fresh verified exact-release point,
+and a new signed generation. A partitioned primary without external fencing,
+lost or stale demotion, changed generation, replay, and double promotion fail.
+Active/active SQLite and automatic conflict merge are unsupported.
+
+The drill restores the forward point into a fresh isolated namespace, verifies
+all 20 states and all 11 governed services, and executes one representative
+governed transaction. While that passive is active, it creates and fully
+verifies a new encrypted offsite backup. That reverse point is synchronized
+before the passive is demoted and the original primary is re-promoted. A second
+fresh isolated restore must start with at least the passive's final Ledger row
+count, retain a valid chain, and execute another governed transaction. Both
+phases must meet the strict five-minute RPO and 30-minute RTO, and backup,
+passive-sync, and writer-fence timers finish enabled and active.
+
+This contract establishes the current Compose cold-passive recovery claim. It
+does not establish active/active operation, partition-tolerant promotion
+without an external fence, dependency-wide readiness, automatic deployment
+rollback, delivered alert acknowledgement, or schema-safe stateful upgrades.
 
 ---
 
