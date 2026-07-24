@@ -2553,6 +2553,32 @@ python3 scripts/check_cryptographic_verification_contract.py --source-root ..
 prod/run-stack-smoke.sh
 ```
 
+### 13.10 Tenant-qualified state migration
+
+**Concept.** Equal agent names in different tenants must never share a secret,
+pin, rate bucket, revocation flag, behavior history, pending decision, replay
+row, export, or lifecycle record. The exact inventory separates state
+partitioning from later route-authorization and retention work.
+
+**Implementation.** The deny-unknown
+[`tenant-state-migration-v1` fixture](contracts/tenant-state-migration-v1.fixture.json)
+binds all 13 state categories to a typed canonical key, collision-safe
+encoding, `(tenant, agent)` columns, or an explicit tenant predicate. Selected
+legacy tenants use read-only qualified-versus-legacy comparison; mismatch or
+missing comparison evidence fails closed, and every cutover write is
+qualified-only. Lite agent polling predicates the issuing tenant and agent in
+addition to the correlation id. Policy learning rejects mixed-tenant corpora.
+Regulatory window reads require a validated tenant on SQLite and Postgres.
+
+**Verify.**
+
+```bash
+python3 -m unittest tests.test_tenant_state_migration_contract -v
+cd ../clavenar-e2e
+python3 scripts/check_tenant_state_migration.py \
+  --source-root .. --require-source
+```
+
 ---
 
 ## 14. Forensic-tier deep review

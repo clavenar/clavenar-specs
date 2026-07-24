@@ -22,6 +22,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
 - [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
 - [Tenant-qualified identity keys](#tenant-qualified-identity-keys) — canonical typed tenant, agent, and composite storage identity
+- [Tenant-qualified state migration](#tenant-qualified-state-migration) — exact state inventory, cutover, and collision rules
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -73,6 +74,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9k | [Production alert delivery lifecycle](#production-alert-delivery-lifecycle) | shipped | v1.200.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9l | [Stateful upgrade safety](#stateful-upgrade-safety) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | shipped | v1.203.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
+| 9n | [Tenant-qualified state migration](#tenant-qualified-state-migration) | shipped | v1.204.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-identity`, `clavenar-simulator`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -120,6 +122,36 @@ but produces a typed `AgentKey` only when both tenant and agent labels are
 present and valid. Later rollout slices migrate stores and metrics, then reject
 non-tenant agent certificates; this primitive does not silently reinterpret
 those identities.
+
+---
+
+## Tenant-qualified state migration
+
+**Module status:** **shipped in v1.204.0.** The exact inventory and migration
+vector is
+[`contracts/tenant-state-migration-v1.fixture.json`](contracts/tenant-state-migration-v1.fixture.json);
+its deny-unknown schema is
+[`contracts/tenant-state-migration-v1.schema.json`](contracts/tenant-state-migration-v1.schema.json).
+
+Every listed state boundary uses either the canonical `AgentKey`, an injective
+encoding of it, `(tenant, agent)` columns, or an explicit tenant predicate.
+The inventory covers Vault upstream secrets, tool-definition pins, rate and
+quota buckets, revocation controls, velocity and spend history, policy learning
+and replay, HIL rows, Lite pending access, regulatory exports, and agent
+lifecycle state. Two tenants may use the same agent label without sharing any
+listed state.
+
+Legacy comparison is enabled for an explicit tenant set only. A selected
+tenant reads the qualified and legacy candidates, serves only an equal
+qualified value, and fails closed with bounded comparison evidence when the
+legacy candidate is missing or differs. New writes are qualified-only; no
+cutover path writes a legacy bare agent key. State without a meaningful legacy
+candidate starts or rebuilds directly in its qualified partition.
+
+The reserved `_legacy_unqualified` tenant keeps a still-accepted unqualified
+identity isolated from every named tenant. It is a compatibility partition,
+not an implicit default. Requiring tenant-bearing identities on every route is
+a separate wire-authorization change.
 
 ---
 
