@@ -70,6 +70,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9i | [Dependency-aware readiness](#dependency-aware-readiness) | shipped | v1.196.0 | `clavenar-specs`, `clavenar-shared`, all 11 governed application images, `clavenar-e2e`, `clavenar-charts` |
 | 9j | [Transactional deployment promotion](#transactional-deployment-promotion) | shipped | v1.197.1 | `clavenar-specs`, `clavenar-e2e` |
 | 9k | [Production alert delivery lifecycle](#production-alert-delivery-lifecycle) | shipped | v1.200.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9l | [Stateful upgrade safety](#stateful-upgrade-safety) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -4109,6 +4110,44 @@ lifecycle, and sanitized terminal receipt. The exact signed release then
 passed canonical production deployment and full smoke.
 
 This contract does not assert stateful schema upgrade safety.
+
+---
+
+## Stateful upgrade safety
+
+**Module status:** contract defined; implementation acceptance in progress.
+
+The deny-unknown
+[`contracts/stateful-upgrade-v1.schema.json`](contracts/stateful-upgrade-v1.schema.json)
+and companion
+[`contracts/stateful-upgrade-v1.fixture.json`](contracts/stateful-upgrade-v1.fixture.json)
+define the terminal evidence for one SQLite-backed Kubernetes release
+transition and rollback. The exact inventory is Ledger, HIL, Identity, Policy
+Engine, and Proxy execution state.
+
+Every persistence-enabled SQLite Deployment uses `Recreate`; a candidate
+application writer cannot start until the prior writer has terminated. A
+passing receipt records a measured maximum of one application writer and
+retains each PVC UID across install, failed scheduling, interrupted migration,
+backup restoration, rollback, and source-release readiness.
+
+Before workload mutation, each database is captured through SQLite's online
+backup API, passes `quick_check`, and receives a SHA-256 commitment in a
+release-bound manifest. The contract declares forward compatibility and uses
+verified backup restoration as the rollback boundary, so a destructive or
+partially committed migration is never assumed to be readable by the previous
+binary.
+
+Acceptance injects both an unschedulable candidate and an interrupted
+migration. Neither may produce overlapping writers or a successful target
+release. Rollback must restore the verified pre-migration database bytes,
+preserve the Ledger chain, HIL pending and decision rows, Identity agent and
+credential rows, Policy active version and history, and Proxy execution
+intent/result state, then return the source release to readiness.
+
+This contract applies to the single-writer SQLite topology. A Ledger configured
+for PostgreSQL is outside this receipt and requires its backend-native
+migration and rollback evidence.
 
 ---
 

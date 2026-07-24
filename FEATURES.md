@@ -1841,6 +1841,34 @@ python3 scripts/check_alert_delivery.py --require-source --require-runtime \
   --receipt prod/runtime-secrets/alert-delivery-live-receipt.json
 ```
 
+### 8.2.14 Stateful upgrade safety
+
+**Concept.** A singleton replica count is not a single-writer upgrade. The
+controller must terminate the existing SQLite writer before starting a
+candidate, and rollback must begin from a verified pre-migration database
+rather than assuming an interrupted schema remains readable.
+
+**Implementation.** The strict
+[`contracts/stateful-upgrade-v1.fixture.json`](contracts/stateful-upgrade-v1.fixture.json)
+binds source and target releases, CSI/PVC identity, all five SQLite workloads,
+`Recreate` strategy, online-backup integrity, explicit schema compatibility,
+failed scheduling, interrupted migration, restored state commitments,
+functional checks, and the maximum observed application-writer count.
+
+**Verify.** Validate the public contract and source projections, then run the
+CSI-backed install, mutation, failed-scheduling, interrupted-migration, and
+rollback matrix.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_stateful_upgrade_contract
+cd ../clavenar-e2e
+python3 scripts/check_stateful_upgrade.py --require-source
+python3 scripts/run_stateful_upgrade_matrix.py --output /tmp/stateful-upgrade.json
+python3 scripts/check_stateful_upgrade.py --require-source \
+  --receipt /tmp/stateful-upgrade.json
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
