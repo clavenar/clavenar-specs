@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.clavenar.com/contracts/tenant-agent-key-v1.schema.json",
+  "title": "Clavenar tenant-qualified agent key conformance vector",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contract",
+    "labelGrammar",
+    "separator",
+    "vector",
+    "migration",
+    "serialization",
+    "prohibitions"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "contract": {"const": "clavenar.tenant-agent-key/v1"},
+    "labelGrammar": {"const": "^[A-Za-z0-9._-]{1,63}$"},
+    "separator": {"const": "/"},
+    "vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenantId", "agentId", "agentKey"],
+      "properties": {
+        "tenantId": {"$ref": "#/$defs/label"},
+        "agentId": {"$ref": "#/$defs/label"},
+        "agentKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,63}/[A-Za-z0-9._-]{1,63}$"
+        }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legacyBareAgentId",
+        "tenantRequired",
+        "readFallback",
+        "bareDualWriteAllowed"
+      ],
+      "properties": {
+        "legacyBareAgentId": {"$ref": "#/$defs/label"},
+        "tenantRequired": {"const": true},
+        "readFallback": {"const": "tenant-bound-explicit"},
+        "bareDualWriteAllowed": {"const": false}
+      }
+    },
+    "serialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenantId", "agentId", "agentKey", "invalidInput"],
+      "properties": {
+        "tenantId": {"const": "string"},
+        "agentId": {"const": "string"},
+        "agentKey": {"const": "canonical-string"},
+        "invalidInput": {"const": "error"}
+      }
+    },
+    "prohibitions": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "bare-production-key"},
+        {"const": "implicit-default-tenant"},
+        {"const": "lossy-normalization"}
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    }
+  },
+  "$defs": {
+    "label": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,63}$"
+    }
+  }
+}

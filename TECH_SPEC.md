@@ -21,6 +21,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) — immutable complete row evidence plus verified head and length
 - [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
 - [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
+- [Tenant-qualified identity keys](#tenant-qualified-identity-keys) — canonical typed tenant, agent, and composite storage identity
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -71,6 +72,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9j | [Transactional deployment promotion](#transactional-deployment-promotion) | shipped | v1.197.1 | `clavenar-specs`, `clavenar-e2e` |
 | 9k | [Production alert delivery lifecycle](#production-alert-delivery-lifecycle) | shipped | v1.200.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9l | [Stateful upgrade safety](#stateful-upgrade-safety) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | shipped | v1.203.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -86,6 +88,38 @@ Versions in the **Landed** column reference `clavenar-internal-specs/VERSION`
 moved. Modules without a single landed version were rolled in over
 several patches and the per-section "Module status" line carries the
 detail.
+
+---
+
+## Tenant-qualified identity keys
+
+**Module status:** **shipped in v1.203.0.** The public conformance vector is
+[`contracts/tenant-agent-key-v1.fixture.json`](contracts/tenant-agent-key-v1.fixture.json);
+its strict schema is
+[`contracts/tenant-agent-key-v1.schema.json`](contracts/tenant-agent-key-v1.schema.json).
+
+`TenantId` and `AgentId` are distinct typed labels. Each accepts exactly 1–63
+ASCII characters from `[A-Za-z0-9._-]`; values are never case-folded, trimmed,
+percent-decoded, or otherwise normalized. Invalid construction and invalid
+deserialization return an error.
+
+`AgentKey` always contains one `TenantId` and one `AgentId`. Its sole canonical
+string representation is `<tenant>/<agent>`. Because neither label grammar
+admits `/`, parsing is unambiguous and rejects bare, empty, or multi-separator
+input. String and Serde round trips preserve the exact bytes.
+
+Legacy migration is explicit and read-only: a caller supplies the tenant and
+legacy bare agent identifier, both are validated, and the result is a qualified
+`AgentKey`. The API may expose the legacy agent component for a bounded
+tenant-at-a-time read comparison, but it provides no bare production-key
+constructor and permits no fallback bare-key dual write. There is no implicit
+default tenant.
+
+SPIFFE parsing retains an explicit unqualified legacy state for compatibility,
+but produces a typed `AgentKey` only when both tenant and agent labels are
+present and valid. Later rollout slices migrate stores and metrics, then reject
+non-tenant agent certificates; this primitive does not silently reinterpret
+those identities.
 
 ---
 

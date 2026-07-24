@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "contract": "clavenar.tenant-agent-key/v1",
+  "labelGrammar": "^[A-Za-z0-9._-]{1,63}$",
+  "separator": "/",
+  "vector": {
+    "tenantId": "acme.corp",
+    "agentId": "support-bot_3",
+    "agentKey": "acme.corp/support-bot_3"
+  },
+  "migration": {
+    "legacyBareAgentId": "support-bot_3",
+    "tenantRequired": true,
+    "readFallback": "tenant-bound-explicit",
+    "bareDualWriteAllowed": false
+  },
+  "serialization": {
+    "tenantId": "string",
+    "agentId": "string",
+    "agentKey": "canonical-string",
+    "invalidInput": "error"
+  },
+  "prohibitions": [
+    "bare-production-key",
+    "implicit-default-tenant",
+    "lossy-normalization"
+  ]
+}

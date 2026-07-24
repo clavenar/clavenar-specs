@@ -2738,6 +2738,26 @@ clavenar-chaos-monkey --category deception   # decoy_trap_dump_secrets, decoy_lu
 
 **Verify.** Validate the migration fixture and compare every mirror byte-for-byte. Gateway owner tests must count zero Ledger, HIL, receipt, and upstream effects for an unselected tool call; unselected control methods must remain available with zero tool effects. The assembled and live suites retain decision, atomic batch, pending, lost-response, durable replay, uncertain reconciliation, and receipt-redelivery proofs.
 
+### 6.12 Tenant-qualified identity keys
+
+**Concept.** A bare agent name is not a storage identity: two tenants may
+legitimately enroll the same name. Every production key must therefore retain
+both identity dimensions without an implicit tenant or lossy normalization.
+
+**Implementation.** `clavenar-shared` provides distinct `TenantId` and
+`AgentId` labels plus an `AgentKey` that can exist only as a validated pair.
+Its canonical string and optional Serde form are exactly `<tenant>/<agent>`.
+The migration helper requires an explicit tenant and permits a bounded
+read-only lookup of the legacy agent component; no API constructs a bare
+production key or permits legacy dual-write fallback. The exact grammar,
+serialization, and migration rules are frozen in
+[`contracts/tenant-agent-key-v1.fixture.json`](contracts/tenant-agent-key-v1.fixture.json).
+
+**Verify.** Run the Specs, Shared all-features, and assembled E2E owner tests.
+They reject empty, overlong, unsafe, bare, extra-separator, mismatched,
+unknown-field, implicit-tenant, and bare-dual-write inputs; string and Serde
+round trips must preserve the exact conformance vector.
+
 **Verify.** Run each package's owner test suite, then compare the fixture across all five repositories byte-for-byte. The conformance tests assert one decision request, zero decision-side effects, one executor invocation after authorization, intent-before-effect ordering, actual provider result return, and fail-closed behavior for missing durability, identity/payload substitution, and persistence errors.
 
 ---
