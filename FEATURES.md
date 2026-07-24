@@ -1739,6 +1739,36 @@ python3 scripts/check_passive_recovery.py --require-source
 python3 -m unittest tests.test_passive_recovery tests.test_check_passive_recovery
 ```
 
+### 8.2.11 Dependency-aware readiness
+
+**Concept.** A process being alive is not evidence that it can safely accept
+traffic. Every routed or required service needs one bounded local readiness
+surface that closes over its storage, authority, synchronization, worker, and
+upstream dependencies while keeping liveness process-only.
+
+**Implementation.** The strict
+[`contracts/dependency-readiness-v1.fixture.json`](contracts/dependency-readiness-v1.fixture.json)
+enumerates all 17 required Compose services and the 12 default Helm
+service/dependency boundaries. Each row binds distinct liveness and readiness
+targets, exact stable check names, topology-specific acyclic startup
+predecessors, a fail-closed result, and a provider-probe posture. HTTP
+readiness uses the common bounded `{status, checks}` response. External
+provider checks validate configuration without sending provider traffic.
+Compose requires healthy or completed predecessors; Helm renders the same
+edges into bounded startup gates plus distinct liveness/readiness probes.
+
+**Verify.** Validate the public schema, exact service sets, dependency closure
+and acyclicity, liveness/readiness separation, provider posture, and critical
+check coverage. The assembled deployment verifier additionally binds the exact
+contract bytes to both rendered Compose environments and all Helm fixtures.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_dependency_readiness_contract
+cd ../clavenar-e2e
+python3 scripts/check_dependency_readiness.py --require-source
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
@@ -2263,7 +2293,12 @@ grep -r "async-nats" repos/*/Cargo.toml
 
 **Concept.** Every shipping service exposes the same three observability endpoints under the same wire shape: `/health` for liveness, `/readyz` for readiness, `/metrics` for Prometheus scrape. Metric naming is uniform: `clavenar_<kebab-to-snake-service-slug>_*`. Logs switch to single-line JSON on the same env knob across services. Lets a single Helm probe template, a single Prometheus scrape config, and a single log-aggregator parser handle every service.
 
-**Implementation.** All 8 services (proxy, brain, policy-engine, ledger, hil, identity, console, clavenar-lite) hit the same `/health` + `/readyz` + `/metrics` trio with the same JSON shape on `/readyz` (`ReadinessResponse { status, checks: BTreeMap }`). Metric prefixes uniformly use `clavenar_<service>_*` — the policy-engine rename `clavenar_policy_*` → `clavenar_policy_engine_*` aligns the last outlier. `CLAVENAR_LOG_FORMAT=json` is honored by every service for structured-event output. Refinement deferred: only `clavenar-proxy` currently threads `correlation_id` as a structured `tracing::span` field; the other services emit it via `tracing::info!("… correlation_id={}")` which lands in the JSON `message` field but isn't a top-level structured key. Migrating every handler to `tracing::info!(correlation_id = %x, …)` is per-handler work, not gating consistency.
+**Implementation.** The original eight-service uniformity baseline is now
+superseded by the exact [dependency-aware readiness](#8211-dependency-aware-readiness)
+inventory. Every required service retains the same `/health` and `/readyz`
+semantics and JSON readiness shape, while the exact required checks and
+topology edges are contract-bound rather than inferred from route presence.
+Metric prefixes uniformly use `clavenar_<service>_*`.
 
 **Verify.**
 

@@ -67,6 +67,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9f | [Scheduled backup sets](#scheduled-backup-sets) | scheduled encrypted offsite backup shipped | v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9g | [Isolated complete restore](#isolated-complete-restore) | authenticated isolated restore shipped | v1.183.0 | `clavenar-specs`, `clavenar-e2e` |
 | 9h | [Passive failover and failback](#passive-failover-and-failback) | monitored encrypted passive synchronization and fenced failover/failback shipped | v1.184.0 | `clavenar-specs`, `clavenar-e2e` |
+| 9i | [Dependency-aware readiness](#dependency-aware-readiness) | contract shipped; complete runtime and deployment projection pending | v1.192.0 target | `clavenar-specs`; runtime rollout spans every required Compose service and the default Helm stack |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -3952,6 +3953,50 @@ This contract establishes the current Compose cold-passive recovery claim. It
 does not establish active/active operation, partition-tolerant promotion
 without an external fence, dependency-wide readiness, automatic deployment
 rollback, delivered alert acknowledgement, or schema-safe stateful upgrades.
+
+---
+
+## Dependency-aware readiness
+
+The deny-unknown
+[`contracts/dependency-readiness-v1.schema.json`](contracts/dependency-readiness-v1.schema.json)
+and companion
+[`contracts/dependency-readiness-v1.fixture.json`](contracts/dependency-readiness-v1.fixture.json)
+define the complete readiness inventory for the supported Compose and default
+Helm stacks. The inventory covers 17 Compose services and the 12 Helm
+service/dependency boundaries: NATS/JetStream, Vault, custody and bootstrap,
+the nine charted application services, the default upstream, Demo Mint,
+Simulator, and Website.
+
+Liveness proves only that a process can answer its local operational endpoint.
+It never calls a dependency and never restarts a healthy process solely
+because a remote system is unavailable. Readiness is a separate, bounded,
+side-effect-free probe. An HTTP service returns `200` with
+`{"status":"ready","checks":{...}}` only when every required check is `ok` or
+an explicitly inapplicable check is `skipped`; otherwise it returns `503` with
+`status=not_ready`. Check names and values are stable. Responses are capped at
+4 KiB and may not expose credentials, secret-bearing URLs, provider bodies,
+database details, keys, or caller identity.
+
+The inventory names storage, NATS and JetStream, active/unsealed Vault,
+workload identity and CA/OIDC trust, required provider configuration, forensic
+consumer/outbox progress, mandatory-control synchronization, HIL sweeper,
+Assurance and Simulator workers, every Proxy and Console backend, the default
+upstream, and Website assets/version. A provider check validates local
+configuration only. Readiness probes never create paid traffic or turn a
+provider outage into retry amplification.
+
+Every Compose dependency edge is declared as healthy or successfully
+completed, never merely started. Helm renders the same dependency set and
+uses a bounded startup gate plus distinct liveness and readiness probes.
+Dependency graphs are topology-closed and acyclic. A deployment projection
+must match the exact inventory bytes; omitting a required service/check,
+substituting liveness, weakening an edge, changing a target, or introducing a
+cycle is contract drift.
+
+The contract itself does not prove deployment promotion, automatic rollback,
+alert delivery, or stateful schema upgrade safety. Those remain separate
+acceptance boundaries.
 
 ---
 
