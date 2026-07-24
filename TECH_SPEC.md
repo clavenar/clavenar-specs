@@ -4068,6 +4068,35 @@ stateful upgrades. Those remain separate acceptance boundaries.
 
 ---
 
+## Production alert delivery lifecycle
+
+**Module status:** implementation acceptance in progress.
+
+The deny-unknown
+[`contracts/alert-delivery-lifecycle-v1.schema.json`](contracts/alert-delivery-lifecycle-v1.schema.json)
+and companion
+[`contracts/alert-delivery-lifecycle-v1.fixture.json`](contracts/alert-delivery-lifecycle-v1.fixture.json)
+define the minimum terminal evidence for a production page. A passing receipt
+binds one exact release and BOM, critical alert identity and label commitment,
+loaded rule and routing state, an authenticated non-discard receiver, durable
+firing and resolved notifications, and an explicit authenticated operator
+acknowledgement.
+
+The alert lifecycle is ordered: the alert starts before firing delivery, the
+operator acknowledges the delivered page before the alert resolves, and a
+distinct resolved notification arrives after the resolved timestamp. Missing,
+unauthenticated, non-durable, discarded, reordered, or firing-only delivery
+cannot pass.
+
+The contract describes portable evidence rather than selecting a vendor.
+Deployments may route to a durable operator incident inbox, paging service, or
+equivalent receiver, provided the receiver authenticates delivery and retains
+operator acknowledgement plus resolution evidence.
+
+This contract does not assert stateful schema upgrade safety.
+
+---
+
 ## Forensic-tier deep review
 
 

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "contract": "clavenar.alert-delivery-lifecycle/v1",
+  "operationId": "alert-drill-1.198.0-20260724T150000Z",
+  "environment": "prod",
+  "release": {
+    "version": "1.198.0",
+    "releaseReference": "ghcr.io/clavenar/clavenar-stack-release@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bomSha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "alert": {
+    "name": "ClavenarSyntheticProductionPage",
+    "fingerprint": "0123456789abcdef",
+    "severity": "critical",
+    "labelsSha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "startsAt": "2026-07-24T15:00:00Z",
+    "endsAt": "2026-07-24T15:02:00Z"
+  },
+  "routing": {
+    "prometheusRuleLoaded": true,
+    "alertmanagerRouteLoaded": true,
+    "receiverId": "operator-inbox",
+    "authenticated": true,
+    "discardReceiver": false
+  },
+  "firing": {
+    "notificationId": "123e4567-e89b-42d3-a456-426614174000",
+    "receivedAt": "2026-07-24T15:00:35Z",
+    "durable": true
+  },
+  "acknowledgement": {
+    "operatorId": "operator:acceptance",
+    "acknowledgedAt": "2026-07-24T15:01:00Z",
+    "method": "operator-authenticated"
+  },
+  "resolution": {
+    "notificationId": "123e4567-e89b-42d3-a456-426614174001",
+    "receivedAt": "2026-07-24T15:02:35Z",
+    "durable": true
+  },
+  "deliveryAttempts": 2,
+  "status": "pass",
+  "sanitized": true
+}

@@ -1811,6 +1811,27 @@ python3 scripts/check_deployment_promotion.py --require-source
 python3 -m unittest tests.test_deployment_promotion
 ```
 
+### 8.2.13 Production alert delivery lifecycle
+
+**Concept.** A configured alert is not an operating control until a real
+receiver durably accepts the firing notification, an authenticated operator
+acknowledges it, and the receiver records a distinct resolved notification.
+
+**Implementation.** The strict
+[`contracts/alert-delivery-lifecycle-v1.fixture.json`](contracts/alert-delivery-lifecycle-v1.fixture.json)
+binds the exact release/BOM, critical alert identity, loaded rule and route,
+authenticated non-discard receiver, ordered firing/acknowledgement/resolution
+timestamps, durable notification identifiers, and terminal result. The
+contract is receiver-vendor-neutral.
+
+**Verify.** Validate the schema and semantic ordering, then fire a synthetic
+critical page through the deployed rule, router, authenticated receiver,
+operator acknowledgement, and resolution path.
+
+```bash
+python3 -m unittest tests.test_alert_delivery_lifecycle_contract
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.

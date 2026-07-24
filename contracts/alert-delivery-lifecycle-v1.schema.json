@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.clavenar.com/contracts/alert-delivery-lifecycle-v1.schema.json",
+  "title": "Clavenar production alert delivery lifecycle receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contract",
+    "operationId",
+    "environment",
+    "release",
+    "alert",
+    "routing",
+    "firing",
+    "acknowledgement",
+    "resolution",
+    "deliveryAttempts",
+    "status",
+    "sanitized"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "contract": {"const": "clavenar.alert-delivery-lifecycle/v1"},
+    "operationId": {
+      "type": "string",
+      "pattern": "^alert-drill-[0-9A-Za-z._-]+$"
+    },
+    "environment": {"const": "prod"},
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "releaseReference", "bomSha256"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "releaseReference": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/clavenar/clavenar-stack-release@sha256:[a-f0-9]{64}$"
+        },
+        "bomSha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "fingerprint",
+        "severity",
+        "labelsSha256",
+        "startsAt",
+        "endsAt"
+      ],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{16,64}$"},
+        "severity": {"const": "critical"},
+        "labelsSha256": {"$ref": "#/$defs/digest"},
+        "startsAt": {"$ref": "#/$defs/timestamp"},
+        "endsAt": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prometheusRuleLoaded",
+        "alertmanagerRouteLoaded",
+        "receiverId",
+        "authenticated",
+        "discardReceiver"
+      ],
+      "properties": {
+        "prometheusRuleLoaded": {"const": true},
+        "alertmanagerRouteLoaded": {"const": true},
+        "receiverId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "authenticated": {"const": true},
+        "discardReceiver": {"const": false}
+      }
+    },
+    "firing": {"$ref": "#/$defs/notification"},
+    "acknowledgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operatorId", "acknowledgedAt", "method"],
+      "properties": {
+        "operatorId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "acknowledgedAt": {"$ref": "#/$defs/timestamp"},
+        "method": {"const": "operator-authenticated"}
+      }
+    },
+    "resolution": {"$ref": "#/$defs/notification"},
+    "deliveryAttempts": {"type": "integer", "minimum": 2},
+    "status": {"const": "pass"},
+    "sanitized": {"const": true}
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["notificationId", "receivedAt", "durable"],
+      "properties": {
+        "notificationId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "receivedAt": {"$ref": "#/$defs/timestamp"},
+        "durable": {"const": true}
+      }
+    }
+  }
+}
