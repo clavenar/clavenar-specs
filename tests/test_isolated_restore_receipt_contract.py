@@ -122,6 +122,17 @@ class IsolatedRestoreReceiptContractTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             self.validate(mutable)
 
+    def test_passive_point_evidence_is_strictly_paired_when_present(self) -> None:
+        passive = copy.deepcopy(self.fixture)
+        passive["source"]["passivePointId"] = (
+            "passive-backup-20260723T212023Z-fc14124d24be"
+        )
+        passive["source"]["passiveRepositoryVerified"] = True
+        self.validate(passive)
+        del passive["source"]["passiveRepositoryVerified"]
+        with self.assertRaises(jsonschema.ValidationError):
+            self.validate(passive)
+
 
 if __name__ == "__main__":
     unittest.main()

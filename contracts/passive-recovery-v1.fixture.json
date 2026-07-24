@@ -51,7 +51,9 @@
     "servicesReady": 11,
     "representativeGovernedTransaction": true,
     "stateCount": 20,
-    "chainValid": true
+    "chainValid": true,
+    "passivePointId": "passive-backup-20260724T115500Z-aaaaaaaaaaaa",
+    "passiveRepositoryVerified": true
   },
   "failback": {
     "backupId": "backup-20260724T121500Z-bbbbbbbbbbbb",
@@ -67,6 +69,8 @@
     "representativeGovernedTransaction": true,
     "stateCount": 20,
     "chainValid": true,
+    "passivePointId": "passive-backup-20260724T121500Z-bbbbbbbbbbbb",
+    "passiveRepositoryVerified": true,
     "continuity": {
       "passiveLedgerRowsBefore": 1000,
       "passiveLedgerRowsAfter": 1004,

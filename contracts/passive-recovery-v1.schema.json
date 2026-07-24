@@ -198,7 +198,9 @@
         "servicesReady",
         "representativeGovernedTransaction",
         "stateCount",
-        "chainValid"
+        "chainValid",
+        "passivePointId",
+        "passiveRepositoryVerified"
       ],
       "properties": {
         "backupId": {
@@ -223,6 +225,11 @@
         "representativeGovernedTransaction": {"const": true},
         "stateCount": {"const": 20},
         "chainValid": {"const": true},
+        "passivePointId": {
+          "type": "string",
+          "pattern": "^passive-backup-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+        },
+        "passiveRepositoryVerified": {"const": true},
         "continuity": {
           "type": "object",
           "additionalProperties": false,

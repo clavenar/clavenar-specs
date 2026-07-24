@@ -3876,6 +3876,12 @@ missing predecessor, release/inventory/plan substitution, or snapshot rollback
 fails before restic may restore content. A passing run requires `restic check`
 and the exact head snapshot plus its backup and release tags.
 
+When a passive point is the selected source, paired `passivePointId` and
+`passiveRepositoryVerified` evidence records that every authenticated
+content-addressed passive object matched the independently reconstructed
+offsite repository byte for byte, replaced that temporary copy, and supplied
+the repository used by `restic check` and restore.
+
 The target is a fresh Compose project with fresh volume names, no host
 publications, no shared network, and no production bind, volume, container, or
 DNS reference. The owner records the production container set before and after
@@ -3931,13 +3937,16 @@ Active/active SQLite and automatic conflict merge are unsupported.
 
 The drill restores the forward point into a fresh isolated namespace, verifies
 all 20 states and all 11 governed services, and executes one representative
-governed transaction. While that passive is active, it creates and fully
-verifies a new encrypted offsite backup. That reverse point is synchronized
-before the passive is demoted and the original primary is re-promoted. A second
-fresh isolated restore must start with at least the passive's final Ledger row
-count, retain a valid chain, and execute another governed transaction. Both
-phases must meet the strict five-minute RPO and 30-minute RTO, and backup,
-passive-sync, and writer-fence timers finish enabled and active.
+governed transaction. Each restore proves that its authenticated passive
+point's content-addressed objects are byte-identical to the independently
+reconstructed offsite chain and uses the passive copy for `restic check` and
+restore. While that passive is active, it creates and fully verifies a new
+encrypted offsite backup. That reverse point is synchronized before the passive
+is demoted and the original primary is re-promoted. A second fresh isolated
+restore must start with at least the passive's final Ledger row count, retain a
+valid chain, and execute another governed transaction. Both phases must meet
+the strict five-minute RPO and 30-minute RTO, and backup, passive-sync, and
+writer-fence timers finish enabled and active.
 
 This contract establishes the current Compose cold-passive recovery claim. It
 does not establish active/active operation, partition-tolerant promotion

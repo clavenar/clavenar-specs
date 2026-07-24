@@ -40,6 +40,10 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "passivePointId": ["passiveRepositoryVerified"],
+        "passiveRepositoryVerified": ["passivePointId"]
+      },
       "required": [
         "backupId",
         "reference",
@@ -62,7 +66,12 @@
         "snapshotId": {"$ref": "#/$defs/sha256"},
         "inventorySha256": {"$ref": "#/$defs/sha256"},
         "planSha256": {"$ref": "#/$defs/sha256"},
-        "recoveryPoint": {"type": "string", "format": "date-time"}
+        "recoveryPoint": {"type": "string", "format": "date-time"},
+        "passivePointId": {
+          "type": "string",
+          "pattern": "^passive-backup-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$"
+        },
+        "passiveRepositoryVerified": {"const": true}
       }
     },
     "chain": {

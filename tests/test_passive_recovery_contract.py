@@ -57,6 +57,15 @@ class PassiveRecoveryContractTests(unittest.TestCase):
             self.assertLessEqual(value[phase]["sourceAgeSeconds"], 300)
             self.assertLessEqual(value[phase]["lossWindowSeconds"], 300)
             self.assertLessEqual(value[phase]["restoreDurationSeconds"], 1800)
+            self.assertTrue(value[phase]["passiveRepositoryVerified"])
+        self.assertEqual(
+            value["recovery"]["forwardPointId"],
+            value["failover"]["passivePointId"],
+        )
+        self.assertEqual(
+            value["recovery"]["reversePointId"],
+            value["failback"]["passivePointId"],
+        )
         continuity = value["failback"]["continuity"]
         self.assertGreater(
             continuity["passiveLedgerRowsAfter"],
@@ -114,6 +123,11 @@ class PassiveRecoveryContractTests(unittest.TestCase):
         chain = copy.deepcopy(self.fixture)
         chain["failback"]["continuity"]["primaryLedgerRowsBefore"] = 1
         mutations.append(chain)
+        point = copy.deepcopy(self.fixture)
+        point["failback"][
+            "passivePointId"
+        ] = "passive-backup-20260724T121500Z-eeeeeeeeeeee"
+        mutations.append(point)
         for value in mutations:
             with self.subTest(value=value):
                 with self.assertRaises(AssertionError):
