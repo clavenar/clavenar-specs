@@ -4021,6 +4021,42 @@ acceptance boundaries.
 
 ---
 
+## Transactional deployment promotion
+
+**Module status:** implementation acceptance in progress.
+
+The deny-unknown
+[`contracts/deployment-promotion-v1.schema.json`](contracts/deployment-promotion-v1.schema.json)
+and companion
+[`contracts/deployment-promotion-v1.fixture.json`](contracts/deployment-promotion-v1.fixture.json)
+define a sanitized terminal receipt for one exact-release deployment
+transaction. The receipt binds the prior and candidate semantic versions,
+immutable release references, release digests, BOM digests, public pointer,
+mutation state, candidate and rollback gates, and terminal result.
+
+A candidate is not public merely because its processes started. Promotion
+requires complete bounded readiness for the supported deployment inventory and
+a fresh authenticated representative transaction with policy, real upstream
+result, durable correlation-scoped forensic evidence, and a continuous valid
+Ledger chain. Only then may the public pointer be confirmed.
+
+Every failure or signal after mutation and before confirmed promotion restores
+the exact prior immutable release without a local build or state reset. The
+rollback itself must pass complete readiness, execute a fresh representative
+transaction, retain chain continuity, and leave the prior public pointer in
+place. A failed rollback is a distinct critical terminal state rather than a
+successful or ambiguous deployment.
+
+Single-flight ownership and stale/missing prior-state rejection prevent
+overlapping or unbound mutations. Mutable references, omitted gates, release
+substitution, reset, and build fallback cannot produce a passing terminal
+receipt.
+
+This contract does not assert delivered operational alerts or schema-safe
+stateful upgrades. Those remain separate acceptance boundaries.
+
+---
+
 ## Forensic-tier deep review
 
 

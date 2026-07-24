@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "contract": "clavenar.deployment-promotion/v1",
+  "operationId": "promotion-1.196.0-to-1.197.0-fixture",
+  "status": "promoted",
+  "terminalStage": "complete",
+  "prior": {
+    "version": "1.196.0",
+    "releaseReference": "ghcr.io/clavenar/clavenar-stack-release@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "releaseDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "bomSha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "candidate": {
+    "version": "1.197.0",
+    "releaseReference": "ghcr.io/clavenar/clavenar-stack-release@sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "releaseDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "bomSha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "publicPointer": {
+    "before": "1.196.0",
+    "after": "1.197.0",
+    "confirmed": true
+  },
+  "mutationStarted": true,
+  "gates": {
+    "candidate": {
+      "completeReadiness": true,
+      "representativeTransaction": true
+    },
+    "rollback": {
+      "completeReadiness": false,
+      "representativeTransaction": false
+    }
+  },
+  "stateReset": false,
+  "localBuildFallback": false,
+  "sanitized": true
+}

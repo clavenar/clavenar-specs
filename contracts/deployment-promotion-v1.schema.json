@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.clavenar.com/contracts/deployment-promotion-v1.schema.json",
+  "title": "Clavenar transactional deployment promotion receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contract",
+    "operationId",
+    "status",
+    "terminalStage",
+    "prior",
+    "candidate",
+    "publicPointer",
+    "mutationStarted",
+    "gates",
+    "stateReset",
+    "localBuildFallback",
+    "sanitized"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "contract": {"const": "clavenar.deployment-promotion/v1"},
+    "operationId": {
+      "type": "string",
+      "pattern": "^promotion-[0-9A-Za-z._-]+$"
+    },
+    "status": {
+      "enum": ["in_progress", "promoted", "rolled_back", "rollback_failed", "rejected"]
+    },
+    "terminalStage": {"type": "string", "minLength": 1, "maxLength": 96},
+    "prior": {"$ref": "#/$defs/release"},
+    "candidate": {"$ref": "#/$defs/release"},
+    "publicPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "after", "confirmed"],
+      "properties": {
+        "before": {"$ref": "#/$defs/semver"},
+        "after": {"$ref": "#/$defs/semver"},
+        "confirmed": {"type": "boolean"}
+      }
+    },
+    "mutationStarted": {"type": "boolean"},
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate", "rollback"],
+      "properties": {
+        "candidate": {"$ref": "#/$defs/gates"},
+        "rollback": {"$ref": "#/$defs/gates"}
+      }
+    },
+    "stateReset": {"const": false},
+    "localBuildFallback": {"const": false},
+    "sanitized": {"const": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "promoted"}}},
+      "then": {
+        "properties": {
+          "publicPointer": {
+            "properties": {"confirmed": {"const": true}}
+          },
+          "gates": {
+            "properties": {
+              "candidate": {
+                "properties": {
+                  "completeReadiness": {"const": true},
+                  "representativeTransaction": {"const": true}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "rolled_back"}}},
+      "then": {
+        "properties": {
+          "publicPointer": {
+            "properties": {"confirmed": {"const": false}}
+          },
+          "gates": {
+            "properties": {
+              "rollback": {
+                "properties": {
+                  "completeReadiness": {"const": true},
+                  "representativeTransaction": {"const": true}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "releaseReference", "releaseDigest", "bomSha256"],
+      "properties": {
+        "version": {"$ref": "#/$defs/semver"},
+        "releaseReference": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/clavenar/clavenar-stack-release@sha256:[a-f0-9]{64}$"
+        },
+        "releaseDigest": {"$ref": "#/$defs/digest"},
+        "bomSha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["completeReadiness", "representativeTransaction"],
+      "properties": {
+        "completeReadiness": {"type": "boolean"},
+        "representativeTransaction": {"type": "boolean"}
+      }
+    }
+  }
+}

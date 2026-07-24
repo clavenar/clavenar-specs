@@ -1779,6 +1779,36 @@ python3 scripts/run_dependency_readiness_fault_matrix.py \
   --confirm readiness-fault-matrix
 ```
 
+### 8.2.12 Transactional deployment promotion
+
+**Concept.** A new release is public only after the exact candidate is ready
+and completes a fresh governed transaction. A failed candidate must restore
+the exact prior release automatically and prove the restored system works.
+
+**Implementation.** The strict
+[`contracts/deployment-promotion-v1.fixture.json`](contracts/deployment-promotion-v1.fixture.json)
+binds both immutable release and BOM digests, the prior and candidate public
+versions, mutation state, complete-readiness and representative-transaction
+gates, and the terminal outcome. Canonical promotion is single-flight and
+rejects stale or missing prior state before mutation. Failure or interruption
+before confirmation restores the prior release with no build or state reset,
+then requires complete readiness, a fresh authenticated policy/upstream/Ledger
+transaction, chain continuity, and the prior public pointer. Rollback failure
+is explicit and critical.
+
+**Verify.** Validate the public schema and adversarial terminal states. The
+deployment owner additionally checks source ordering and exercises readiness,
+transaction, version, interruption, concurrency, stale-prior, rollback-failure,
+and success cases against exact signed artifacts.
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_deployment_promotion_contract
+cd ../clavenar-e2e
+python3 scripts/check_deployment_promotion.py --require-source
+python3 -m unittest tests.test_deployment_promotion
+```
+
 ### 8.3 UUIDv4 `correlation_id`
 
 **Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
