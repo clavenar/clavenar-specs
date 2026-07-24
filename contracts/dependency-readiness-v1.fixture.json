@@ -84,7 +84,7 @@
       "requiredWhenEnabled": true,
       "liveness": {"type": "http", "target": "http://127.0.0.1:8086/health"},
       "readiness": {"type": "http", "target": "http://127.0.0.1:8086/readyz"},
-      "checks": ["storage", "nats", "vault", "ca", "oidc", "control_sync", "outbox_worker", "workload_identity"],
+      "checks": ["storage", "nats", "vault", "ca", "oidc", "control_sync", "outbox_worker", "workload_identity", "attestation_k8s_key_bound", "attestation_signed_measurement_registry"],
       "startupAfter": [
         {"service": "nats", "topologies": ["compose", "helm"]},
         {"service": "vault", "topologies": ["compose", "helm"]},

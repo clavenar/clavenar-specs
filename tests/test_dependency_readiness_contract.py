@@ -145,7 +145,15 @@ class DependencyReadinessContractTest(unittest.TestCase):
         self.assertTrue({"server", "jetstream"} <= checks["nats"])
         self.assertTrue({"active", "unsealed"} <= checks["vault"])
         self.assertTrue(
-            {"vault", "ca", "oidc", "control_sync", "outbox_worker"}
+            {
+                "vault",
+                "ca",
+                "oidc",
+                "control_sync",
+                "outbox_worker",
+                "attestation_k8s_key_bound",
+                "attestation_signed_measurement_registry",
+            }
             <= checks["identity"]
         )
         self.assertTrue({"forensic_consumer", "identity_signing"} <= checks["ledger"])
