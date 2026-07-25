@@ -2806,6 +2806,29 @@ legacy retention, zero second selection, unchanged Ledger head/length,
 retained HIL forensic envelopes, uninterrupted services, and byte-identical
 volume identities.
 
+### 6.14 Tenant-bearing route authorization
+
+**Concept.** Authentication is not sufficient when one credential can still
+name or discover another tenant's work. Every production agent identity and
+every authenticated queue route must carry an independently verified tenant
+authority.
+
+**Implementation.** Proxy rejects production certificates without an exact
+tenant-bearing agent SPIFFE URI SAN before pipeline work. HIL binds list,
+stream, decide, poll, and get-by-id to its authenticated principal/workload
+scope. Lite requires `tenant/agent:token` entries for multi-agent mode and
+supports `tenant:token` operator entries via `--deciders`; target reads and
+updates include the tenant predicate. Request headers, JSON, query strings,
+and correlation IDs are never tenant authority. The frozen conformance vector
+is
+[`contracts/tenant-route-authorization-v1.fixture.json`](contracts/tenant-route-authorization-v1.fixture.json).
+
+**Verify.** Enroll two tenants with the same agent label. Exercise valid and
+forged identity inputs, collection and object routes, and same/cross-tenant
+decisions. Foreign and unknown object responses must share the 404 class,
+foreign collections must be empty, and denied decisions must leave the target
+unchanged.
+
 ---
 
 ## Verification — end to end

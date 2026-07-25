@@ -24,6 +24,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Tenant-qualified identity keys](#tenant-qualified-identity-keys) — canonical typed tenant, agent, and composite storage identity
 - [Tenant-qualified state migration](#tenant-qualified-state-migration) — exact state inventory, cutover, and collision rules
 - [State namespace isolation](#state-namespace-isolation) — explicit demo/operator ownership and bounded cleanup
+- [Tenant route authorization](#tenant-route-authorization) — tenant-bearing production identity and object/collection route confinement
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -77,6 +78,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | shipped | v1.203.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
 | 9n | [Tenant-qualified state migration](#tenant-qualified-state-migration) | shipped | v1.204.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-identity`, `clavenar-simulator`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
 | 9o | [State namespace isolation](#state-namespace-isolation) | contract shipped; release acceptance in progress | — | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
+| 9p | [Tenant route authorization](#tenant-route-authorization) | contract shipped; release acceptance in progress | — | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -186,6 +188,34 @@ never resets an allocator, and never deletes or recreates a volume. The public
 collision vector requires the same tenant and agent label in both namespaces
 to receive distinct globally allocated identifiers and independently owned
 state.
+
+---
+
+## Tenant route authorization
+
+**Module status:** contract shipped; release acceptance in progress. The exact
+identity, route, and denial invariants are frozen by
+[`contracts/tenant-route-authorization-v1.fixture.json`](contracts/tenant-route-authorization-v1.fixture.json)
+and its deny-unknown
+[`schema`](contracts/tenant-route-authorization-v1.schema.json).
+
+Production Proxy ingress requires a verified URI SAN in the exact
+tenant-bearing agent SPIFFE shape. CN-only certificates, abbreviated agent
+SPIFFE paths, service identities, malformed paths, and extra segments are
+rejected before rate, quota, revocation, policy, HIL, Vault, Ledger, or
+upstream work. The tenant and agent are derived only from the verified
+certificate; headers, bodies, and query parameters cannot replace them.
+
+HIL derives queue scope from the authenticated approver principal, exact
+trusted workload identity, or verified demo session. Lite binds multi-agent
+and multi-operator bearer tokens to tenant-qualified registry entries. List
+and stream results are tenant-filtered, while poll, get-by-id, and decide use
+tenant predicates in the target lookup itself. A foreign target is
+indistinguishable from an unknown target and cannot be mutated.
+
+The only unqualified compatibility paths are explicit development/single-user
+configuration. Production ingress and multi-identity registries never infer a
+tenant or fall back to the certificate common name.
 
 ---
 
