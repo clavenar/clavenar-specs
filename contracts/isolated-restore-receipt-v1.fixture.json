@@ -91,6 +91,35 @@
   ],
   "validation": {
     "sqlite": {"databases":5,"quickCheck":true,"policyMutationExact":true,"hilStateExact":true,"identityStateExact":true,"ledgerChain":true,"ledgerSignatures":true,"tsaHistory":true},
+    "hilBackupErasure": {
+      "backupCopy": {
+        "schemaVersion":1,
+        "contract":"clavenar.hil-backup-erasure/v1",
+        "phase":"backup-copy",
+        "evaluatedAt":"2026-07-23T21:20:52Z",
+        "policySha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "inputDatabaseSha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "outputDatabaseSha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "disposition":{"contract":"clavenar.tenant-erasure-disposition/v1","generation":1,"keyId":"sha256:1111111111111111111111111111111111111111111111111111111111111111","sha256":"1212121212121212121212121212121212121212121212121212121212121212"},
+        "outcomes":{"payloadsPurged":0,"rowsDeleted":0,"rowsHeld":0,"transactions":0,"forbiddenFixtureMatches":0},
+        "physical":{"secureDelete":true,"walCheckpoint":"TRUNCATE","vacuum":true,"quickCheck":true},
+        "result":"pass"
+      },
+      "restoreAdmission": {
+        "schemaVersion":1,
+        "contract":"clavenar.hil-backup-erasure/v1",
+        "phase":"restore-admission",
+        "evaluatedAt":"2026-07-23T22:00:00Z",
+        "policySha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "inputDatabaseSha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "outputDatabaseSha256":"1313131313131313131313131313131313131313131313131313131313131313",
+        "disposition":{"contract":"clavenar.tenant-erasure-disposition/v1","generation":2,"keyId":"sha256:1111111111111111111111111111111111111111111111111111111111111111","sha256":"1414141414141414141414141414141414141414141414141414141414141414"},
+        "outcomes":{"payloadsPurged":1,"rowsDeleted":1,"rowsHeld":1,"transactions":2,"forbiddenFixtureMatches":0},
+        "physical":{"secureDelete":true,"walCheckpoint":"TRUNCATE","vacuum":true,"quickCheck":true},
+        "result":"pass"
+      },
+      "beforeWorkloadStart": true
+    },
     "jetstream": {"streams":7,"consumers":6,"kvBuckets":4,"sequencesExact":true,"authorizationEnforced":true},
     "vault": {"storageVerified":true,"recoveryMaterialVerified":true,"transitHistoryExact":true,"applicationSecretsVerified":true,"attestationAuthorityVerified":true,"workloadPkiAuthorityVerified":true,"trustHistoryVerified":true},
     "identities": {"privateKeysCopied":false,"workloadIdentitiesReissued":13,"simulatorIdentitiesReissued":64,"signedOneUseRecovery":true},
