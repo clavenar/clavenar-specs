@@ -2863,6 +2863,36 @@ cross-tenant operation identifier returns the same 404 as an unknown one.
 
 ---
 
+## 18. HIL legal hold and erasure
+
+**Concept.** Sensitive approval payloads must disappear at their approved
+deadline, while an authorized legal hold may extend that deadline without
+turning raw reasons or deleted content into permanent audit data.
+
+**Implementation.** HIL runs a 100-row bounded sweeper that replaces terminal
+payloads with a fixed tombstone and later deletes expired metadata. Tenant
+offboarding immediately deletes every unheld tenant row and records held rows
+for deletion upon release. Exact tenant-authorized legal-hold operations are
+idempotent and substitution-safe. Every purge or deletion transaction includes
+immutable local evidence and a minimized WP-09 intent/commit pair. SQLite
+secure deletion, truncating WAL checkpoint, and vacuum remove physical
+remnants. The exact boundary is
+[`contracts/hil-erasure-v1.fixture.json`](contracts/hil-erasure-v1.fixture.json);
+backup and restored-copy enforcement remains a separate contract.
+
+**Verify.**
+
+```bash
+python3 -m unittest tests/test_hil_erasure_contract.py
+python3 repos/clavenar-e2e/scripts/check_hil_erasure.py \
+  --source-root repos --require-source
+```
+
+The live proof interleaves two tenants, applies a hold, offboards its tenant,
+verifies only the held row remains, releases the hold, replays the same
+operation exactly, and confirms both rows and their sentinels are absent while
+the minimized deletion evidence remains.
+
 ## Verification — end to end
 
 The single command that exercises ~80% of the features above:

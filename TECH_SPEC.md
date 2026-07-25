@@ -26,6 +26,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [State namespace isolation](#state-namespace-isolation) — explicit demo/operator ownership and bounded cleanup
 - [Tenant route authorization](#tenant-route-authorization) — tenant-bearing production identity and object/collection route confinement
 - [Tenant lifecycle sagas](#tenant-lifecycle-sagas) — durable idempotent provisioning and authority-first offboarding
+- [HIL legal hold and erasure](#hil-legal-hold-and-erasure) — deadline purge, tenant erasure, legal holds, and minimized deletion evidence
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -81,6 +82,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9o | [State namespace isolation](#state-namespace-isolation) | contract shipped; release acceptance in progress | — | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9p | [Tenant route authorization](#tenant-route-authorization) | shipped | v1.206.2 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
 | 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9r | [HIL legal hold and erasure](#hil-legal-hold-and-erasure) | shipped | v1.209.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -7237,6 +7239,39 @@ Reports that explicitly cite this document by section number make
 triage faster.
 
 ---
+
+## HIL legal hold and erasure
+
+**Module status:** shipped in v1.209.0.
+
+HIL enforces the D-08 `hil-sensitive` lifecycle after the protected-retention
+window defined by `clavenar.hil-retention/v1`. A bounded sweeper purges
+terminal sensitive payload at its tier deadline and deletes the remaining
+pending row at its metadata deadline. Every physical mutation commits an
+immutable local deletion record and the WP-09 `operation.intent` /
+`transition.committed` forensic pair in the same database transaction. Those
+records contain identifiers, policy metadata, disposition, and a pre-existing
+payload commitment only; request bodies, modified bodies, review reports,
+narratives, approver credentials, notifications, and raw legal-hold reasons
+are prohibited.
+
+The exact Console workload capability `hil.retention.manage` controls
+`POST /admin/pending/{pending_id}/legal-hold`. Apply and release requests bind a
+UUID operation, hold UUID, authenticated tenant, target, action, and
+reason commitment. Exact retries return the stored receipt; operation or target
+substitution conflicts. Foreign and unknown targets share the same not-found
+response. An active hold defers both deadline and tenant-offboarding deletion.
+Authorized release executes any deferred or overdue erasure before returning
+success.
+
+Offboarding removes every unheld HIL row for the authenticated tenant in the
+owner transaction and marks held rows for deletion on release; other tenants
+are unchanged. Demo cleanup uses the same audited path. SQLite secure deletion
+is enabled and physical mutation is followed by a truncating WAL checkpoint
+and vacuum. The frozen behavior and audit allow-list are published in
+[`contracts/hil-erasure-v1.fixture.json`](contracts/hil-erasure-v1.fixture.json).
+Erasure of backup copies and enforcement after restore are intentionally not
+claimed by this module.
 
 ## Runbooks
 
