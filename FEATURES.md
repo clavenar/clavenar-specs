@@ -43,6 +43,7 @@ The host-cargo runner (`run.sh`) builds in **debug profile on purpose** — Appl
 14. [Forensic-tier deep review](#14-forensic-tier-deep-review)
 15. [Deception layer (decoys)](#15-deception-layer-decoys)
 16. [Governed language SDK execution](#16-governed-language-sdk-execution)
+17. [Durable tenant lifecycle](#17-durable-tenant-lifecycle)
 
 ---
 
@@ -2828,6 +2829,37 @@ forged identity inputs, collection and object routes, and same/cross-tenant
 decisions. Foreign and unknown object responses must share the 404 class,
 foreign collections must be empty, and denied decisions must leave the target
 unchanged.
+
+---
+
+## 17. Durable tenant lifecycle
+
+**Concept.** Tenant provisioning and offboarding are restart-safe workflows,
+not a sequence of best-effort HTTP calls. Identity durably records immutable
+intent and each step before invoking its owner. Offboarding fences live
+authority before deleting tenant-visible state, and never reports success
+until final export, tombstone, and retained-backup disposition are recorded.
+
+**Implementation.** The public
+`clavenar.tenant-lifecycle-saga/v1` contract fixes the two step plans, operation
+and step state machines, one-active-operation rule, five-attempt retry schedule,
+lease recovery, and terminal receipt. Identity owns the journal; Policy, HIL,
+Ledger, Proxy, and platform operations remain idempotent owner effects. The SDK
+exposes typed start/status/claim/complete methods, while Console resumes the
+same operation after restart or a lost response.
+
+**Verify.**
+
+```bash
+python3 -m unittest tests/test_tenant_lifecycle_saga_contract.py
+python3 repos/clavenar-e2e/scripts/check_tenant_lifecycle_saga.py \
+  --source-root repos --require-source
+```
+
+The live matrix starts two same-agent-name tenants, forces a dependency failure
+and a lost response at every step boundary, restarts the coordinator, and
+proves no owner effect is duplicated under a new intent. A forged or
+cross-tenant operation identifier returns the same 404 as an unknown one.
 
 ---
 

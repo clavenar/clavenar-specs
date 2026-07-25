@@ -25,6 +25,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Tenant-qualified state migration](#tenant-qualified-state-migration) — exact state inventory, cutover, and collision rules
 - [State namespace isolation](#state-namespace-isolation) — explicit demo/operator ownership and bounded cleanup
 - [Tenant route authorization](#tenant-route-authorization) — tenant-bearing production identity and object/collection route confinement
+- [Tenant lifecycle sagas](#tenant-lifecycle-sagas) — durable idempotent provisioning and authority-first offboarding
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -78,7 +79,8 @@ authoritative wire-contract detail still lives in those sections.
 | 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | shipped | v1.203.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
 | 9n | [Tenant-qualified state migration](#tenant-qualified-state-migration) | shipped | v1.204.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-identity`, `clavenar-simulator`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
 | 9o | [State namespace isolation](#state-namespace-isolation) | contract shipped; release acceptance in progress | — | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
-| 9p | [Tenant route authorization](#tenant-route-authorization) | contract shipped; release acceptance in progress | — | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
+| 9p | [Tenant route authorization](#tenant-route-authorization) | shipped | v1.206.2 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
+| 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -161,7 +163,7 @@ a separate wire-authorization change.
 
 ## State namespace isolation
 
-**Module status:** contract shipped; release acceptance in progress. The exact
+**Module status:** **shipped in v1.206.2.** The exact
 invariants are frozen by
 [`contracts/state-namespace-isolation-v1.fixture.json`](contracts/state-namespace-isolation-v1.fixture.json)
 and its deny-unknown
@@ -216,6 +218,46 @@ indistinguishable from an unknown target and cannot be mutated.
 The only unqualified compatibility paths are explicit development/single-user
 configuration. Production ingress and multi-identity registries never infer a
 tenant or fall back to the certificate common name.
+
+---
+
+## Tenant lifecycle sagas
+
+**Module status:** contract defined; implementation acceptance in progress.
+The exact plan, state, retry, and evidence invariants are frozen by
+[`contracts/tenant-lifecycle-saga-v1.fixture.json`](contracts/tenant-lifecycle-saga-v1.fixture.json)
+and its deny-unknown
+[`schema`](contracts/tenant-lifecycle-saga-v1.schema.json).
+
+Identity is the durable coordinator for tenant provisioning and offboarding.
+The verified operator tenant must match the path tenant, while workload mTLS
+and the tenant-lifecycle endpoint capability authenticate the executor.
+Headers, forms, query parameters, and operation identifiers never grant tenant
+authority. Cross-tenant operation reads and mutations are indistinguishable
+from an unknown operation.
+
+An `Idempotency-Key` is scoped by tenant and lifecycle kind. Identity commits
+the canonical request digest with the operation, rejects reuse for different
+intent, and permits at most one non-terminal lifecycle operation for a tenant.
+Each step is committed as `running` with its attempt and bounded lease before
+the owner effect is called. Success stores a bounded owner receipt; failure
+stores a sanitized error and a fixed bounded retry time. A lost response or
+expired worker lease repeats the same idempotent owner effect or reconciles its
+receipt. The fifth failed attempt enters `manual_recovery`; retry exhaustion
+never becomes success.
+
+Provisioning creates the tenant record and key generation before policy, HIL,
+cache, and Ledger-marker steps. Offboarding fences authority first, retires
+keys and cache authority, retires policy and HIL namespaces, creates the final
+content-addressed Ledger export, tombstones live Ledger rows, and records the
+retained-backup disposition. Destructive effects have no implicit rollback:
+when safe compensation is unavailable, the operation reports explicit manual
+recovery.
+
+Console and SDK clients may report completion only from Identity's terminal
+coordinator receipt containing every ordered step. Owner-service errors,
+including Ledger export or tombstone failure, remain visible and resumable;
+they cannot be ignored before a success redirect.
 
 ---
 
