@@ -44,6 +44,8 @@ The host-cargo runner (`run.sh`) builds in **debug profile on purpose** — Appl
 15. [Deception layer (decoys)](#15-deception-layer-decoys)
 16. [Governed language SDK execution](#16-governed-language-sdk-execution)
 17. [Durable tenant lifecycle](#17-durable-tenant-lifecycle)
+18. [HIL legal hold and erasure](#18-hil-legal-hold-and-erasure)
+19. [HIL backup and restore erasure](#19-hil-backup-and-restore-erasure)
 
 ---
 
@@ -2892,6 +2894,37 @@ The live proof interleaves two tenants, applies a hold, offboards its tenant,
 verifies only the held row remains, releases the hold, replays the same
 operation exactly, and confirms both rows and their sentinels are absent while
 the minimized deletion evidence remains.
+
+---
+
+## 19. HIL backup and restore erasure
+
+**Concept.** Recovery must not reset a retention deadline or revive a tenant
+that was offboarded after the selected recovery point.
+
+**Implementation.** Scheduled backup takes an application-consistent HIL
+SQLite copy and applies the accepted retention and erasure rules to that copy
+before restic encryption. Restore verifies the original capture commitment,
+then re-applies the rules before any restored workload starts. A private
+HMAC-authenticated, monotonically advancing tenant-erasure disposition is
+kept outside the backup chain; receipts expose only commitments and aggregate
+counts. Active legal holds remain protected and auditable. Each destructive
+transaction is limited to 100 rows and is followed by secure deletion, a
+truncating WAL checkpoint, vacuum, quick-check, and forbidden-fixture scans.
+
+**Verify.**
+
+```bash
+python3 -m unittest tests/test_hil_backup_erasure_contract.py
+python3 repos/clavenar-e2e/scripts/check_hil_backup_erasure.py \
+  --source-root repos --require-source
+```
+
+The acceptance matrix creates an older recovery point, offboards one of two
+same-agent-name tenants, advances the external disposition, and restores the
+older point. The offboarded unheld row must be absent before workload
+startup, the other tenant must be unchanged, an active-held row must remain
+protected, and no disallowed raw fixture may remain recoverable.
 
 ## Verification — end to end
 

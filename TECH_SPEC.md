@@ -83,6 +83,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9p | [Tenant route authorization](#tenant-route-authorization) | shipped | v1.206.2 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
 | 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9r | [HIL legal hold and erasure](#hil-legal-hold-and-erasure) | shipped | v1.209.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
+| 9s | [HIL backup and restore erasure](#hil-backup-and-restore-erasure) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -7272,6 +7273,30 @@ and vacuum. The frozen behavior and audit allow-list are published in
 [`contracts/hil-erasure-v1.fixture.json`](contracts/hil-erasure-v1.fixture.json).
 Erasure of backup copies and enforcement after restore are intentionally not
 claimed by this module.
+
+## HIL backup and restore erasure
+
+**Module status:** contract defined; implementation acceptance in progress.
+
+Backup encryption does not suspend the HIL retention clock. The exact
+`clavenar.hil-backup-erasure/v1` boundary sanitizes an
+application-consistent HIL copy before backup encryption and sanitizes every
+restored copy again before workload admission. Each bounded transaction
+purges expired unheld payloads, deletes metadata-expired or offboarded unheld
+rows with minimized local audit, and preserves active-held rows with their
+protected payload and immutable authority commitments.
+
+A private HMAC-authenticated tenant-erasure disposition advances
+monotonically when an offboarded tenant is observed. Its signing key remains
+outside the backup chain. Public backup and restore receipts disclose only
+the generation, key identifier, disposition digest, policy/database
+commitments, and aggregate outcomes. Restore requires at least the latest
+external generation; it never prefers the recovery point's older embedded
+state. Missing, stale, rolled-back, substituted, unknown-policy, or
+post-sanitization-invalid state fails before a restored workload starts.
+
+The frozen contract is
+[`contracts/hil-backup-erasure-v1.fixture.json`](contracts/hil-backup-erasure-v1.fixture.json).
 
 ## Runbooks
 
