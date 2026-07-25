@@ -23,6 +23,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
 - [Tenant-qualified identity keys](#tenant-qualified-identity-keys) — canonical typed tenant, agent, and composite storage identity
 - [Tenant-qualified state migration](#tenant-qualified-state-migration) — exact state inventory, cutover, and collision rules
+- [State namespace isolation](#state-namespace-isolation) — explicit demo/operator ownership and bounded cleanup
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -75,6 +76,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9l | [Stateful upgrade safety](#stateful-upgrade-safety) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | shipped | v1.203.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
 | 9n | [Tenant-qualified state migration](#tenant-qualified-state-migration) | shipped | v1.204.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-identity`, `clavenar-simulator`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
+| 9o | [State namespace isolation](#state-namespace-isolation) | contract shipped; release acceptance in progress | — | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -152,6 +154,38 @@ The reserved `_legacy_unqualified` tenant keeps a still-accepted unqualified
 identity isolated from every named tenant. It is a compatibility partition,
 not an implicit default. Requiring tenant-bearing identities on every route is
 a separate wire-authorization change.
+
+---
+
+## State namespace isolation
+
+**Module status:** contract shipped; release acceptance in progress. The exact
+invariants are frozen by
+[`contracts/state-namespace-isolation-v1.fixture.json`](contracts/state-namespace-isolation-v1.fixture.json)
+and its deny-unknown
+[`schema`](contracts/state-namespace-isolation-v1.schema.json).
+
+Every new HIL pending and Ledger row has one immutable cleanup owner:
+`operator` or `demo`. The typed shared representation rejects any other value.
+Proxy selects `demo` only from its already-validated demo-session prefix; input
+payloads, agent names, tenant names, and arbitrary headers cannot select it.
+Absent ownership on a legacy Ledger write remains operator-retained, while HIL
+requires new callers to state ownership explicitly.
+
+Ledger chain v6 appends `state_namespace` after the complete frozen v5 field
+order. Cleanup sets a separate non-hash demo tombstone so live product views
+hide selected demo rows without deleting, renumbering, or rewriting chain
+evidence. Verification, content-addressed sidecars, regulatory exports, and
+external anchors retain the immutable rows. HIL deletes only pending rows
+whose explicit owner is `demo`; its immutable forensic outbox, identities, and
+credentials remain.
+
+Cleanup uses exact Console-only workload-mTLS capabilities on Ledger and HIL.
+It is idempotent, reports selected/retained counts, never stops a service,
+never resets an allocator, and never deletes or recreates a volume. The public
+collision vector requires the same tenant and agent label in both namespaces
+to receive distinct globally allocated identifiers and independently owned
+state.
 
 ---
 

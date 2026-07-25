@@ -2786,6 +2786,26 @@ round trips must preserve the exact conformance vector.
 
 **Verify.** Run each package's owner test suite, then compare the fixture across all five repositories byte-for-byte. The conformance tests assert one decision request, zero decision-side effects, one executor invocation after authorization, intent-before-effect ordering, actual provider result return, and fail-closed behavior for missing durability, identity/payload substitution, and persistence errors.
 
+### 6.13 State namespace isolation
+
+**Concept.** Disposable demo state must never be identified by a name pattern
+or cleared by replacing shared storage. Every new state row instead declares
+an immutable `operator` or `demo` owner, and cleanup selects only the latter.
+
+**Implementation.** The Proxy derives demo ownership only from a validated
+demo-session prefix and projects it to HIL and Ledger. Ledger chain v6 commits
+the owner and uses a separate live-view tombstone; HIL requires explicit
+ownership and deletes only demo pending rows while retaining forensic
+evidence. Exact Console workload-mTLS capabilities authorize both bounded
+cleanup endpoints. The contract and collision vector live in
+[`contracts/state-namespace-isolation-v1.fixture.json`](contracts/state-namespace-isolation-v1.fixture.json).
+
+**Verify.** Interleave same-tenant, same-agent operator and demo writes; prove
+distinct IDs and hash-bound ownership; run cleanup twice; verify operator and
+legacy retention, zero second selection, unchanged Ledger head/length,
+retained HIL forensic envelopes, uninterrupted services, and byte-identical
+volume identities.
+
 ---
 
 ## Verification — end to end
