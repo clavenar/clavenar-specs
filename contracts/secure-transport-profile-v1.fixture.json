@@ -17,6 +17,6 @@
     "mode": "direct"
   },
   "rotation": {
-    "mode": "reload-before-request"
+    "mode": "explicit-reload"
   }
 }
