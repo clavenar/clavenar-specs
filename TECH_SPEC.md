@@ -91,7 +91,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9t | [Production federated identity](#production-federated-identity) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9u | [CLI device authorization](#cli-device-authorization) | shipped | v1.214.0 | `clavenar-specs`, `clavenar-ctl`, `clavenar-e2e`, `clavenar-charts` |
 | 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | shipped | v1.217.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
-| 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | contract and implementation acceptance in progress | — | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | shipped | v1.219.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -4350,7 +4350,7 @@ per-tenant destination routing remains a separate work package.
 
 ## Active-agent subscription meter
 
-**Module status:** contract defined; release acceptance in progress.
+**Module status:** **shipped in release `1.219.0`.**
 
 The commercial subscription unit is one canonical tenant-qualified agent with
 at least one qualifying event in the half-open 30-day rolling window
