@@ -46,6 +46,8 @@ The host-cargo runner (`run.sh`) builds in **debug profile on purpose** — Appl
 17. [Durable tenant lifecycle](#17-durable-tenant-lifecycle)
 18. [HIL legal hold and erasure](#18-hil-legal-hold-and-erasure)
 19. [HIL backup and restore erasure](#19-hil-backup-and-restore-erasure)
+20. [Production federated identity](#20-production-federated-identity)
+21. [Optional Exec containment](#21-optional-exec-containment)
 
 ---
 
@@ -3057,6 +3059,31 @@ The acceptance matrix drives a pinned real IdP through OIDC and signed SAML,
 then rejects missing/unmapped tenants, ambiguous groups, absent MFA, wrong
 issuer/audience/key, stale rotation after one refresh, unsigned or replayed
 SAML, and IdP outage.
+
+---
+
+## 21. Optional Exec containment
+
+**Concept.** The execution gateway remains outside official production until
+the complete WP-13 package closes. Its evaluation path must not turn a
+Proxy-injected identity header into an unauthenticated workspace selector.
+
+**Implementation.** Default and production Helm values omit Exec, and the
+production profile rejects opt-in. Evaluation requires workload TLS and
+NetworkPolicy. Proxy selects a dedicated outbound mutual-TLS transport and
+injects verified agent identity only on that hop. Exec requires the exact
+Proxy SPIFFE identity, rejects missing or malformed agent identity, and serves
+plain liveness/readiness on a separate unpublished listener with no MCP
+fallback. The strict boundary is
+[`contracts/exec-surface-containment-v1.fixture.json`](contracts/exec-surface-containment-v1.fixture.json).
+
+**Verify.**
+
+```bash
+python3 -m pytest tests/test_exec_surface_containment_contract.py
+python3 repos/clavenar-e2e/scripts/check_exec_surface_containment.py
+python3 -m pytest repos/clavenar-charts/tests/test_exec_surface_containment.py
+```
 
 ## Verification — end to end
 
