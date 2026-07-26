@@ -3085,6 +3085,35 @@ python3 repos/clavenar-e2e/scripts/check_exec_surface_containment.py
 python3 -m pytest repos/clavenar-charts/tests/test_exec_surface_containment.py
 ```
 
+### 21.2 Structured allowlisted execution
+
+**Concept.** Evaluation access to an execution pod is not permission to submit
+a shell program. The process boundary accepts a command identifier and typed
+argument slots from one immutable allowlist; it never interprets a command
+line, searches `PATH`, or inherits ambient process environment.
+
+**Implementation.** The exact
+[`clavenar.structured-execution/v1`](contracts/structured-execution-v1.fixture.json)
+contract replaces `bash` and its `cmd` string with `execute_command`. Calls
+provide the policy command identifier, exactly ordered named arguments, and an
+exact environment object. The initial `render_text` command directly invokes
+`/usr/bin/printf`; a fixed literal format precedes one bounded text argument,
+fixed locale is injected after environment clearing, and only `TERM=dumb` may
+be requested. The chart requires a digest-pinned Exec image, mounts the
+immutable policy read-only, and binds non-root UID/GID 65532, read-only root,
+64 MiB memory scratch, RuntimeDefault seccomp, dropped capabilities, no
+privilege escalation, and default-deny egress with only cluster DNS and the
+in-cluster fallback peer admitted. Production remains resource-absent and
+rejects opt-in.
+
+**Verify.**
+
+```bash
+python3 -m pytest tests/test_structured_execution_contract.py
+python3 repos/clavenar-e2e/scripts/check_structured_execution.py
+python3 -m pytest repos/clavenar-charts/tests/test_structured_execution.py
+```
+
 ## Verification — end to end
 
 The single command that exercises ~80% of the features above:
