@@ -3148,3 +3148,18 @@ The single command that exercises ~80% of the features above:
 ```
 
 Boots all six services, drives the happy path through every layer, runs the chaos-monkey catalog, asserts the chain verifies, exits 0 on success. Read the runner's stdout — every assertion that passes corresponds to a feature in this document.
+### Rooted paths and normalized outbound targets
+
+[`clavenar.rooted-path-target-validation/v1`](contracts/rooted-path-target-validation-v1.fixture.json)
+requires file tools to operate beneath an already-opened per-agent directory
+without following intermediate, final, or magic symlinks. Fetch and callback
+allowlists compare parsed and normalized HTTP(S) scheme, IDNA host, effective
+port, and a path-segment boundary. Credentials, fragments, ambiguous sibling
+domains, local-use names, and non-public IP literals fail closed. Redirects
+remain disabled until WP-13.5 adds per-hop DNS validation and address pinning.
+
+```bash
+python3 -m pytest tests/test_rooted_path_target_validation_contract.py
+python3 repos/clavenar-e2e/scripts/check_rooted_path_target_validation.py
+python3 -m pytest repos/clavenar-charts/tests/test_rooted_path_target_validation.py
+```

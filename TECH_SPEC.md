@@ -7808,3 +7808,14 @@ On-call runbooks — proxy / NATS / ledger / HIL / identity failure
 modes, issuer-key compromise, and routine issuer-key rotation — are
 operational procedures maintained privately in
 `clavenar-internal-specs/RUNBOOKS.md`, not in this public spec.
+### Rooted file and outbound target boundary
+
+The exact
+[`clavenar.rooted-path-target-validation/v1`](contracts/rooted-path-target-validation-v1.schema.json)
+[fixture](contracts/rooted-path-target-validation-v1.fixture.json) makes the
+per-agent directory file descriptor, rather than a canonicalized pathname,
+the authority for every Exec file operation. It also defines normalized
+origin and segment-boundary matching for Exec fetch and Lite callback targets.
+The v1 boundary rejects credentials, fragments, local-use names, and non-public
+IP literals and follows no redirects. WP-13.5 retains every-hop DNS/redirect
+validation and validated-address pinning.
