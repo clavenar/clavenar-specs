@@ -31,6 +31,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [HIL legal hold and erasure](#hil-legal-hold-and-erasure) — deadline purge, tenant erasure, legal holds, and minimized deletion evidence
 - [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) — complete trigger/update/resolve fan-out, readiness, and durable operator routing
 - [Active-agent subscription meter](#active-agent-subscription-meter) — tenant-safe rolling qualification, late-event finalization, immutable adjustments, and invoice reconstruction
+- [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) — immutable feature-enabled image, verified TLS, exact route scope, and explicit non-HA boundary
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -65,7 +66,7 @@ authoritative wire-contract detail still lives in those sections.
 | 4 | [Console config page](#console-config-page) | shipped | — | `clavenar-console`, `clavenar-sdk` (+3 public getters) |
 | 5 | [Operator authentication](#operator-authentication) | shipped | — | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
 | 6 | [Regulatory export](#regulatory-export) | shipped (manifest v8; tenant-bound export in v1.216.0) | v1.216.0 | `clavenar-ledger` (chain v4 evidence rows; backend-agnostic core), `clavenar-identity` (`POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl`, `clavenar-console` |
-| 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, runs on Postgres when required bundle signing is disabled), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
+| 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, backend-agnostic with required signing when Identity is configured), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -92,6 +93,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9u | [CLI device authorization](#cli-device-authorization) | shipped | v1.214.0 | `clavenar-specs`, `clavenar-ctl`, `clavenar-e2e`, `clavenar-charts` |
 | 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | shipped | v1.217.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | shipped | v1.219.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9x | [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) | staged image and chart boundary shipped; PostgreSQL not promoted | v1.220.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -2301,8 +2303,9 @@ The approved procedure is export-before-erasure and is fail closed:
 
 This is the reviewed public operating boundary. The supported production store
 is SQLite singleton. The Postgres regulatory core applies the same tenant
-predicate and manifest contract, but Postgres image/sidecar promotion and any
-HA claim remain excluded until their separate release gate passes.
+predicate, manifest contract, and required Identity signing. Its image and
+single-replica chart boundary are staged, but production promotion and any HA
+claim remain excluded until their separate release gates pass.
 
 ---
 
@@ -4442,6 +4445,61 @@ Ledger stages must reconcile to the same tenant, unit total, commitments, and
 invoice checksum. Production acceptance requires two same-name agents in
 different tenants, a duplicate, a late strict completion, a credit, and a
 correction to reconcile without any cross-tenant row.
+
+---
+
+## Staged PostgreSQL Ledger topology
+
+**Module status:** **staged image and chart boundary shipped in release
+`1.220.0`; PostgreSQL is not the production default and HA is not promoted.**
+
+The deny-unknown
+[`contracts/postgres-ledger-topology-v1.schema.json`](contracts/postgres-ledger-topology-v1.schema.json)
+and companion
+[`fixture`](contracts/postgres-ledger-topology-v1.fixture.json) define
+`clavenar.postgres-ledger-topology/v1`. A conforming receipt binds one
+immutable Ledger image built with the `postgres` feature, the chart source,
+one external PostgreSQL topology, exact supported and unavailable route
+sets, and the terminal acceptance result.
+
+The chart keeps SQLite plus its PVC as the production default. PostgreSQL is
+an explicit structured opt-in that requires:
+
+- exactly one Ledger replica;
+- Ledger persistence disabled;
+- a DSN sourced from a named Secret key;
+- a private CA sourced from a separate named Secret;
+- TLS with certificate verification against the DSN host; and
+- no chart-renderable plaintext or insecure verification escape.
+
+The Ledger image forces TLS on the normal PostgreSQL path even if the DSN
+requests a weaker mode. A deliberately named insecure escape exists only for
+owner-controlled local tests and is absent from the chart. Changing the DSN,
+CA Secret, or explicit rotation identifier changes the pod template so
+credential rotation replaces the pod.
+
+The supported path set is exact. It contains append, full verification,
+tenant-scoped audit reads, strict forensic deduplication, streaming,
+tenant tombstone and demo cleanup, active-agent metering and adjustments,
+regulatory export, and compliance evidence. The exact 21-path unavailable
+set contains SQLite-direct analytics, replay, silence allowlist, cases,
+cold-tier export inventory, and related administrative lifecycle surfaces.
+Every unavailable route returns stable `503 Service Unavailable` text and
+never falls back to a local SQLite database.
+
+Image-level acceptance boots the built Ledger image against a TLS-only
+PostgreSQL server and JetStream, rejects a certificate for the wrong DSN
+host, proves a complete chain walk after persistence round-trip, collapses a
+duplicate strict forensic event, exercises tenant reads, active-agent
+adjustments, regulatory and compliance output, confirms PostgreSQL reports
+TLS for the Ledger connection, and probes representative unavailable paths
+twice for stable results.
+
+This topology is deliberately **not** a whole-stack HA claim. It permits one
+Ledger process and one external database endpoint, does not assert database
+failover, multi-writer correctness, rollout overlap, or failback, and does not
+change the production SQLite deployment. Those claims require a separate
+failure-model acceptance.
 
 ---
 

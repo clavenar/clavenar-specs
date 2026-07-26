@@ -267,21 +267,43 @@ curl http://localhost:8083/agents | jq .agents
 
 ### 1.11 Pluggable storage backend (SQLite + Postgres)
 
-**Concept.** Until v0.5.0 the ledger was SQLite-only, which capped deployment to a single replica — concurrent writers on a shared PVC corrupt SQLite even with WAL, and SQLite's locking doesn't reach across hosts. The pluggable backend lifts that pin: Postgres mode lets N ledger replicas share one managed Postgres instance, with the `entries.seq UNIQUE` constraint serializing the chain append across pods. SQLite stays the default for single-node deployments and dev. **The chain hash is backend-agnostic** — byte-identical `entry_hash` values across SQLite and Postgres for the same `AppendRequest` sequence, enforced by a cross-backend equivalence test. A chain produced under one backend verifies under the other.
+**Concept.** Until v0.5.0 the ledger was SQLite-only. The storage trait makes
+the chain backend-independent, but the supported PostgreSQL deployment is
+deliberately staged at one Ledger replica. SQLite remains the production
+default. PostgreSQL is available for controlled evaluation without implying
+database failover, multi-writer rollout safety, or whole-stack HA. **The chain
+hash is backend-agnostic** — equivalent persisted timestamps and rows produce
+byte-identical `entry_hash` values across SQLite and PostgreSQL, enforced by
+cross-backend tests and an image-level full verification walk.
 
-**Implementation.** `LedgerStore` trait in `clavenar-ledger/src/storage.rs` covers every chain primitive — `append`, `latest_seed`, `read_for_agent` / `_paged` / `count`, `read_for_correlation`, `read_all`, `read_after_seq`, `read_in_time_window`, `list_audit_agent_ids`, `read_lifecycle_for_agent`, `read_payload`, `ping`. Two impls: `SqliteLedgerStore` (default, file-backed) and `PostgresLedgerStore` behind the `postgres` cargo feature (`tokio-postgres` + `deadpool-postgres`). `AppState.store: Arc<dyn LedgerStore>` is always set; `AppState.conn: Option<Arc<Mutex<Connection>>>` is populated only in SQLite mode so the SQLite-only sidecars (cold-tier Parquet export, Iceberg metadata, anchor proofs, vacuum cursor, egress sweeper) keep their direct connection. The regulatory export + compliance-evidence **core** runs through the trait (windowed `read_in_time_window` + `verify_chain_via_store`), so those endpoints work on Postgres. Verify also flows through the trait — `verify_chain_via_store` mirrors per-row version dispatch + JWKS signature check + v3/v4 payload integrity. Equivalence test at `tests/storage_equivalence.rs` feeds 16 deterministic fixtures (v1/v2/v3/v4) through both backends and asserts byte-identical hashes.
+**Implementation.** `LedgerStore` in `clavenar-ledger/src/storage.rs` covers
+the chain primitives, with `SqliteLedgerStore` as default and
+`PostgresLedgerStore` behind the `postgres` cargo feature. The production
+Dockerfile builds the feature-enabled binary. PostgreSQL timestamps are
+normalized to the database's microsecond precision before hashing, so rows
+remain verifiable after persistence. The normal PostgreSQL connection path
+requires a private CA file, forces TLS, and verifies the certificate against
+the single TCP host in the DSN. The chart exposes a structured
+`services.ledger.postgres` object with governed DSN and CA Secret names plus an
+optional rotation identifier; it rejects persistence, more than one replica,
+missing Secret names, and env-based shadow configuration.
 
-Backend select at boot:
+The exact supported/unavailable route inventory is governed by
+`clavenar.postgres-ledger-topology/v1` in
+`contracts/postgres-ledger-topology-v1.{schema,fixture}.json`. Sixteen
+backend-agnostic paths are supported, including append, verify, audit reads,
+strict deduplication, active-agent metering, regulatory export, and compliance
+evidence. Twenty-one SQLite-direct analytics, case, replay, allowlist, and
+cold-tier routes return stable `503` responses with no SQLite fallback.
+
+Backend selection:
 
 ```
 CLAVENAR_LEDGER_BACKEND={sqlite|postgres}   # default: sqlite
-CLAVENAR_LEDGER_PG_URL=postgres://...       # required when backend=postgres
-CLAVENAR_LEDGER_DB=/var/lib/clavenar/...      # sqlite-mode only
+CLAVENAR_LEDGER_PG_URL=postgres://...       # Secret-backed in the chart
+CLAVENAR_LEDGER_PG_TLS_CA_FILE=/path/ca.crt # required verified-TLS trust root
+CLAVENAR_LEDGER_DB=/var/lib/clavenar/...    # sqlite-mode only
 ```
-
-Postgres mode disables the remaining SQLite-only routes (`POST /export`, `GET /exports`, the egress sweeper) — they return `503 Service Unavailable` with a diagnostic. `POST /export/regulatory` and `POST /compliance/evidence` now run on Postgres (their core — windowed read + trait verify + compliance register — is backend-agnostic; the bundle just omits the SQLite-only blocks). SIEM ingest in Postgres mode wires directly against the chain table; cold-tier Parquet export is the main feature that still requires SQLite.
-
-Helm wiring lives in `clavenar-e2e/charts/clavenar/values.yaml` — SQLite mode pinned to `replicas: 1`, Postgres mode lifts the pin. The "Postgres ledger mode" section of `clavenar-e2e/HA_RUNBOOK.md` documents the multi-replica deploy + the disabled-feature list.
 
 **Verify.**
 
@@ -289,16 +311,11 @@ Helm wiring lives in `clavenar-e2e/charts/clavenar/values.yaml` — SQLite mode 
 # SQLite (default)
 cargo run --bin clavenar-ledger
 
-# Postgres
-docker run -d --rm --name pg -p 5432:5432 -e POSTGRES_PASSWORD=test postgres:16-alpine
-CLAVENAR_LEDGER_BACKEND=postgres \
-  CLAVENAR_LEDGER_PG_URL="postgres://postgres:test@127.0.0.1:5432/postgres" \
-  cargo run --features postgres --bin clavenar-ledger
-
-# Cross-backend equivalence
-CLAVENAR_TEST_POSTGRES_URL="postgres://postgres:test@127.0.0.1:5432/postgres" \
-  cargo test --features postgres --test storage_equivalence
-# test sqlite_and_postgres_produce_identical_chain ... ok
+# Contract, chart source, and image-level live acceptance
+python3 clavenar-e2e/scripts/check_postgres_ledger_topology.py --require-source
+sudo -n clavenar-e2e/scripts/check-postgres-ledger-image-live.sh \
+  --image-ref ghcr.io/clavenar/clavenar-ledger@sha256:<digest> \
+  --receipt /tmp/postgres-ledger-receipt.json
 ```
 
 ### 1.12 Observe-only mode (`CLAVENAR_MODE=observe`)
@@ -1421,7 +1438,7 @@ cat README.txt
 
 **Concept.** The Article 11/12 bundle covers documentation + logging. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), plus the operational-monitoring controls auditors ask about under SOC 2 / ISO 27001, are *auto-derived from the chain* — no operator prose required. A live JSON register the operator renders at `/compliance` and downloads as a signed pack. It is evidence projection, not a legal conformity assessment, and says so on the wire.
 
-**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of five seed controls (`EU-AI-Act-Article-14`, `-15`, `ISO-27001-8.13`, `SOC2-CC7.2`, `SOC2-CC7.3`), each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v2: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, representative `sample_seqs`, and a narrative). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (current manifest **v7**, block introduced in v4, committed by sha256, `article_scope` widened to 14 + 15) — both go through one derivation function so the live view and the bundled artifact agree. The derivation is backend-agnostic (it runs through the `LedgerStore` trait), so `/compliance/evidence` and optional-signing regulatory exports work on Postgres too; official required-signing profiles use SQLite. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) **and their channel provenance** — Satisfied demands every human decision rode an attested channel (`webauthn` / `oidc` / `saml`, stamped server-side by HIL from the verified principal); demo sessions, plain bearer stamps, and auth-disabled bypasses never count, system/auto decisions are excluded from the human count entirely, and the `provenance_summary` metric tags every decision channel so an auditor sees exactly what decided. Article 15 derives from deny-signal distribution + `verify_chain` pass + signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
+**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of five seed controls (`EU-AI-Act-Article-14`, `-15`, `ISO-27001-8.13`, `SOC2-CC7.2`, `SOC2-CC7.3`), each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v2: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, representative `sample_seqs`, and a narrative). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (current manifest **v7**, block introduced in v4, committed by sha256, `article_scope` widened to 14 + 15) — both go through one derivation function so the live view and the bundled artifact agree. The derivation and required Identity signing are backend-agnostic, so `/compliance/evidence` and signed regulatory exports work on the staged PostgreSQL path too. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) **and their channel provenance** — Satisfied demands every human decision rode an attested channel (`webauthn` / `oidc` / `saml`, stamped server-side by HIL from the verified principal); demo sessions, plain bearer stamps, and auth-disabled bypasses never count, system/auto decisions are excluded from the human count entirely, and the `provenance_summary` metric tags every decision channel so an auditor sees exactly what decided. Article 15 derives from deny-signal distribution + `verify_chain` pass + signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
 
 **Verify.**
 
