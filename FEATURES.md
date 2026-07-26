@@ -2926,6 +2926,38 @@ older point. The offboarded unheld row must be absent before workload
 startup, the other tenant must be unchanged, an active-held row must remain
 protected, and no disallowed raw fixture may remain recoverable.
 
+---
+
+## 20. Production federated identity
+
+**Concept.** OIDC and SAML are alternate transports for one operator identity,
+not separate authorization models. Neither may create an unscoped or
+password-only production session.
+
+**Implementation.** One strict projection requires one-to-one external tenant
+aliases, exact canonical tenant labels, disjoint configured role groups, and
+accepted MFA evidence. It emits a protocol/issuer/tenant/subject-bound
+commitment rather than persisting a raw subject. OIDC uses code flow, S256
+PKCE, nonce, bounded reactive JWKS refresh, and provider logout. The production
+Console artifact includes SAML and accepts only signed, request- and
+audience-bound assertions from pinned metadata before applying the same
+projection. The frozen behavior is
+[`contracts/production-federated-identity-v1.fixture.json`](contracts/production-federated-identity-v1.fixture.json).
+
+**Verify.**
+
+```bash
+cargo test --all-targets --features saml \
+  --manifest-path repos/clavenar-console/Cargo.toml
+python3 repos/clavenar-e2e/scripts/check_production_federated_identity.py \
+  --source-root repos --require-source
+```
+
+The acceptance matrix drives a pinned real IdP through OIDC and signed SAML,
+then rejects missing/unmapped tenants, ambiguous groups, absent MFA, wrong
+issuer/audience/key, stale rotation after one refresh, unsigned or replayed
+SAML, and IdP outage.
+
 ## Verification — end to end
 
 The single command that exercises ~80% of the features above:

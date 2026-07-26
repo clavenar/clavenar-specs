@@ -11,6 +11,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Tenancy scope](#tenancy-scope) — demo + operator tenant isolation: what's live, what's capability-only, what's still deployment-wide
 - [Console config page](#console-config-page) — `/config` diagnostic surface
 - [Operator authentication](#operator-authentication) — console + HIL human auth, RBAC, cross-channel identity
+- [Production federated identity](#production-federated-identity) — strict OIDC and signed SAML tenant, role, MFA, rotation, and logout rules
 - [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
 - [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
 - [Demo experience](#demo-experience) — public-facing demo design
@@ -84,6 +85,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9r | [HIL legal hold and erasure](#hil-legal-hold-and-erasure) | shipped | v1.209.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9s | [HIL backup and restore erasure](#hil-backup-and-restore-erasure) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9t | [Production federated identity](#production-federated-identity) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -7297,6 +7299,45 @@ post-sanitization-invalid state fails before a restored workload starts.
 
 The frozen contract is
 [`contracts/hil-backup-erasure-v1.fixture.json`](contracts/hil-backup-erasure-v1.fixture.json).
+
+## Production federated identity
+
+**Module status:** contract defined; implementation acceptance in progress.
+
+The exact `clavenar.production-federated-identity/v1` boundary applies before
+either OIDC or SAML may create an operator session. Both protocols use one
+configuration-validated projection: each external tenant value maps one-to-one
+to one exact canonical `TenantId`; role groups are explicitly configured and
+disjoint; and at least one configured MFA evidence value must be present.
+Missing, padded, malformed, ambiguous, duplicated, or unmapped tenant, role, or
+MFA input denies authentication. There is no claimless System fallback and no
+case-folding or other lossy tenant normalization.
+
+The durable human principal contains the protocol, canonical tenant, a
+64-bit issuer commitment, and a 128-bit subject commitment. SHA-256 inputs are
+length-prefixed and bind protocol, issuer, tenant, and subject so equal raw
+subjects cannot collide across tenants, issuers, or OIDC/SAML. Raw subjects,
+tokens, assertions, credentials, and client secrets are prohibited from the
+authentication audit.
+
+OIDC requires authorization code, S256 PKCE, nonce, exact issuer and audience,
+provider signature verification, and a bounded single JWKS rediscovery after a
+verification failure. A second failure denies the login. Discovery must expose
+an RP-initiated logout endpoint; console logout destroys local state before
+redirecting there. Provider and return endpoints use HTTPS, except loopback HTTP
+in tests.
+
+SAML is built into the supported production Console artifact. It accepts only
+SP-initiated, request-bound, audience-bound signed responses or assertions
+verified against the signing certificate in pinned IdP metadata. The tenant,
+group, and MFA assertion attributes then pass through the same projection as
+OIDC. Unknown requests, replay, unsigned assertions, wrong keys, duplicate
+tenant values, and IdP outage fail closed.
+
+The frozen vector and deny-unknown schema are
+[`contracts/production-federated-identity-v1.fixture.json`](contracts/production-federated-identity-v1.fixture.json)
+and
+[`contracts/production-federated-identity-v1.schema.json`](contracts/production-federated-identity-v1.schema.json).
 
 ## Runbooks
 
