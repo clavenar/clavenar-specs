@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.clavenar.com/contracts/device-authorization-v1.schema.json",
+  "title": "Clavenar RFC 8628 device authorization v1 conformance vector",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contract",
+    "feature",
+    "client",
+    "transport",
+    "polling",
+    "tokenBindings",
+    "authority",
+    "credentialStorage",
+    "terminalErrors",
+    "sourceEvidence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "contract": {
+      "const": "clavenar.device-authorization/v1"
+    },
+    "feature": {
+      "const": "WP-12.2"
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "publicClient",
+        "grantType",
+        "requiredScopes",
+        "forbiddenScopes"
+      ],
+      "properties": {
+        "clientId": {
+          "const": "clavenar-operator-cli"
+        },
+        "publicClient": {
+          "const": true
+        },
+        "grantType": {
+          "const": "urn:ietf:params:oauth:grant-type:device_code"
+        },
+        "requiredScopes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "openid"
+            },
+            {
+              "const": "clavenar.operator"
+            }
+          ],
+          "items": false
+        },
+        "forbiddenScopes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "clavenar.agent"
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "httpsRequired",
+        "loopbackHttpOnlyForTests",
+        "exactDiscoveryIssuer",
+        "sameOriginEndpoints",
+        "followRedirects",
+        "connectTimeoutSeconds",
+        "requestTimeoutSeconds",
+        "maximumDiscoveryBytes",
+        "maximumResponseBytes"
+      ],
+      "properties": {
+        "httpsRequired": {
+          "const": true
+        },
+        "loopbackHttpOnlyForTests": {
+          "const": true
+        },
+        "exactDiscoveryIssuer": {
+          "const": true
+        },
+        "sameOriginEndpoints": {
+          "const": true
+        },
+        "followRedirects": {
+          "const": false
+        },
+        "connectTimeoutSeconds": {
+          "const": 5
+        },
+        "requestTimeoutSeconds": {
+          "const": 10
+        },
+        "maximumDiscoveryBytes": {
+          "const": 65536
+        },
+        "maximumResponseBytes": {
+          "const": 32768
+        }
+      }
+    },
+    "polling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximumLifetimeSeconds",
+        "minimumIntervalSeconds",
+        "maximumIntervalSeconds",
+        "maximumPolls",
+        "slowDownIncrementSeconds"
+      ],
+      "properties": {
+        "maximumLifetimeSeconds": {
+          "const": 900
+        },
+        "minimumIntervalSeconds": {
+          "const": 1
+        },
+        "maximumIntervalSeconds": {
+          "const": 15
+        },
+        "maximumPolls": {
+          "const": 180
+        },
+        "slowDownIncrementSeconds": {
+          "const": 5
+        }
+      }
+    },
+    "tokenBindings": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "exact-issuer"
+        },
+        {
+          "const": "canonical-tenant"
+        },
+        {
+          "const": "nonempty-subject"
+        },
+        {
+          "const": "future-expiry"
+        },
+        {
+          "const": "operator-scope"
+        },
+        {
+          "const": "no-agent-scope"
+        }
+      ],
+      "items": false
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator",
+        "agent",
+        "credentialCombinationUpgradesAuthority"
+      ],
+      "properties": {
+        "operator": {
+          "$ref": "#/$defs/authority"
+        },
+        "agent": {
+          "$ref": "#/$defs/authority"
+        },
+        "credentialCombinationUpgradesAuthority": {
+          "const": false
+        }
+      }
+    },
+    "credentialStorage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerOnly",
+        "idToken",
+        "optionalRefreshToken",
+        "deviceCode",
+        "userCode"
+      ],
+      "properties": {
+        "ownerOnly": {
+          "const": true
+        },
+        "idToken": {
+          "const": true
+        },
+        "optionalRefreshToken": {
+          "const": true
+        },
+        "deviceCode": {
+          "const": false
+        },
+        "userCode": {
+          "const": false
+        }
+      }
+    },
+    "terminalErrors": {
+      "type": "array",
+      "minItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "access_denied",
+          "expired_token",
+          "tenant_mismatch",
+          "issuer_mismatch",
+          "scope_mismatch",
+          "malformed_response",
+          "oversized_response",
+          "poll_limit",
+          "unknown_oauth_error"
+        ]
+      }
+    },
+    "sourceEvidence": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "contains"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contains": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authentication",
+        "principal",
+        "callerId",
+        "mayNotSatisfy"
+      ],
+      "properties": {
+        "authentication": {
+          "type": "string",
+          "minLength": 1
+        },
+        "principal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "callerId": {
+          "enum": [
+            "operator",
+            "agent-workload"
+          ]
+        },
+        "mayNotSatisfy": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

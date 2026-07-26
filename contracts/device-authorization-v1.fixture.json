@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "contract": "clavenar.device-authorization/v1",
+  "feature": "WP-12.2",
+  "client": {
+    "clientId": "clavenar-operator-cli",
+    "publicClient": true,
+    "grantType": "urn:ietf:params:oauth:grant-type:device_code",
+    "requiredScopes": [
+      "openid",
+      "clavenar.operator"
+    ],
+    "forbiddenScopes": [
+      "clavenar.agent"
+    ]
+  },
+  "transport": {
+    "httpsRequired": true,
+    "loopbackHttpOnlyForTests": true,
+    "exactDiscoveryIssuer": true,
+    "sameOriginEndpoints": true,
+    "followRedirects": false,
+    "connectTimeoutSeconds": 5,
+    "requestTimeoutSeconds": 10,
+    "maximumDiscoveryBytes": 65536,
+    "maximumResponseBytes": 32768
+  },
+  "polling": {
+    "maximumLifetimeSeconds": 900,
+    "minimumIntervalSeconds": 1,
+    "maximumIntervalSeconds": 15,
+    "maximumPolls": 180,
+    "slowDownIncrementSeconds": 5
+  },
+  "tokenBindings": [
+    "exact-issuer",
+    "canonical-tenant",
+    "nonempty-subject",
+    "future-expiry",
+    "operator-scope",
+    "no-agent-scope"
+  ],
+  "authority": {
+    "operator": {
+      "authentication": "device-id-token",
+      "principal": "tenant-bound-human",
+      "callerId": "operator",
+      "mayNotSatisfy": [
+        "agent-workload",
+        "workload-svid",
+        "workload-attestation",
+        "proxy-execution"
+      ]
+    },
+    "agent": {
+      "authentication": "tenant-qualified-workload-svid",
+      "principal": "agent-workload",
+      "callerId": "agent-workload",
+      "mayNotSatisfy": [
+        "operator-device",
+        "operator-session",
+        "agent-lifecycle-administration",
+        "policy-administration"
+      ]
+    },
+    "credentialCombinationUpgradesAuthority": false
+  },
+  "credentialStorage": {
+    "ownerOnly": true,
+    "idToken": true,
+    "optionalRefreshToken": true,
+    "deviceCode": false,
+    "userCode": false
+  },
+  "terminalErrors": [
+    "access_denied",
+    "expired_token",
+    "tenant_mismatch",
+    "issuer_mismatch",
+    "scope_mismatch",
+    "malformed_response",
+    "oversized_response",
+    "poll_limit",
+    "unknown_oauth_error"
+  ],
+  "sourceEvidence": [
+    {
+      "path": "clavenar-ctl/src/device_authorization.rs",
+      "contains": [
+        "urn:ietf:params:oauth:grant-type:device_code",
+        "clavenar-operator-cli",
+        "openid clavenar.operator"
+      ]
+    },
+    {
+      "path": "clavenar-ctl/tests/keycloak_device_authorization.rs",
+      "contains": [
+        "pinned_keycloak_completes_bounded_operator_device_flow",
+        "cross-tenant token must not be persisted"
+      ]
+    },
+    {
+      "path": "clavenar-e2e/ENDPOINT_CAPABILITY_MATRIX.json",
+      "contains": [
+        "\"id\": \"operator\"",
+        "\"id\": \"agent-workload\""
+      ]
+    }
+  ]
+}

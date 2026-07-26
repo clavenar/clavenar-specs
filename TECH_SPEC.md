@@ -12,6 +12,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Console config page](#console-config-page) — `/config` diagnostic surface
 - [Operator authentication](#operator-authentication) — console + HIL human auth, RBAC, cross-channel identity
 - [Production federated identity](#production-federated-identity) — strict OIDC and signed SAML tenant, role, MFA, rotation, and logout rules
+- [CLI device authorization](#cli-device-authorization) — bounded RFC 8628 operator login and disjoint operator/agent authority
 - [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
 - [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
 - [Demo experience](#demo-experience) — public-facing demo design
@@ -86,6 +87,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9r | [HIL legal hold and erasure](#hil-legal-hold-and-erasure) | shipped | v1.209.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9s | [HIL backup and restore erasure](#hil-backup-and-restore-erasure) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9t | [Production federated identity](#production-federated-identity) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9u | [CLI device authorization](#cli-device-authorization) | shipped | v1.214.0 | `clavenar-specs`, `clavenar-ctl`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -228,7 +230,7 @@ tenant or fall back to the certificate common name.
 
 ## Tenant lifecycle sagas
 
-**Module status:** contract defined; implementation acceptance in progress.
+**Module status:** **shipped in v1.213.0.**
 The exact plan, state, retry, and evidence invariants are frozen by
 [`contracts/tenant-lifecycle-saga-v1.fixture.json`](contracts/tenant-lifecycle-saga-v1.fixture.json)
 and its deny-unknown
@@ -7338,6 +7340,46 @@ The frozen vector and deny-unknown schema are
 [`contracts/production-federated-identity-v1.fixture.json`](contracts/production-federated-identity-v1.fixture.json)
 and
 [`contracts/production-federated-identity-v1.schema.json`](contracts/production-federated-identity-v1.schema.json).
+
+## CLI device authorization
+
+**Module status:** **shipped in v1.214.0.**
+
+The production CLI authenticates a human operator with RFC 8628 using the
+fixed public client `clavenar-operator-cli` and exact required scopes
+`openid clavenar.operator`. It accepts an explicit issuer per login, discovers
+the device and token endpoints, and requires both endpoints to share that
+issuer's exact origin. Issuers and verification pages use HTTPS; loopback HTTP
+is permitted only for tests. Redirects are not followed.
+
+Discovery is limited to 65,536 bytes; device and token responses to 32,768
+bytes. Connect and request deadlines are 5 and 10 seconds. A device ceremony
+lives at most 900 seconds, polls at intervals from 1 through 15 seconds, and
+performs no more than 180 polls. `authorization_pending` preserves the
+interval; `slow_down` adds five seconds without exceeding the ceiling.
+Denial, expiry, malformed or oversized responses, an unknown OAuth error, and
+ambiguous transport failure produce no credential.
+
+Before storage, the returned ID token must expose the exact discovered issuer,
+requested canonical `clavenar_tenant`, a non-empty subject, and a future
+expiry. The returned scope contains `openid` and `clavenar.operator` and must
+not contain `clavenar.agent`. Device codes and user codes exist only for the
+active ceremony and are never persisted or logged. Successful ID and optional
+refresh tokens use the existing owner-only credential store.
+
+Operator and agent authority are disjoint. A device-authenticated operator is
+a human principal with tenant-bound operator scope; it is not an agent
+workload and cannot satisfy workload SPIFFE, attestation, SVID issuance, or
+proxy execution authority. An agent uses its tenant-qualified workload SVID
+and the generated `agent-workload` capabilities; it cannot satisfy operator
+device, Console session, lifecycle-administration, or policy-administration
+authority. Combining a token and an unrelated certificate never upgrades
+either principal.
+
+The frozen vector and deny-unknown schema are
+[`contracts/device-authorization-v1.fixture.json`](contracts/device-authorization-v1.fixture.json)
+and
+[`contracts/device-authorization-v1.schema.json`](contracts/device-authorization-v1.schema.json).
 
 ## Runbooks
 
