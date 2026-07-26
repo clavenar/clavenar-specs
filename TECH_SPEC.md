@@ -29,6 +29,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Tenant route authorization](#tenant-route-authorization) — tenant-bearing production identity and object/collection route confinement
 - [Tenant lifecycle sagas](#tenant-lifecycle-sagas) — durable idempotent provisioning and authority-first offboarding
 - [HIL legal hold and erasure](#hil-legal-hold-and-erasure) — deadline purge, tenant erasure, legal holds, and minimized deletion evidence
+- [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) — complete trigger/update/resolve fan-out, readiness, and durable operator routing
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -88,6 +89,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9s | [HIL backup and restore erasure](#hil-backup-and-restore-erasure) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9t | [Production federated identity](#production-federated-identity) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9u | [CLI device authorization](#cli-device-authorization) | shipped | v1.214.0 | `clavenar-specs`, `clavenar-ctl`, `clavenar-e2e`, `clavenar-charts` |
+| 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | shipped | v1.217.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -2065,7 +2067,7 @@ The `/hil` queue is an operator workbench, not just a list. Shipped additive on 
 - **Approval tiers (whether a human must block)** — quorum decides *how many* approvers; tiers decide *whether one is needed at all*. The Rego authorization decision carries an `approval_tier` (`data.clavenar.authz.approval_tier`, a `default`-total rule → `auto` / `standard` / `strict`), additive nullable through `PolicyDecision` → the proxy → the HIL pending (`approval_tier` column, hashable inside `policy_decision`). It is consumed only on the review path — inert on allow/deny, where no pending is created. **`standard`** is the historical single-human block. **`auto`** records the pending and *immediately* approves it through the unchanged `apply_decision` path with typed principal `{subject: system:policy-tier, method: system, credential: policy-tier:auto}` and matching provenance `system` (so the Article 14 deriver never counts it as human oversight) — visibility without blocking; the create response comes back already `Approved`, so the proxy's poll loop forwards without waiting. Auto rows are forced single-approver and surface in the console's read-only **retroactive-review queue** (`GET /hil/retroactive-review`, the auto-approved rows filtered by `decided_by = system:policy-tier`) — auto-approved is not unaudited. **`strict`** raises the quorum floor (`CLAVENAR_HIL_QUORUM_STRICT`, ≥2) so the request routes to the four-eyes gate above. Per-tier default TTLs replace the single 600 s default (`auto` 120 s, `strict` 1800 s) when the caller doesn't pin one. All additive — **no new `Status`, no `/decide` wire change, no chain-version bump**. The simulator's `dev-bot` persona fires `test_replay` (tiered `auto`) and `prod_release` (tiered `strict`) so the two read side by side on a live demo.
 - **Advisory hand-off** — `POST /pending/{id}/assign {assigned_to, escalation_pool?}` records a backup approver (or pool) on a still-`Pending` row (`assigned_to` column). It is *routing metadata only*: it does not change `status`, the quorum count, or *who* may decide — anyone authorized still approves. 404 if unknown, 409 if already decided.
 - **Backup escalation pool** — a row may carry an `escalation_pool` (snapshotted at create from the caller or `CLAVENAR_HIL_DEFAULT_ESCALATION_POOL`). When the SLA sweep escalates the row, `notify_escalation` *also* pages that pool's distinct on-call targets (a separate Slack channel / PagerDuty key / SMTP list) on top of the primary channels — defined in the `CLAVENAR_HIL_ESCALATION_POOLS` JSON map. An unmatched pool name is warned, not silently dropped.
-- **Notifier channels** — `Slack`, `Microsoft Teams`, `PagerDuty` (Events v2), a generic HTTP webhook, and **SMTP email** (`lettre`, rustls). Each is env-enabled independently (missing config → channel disabled). `GET /notifications/config` reports which channels are live as booleans + pool names (no secrets); `POST /notifications/test` fires a synthetic notification to every configured channel. The console exposes both at `/hil/settings`.
+- **Notifier channels and lifecycle** — `Slack`, `Microsoft Teams`, `PagerDuty` (Events v2), an authenticated generic HTTP webhook, and **SMTP email** (`lettre`, rustls) receive a complete `trigger` (created), `update` (partial quorum or escalation), and `resolve` (approved/denied/expired) lifecycle. PagerDuty uses exact Events API `trigger`/`resolve` names under the pending UUID dedup key; bounded HTTP retries reuse an event-stable `Idempotency-Key`. The strict generic event shape is [`clavenar.hil-notification-lifecycle/v1`](contracts/hil-notification-lifecycle-v1.schema.json). `CLAVENAR_HIL_NOTIFICATION_MODE=enforce` fails readiness without at least one complete channel; production routes an external-bearer-authenticated webhook into the durable operator inbox and alerts on sustained delivery failure. `GET /notifications/config` reports mode, viability, channel booleans, and pool names without secrets; `POST /notifications/test` fires a synthetic trigger. The console exposes both at `/hil/settings`.
 - **Signed decision links (approve from anywhere)** — a decision link is a *pointer plus an authorization claim, never a bearer credential*. HIL mints a per-pending HMAC token `{pending_id}.{action}.{exp}.{sig}` where `sig = HMAC-SHA256(link_key, "{pending_id}.{action}.{exp}")` and `link_key` is **derived** from the session-cookie key via a domain-separated HMAC (no new secret; rotating the master key invalidates outstanding links). `GET /pending/{id}/decision-link?action=approve|deny&ttl_secs=…` mints one (approver-gated, `409` on an already-decided row, default TTL 1 h, clamped ≤ 24 h); `POST /decision-link/verify` validates a token (constant-time, signature checked *before* any field is trusted) and returns its claim plus the target pending's summary (ungated like the other `/pending` reads — the response is a strict subset of `GET /pending/{id}`, no new oracle). The console redemption page `GET/POST /decide/redeem?token=` **still requires a normal authenticated approver session** before it decides: GET shows the confirm form, POST re-verifies the token server-side (the action + pending id come from the *signature*, never the form) and decides through the unchanged `/decide` path with the session credential. So a leaked link alone decides nothing — it only spares the approver from hunting the pending down. The action is bound into the signature, so an `approve` link can never be replayed as a `deny`; expiry is enforced; and the pending state machine bounds replay (a second decide on a settled row is the usual `409`). **No `/decide` wire-contract change and no new `Status`.**
   - **Channel-carried links** — when `CLAVENAR_CONSOLE_URL` is set, every pending and escalation notification carries the two redemption URLs (`{console}/decide/redeem?token=…` for approve and deny, default TTL 1 h) so an approver acts straight from the channel. Slack and Teams cards gain action-bound "Approve in console" / "Deny in console" buttons (Slack URL buttons supersede the generic "Open in console" deep-link; Teams adds `Action.OpenUrl` actions alongside the `Action.Http` ones); PagerDuty `custom_details`, the generic webhook body, and the SMTP email each carry `approve_url` / `deny_url`. The URLs are minted from the same derived `link_key`, so each still redeems only through an authenticated console session — a leaked card decides nothing, and the Slack URL buttons carry a non-`approve:`/`deny:` `action_id` so an inbound click is never parsed as a real decision.
   - **Terminal inspection** — `clavenarctl pending decide <token>` `POST`s the token to `/decision-link/verify` and prints the target pending, but carries no decision authority. HIL no longer accepts a caller-supplied terminal identity; applying the action requires the normal authenticated Console redemption flow. The retained hidden CLI `--yes` compatibility flag fails without sending `/decide`. A token whose pending already settled returns the usual `not_pending`.
@@ -4283,6 +4285,64 @@ The deployment receipt alone does not assert delivered operational alerts or
 schema-safe stateful upgrades. Alert delivery is proven separately by the
 production alert delivery lifecycle below; upgrade safety remains a separate
 acceptance boundary.
+
+---
+
+## HIL notification delivery lifecycle
+
+**Module status:** **shipped in release `1.217.0`.**
+
+HIL emits one channel-neutral lifecycle for every approval request:
+
+- `trigger` after the pending row commits;
+- `update` after each distinct partial-quorum approval and after the one-time
+  SLA escalation;
+- `resolve` after approve, deny, or TTL expiry.
+
+Slack, Microsoft Teams, PagerDuty Events API v2, an authenticated generic HTTP
+webhook, and SMTP all receive every applicable phase. PagerDuty maps `trigger`
+and `update` to the exact Events API `trigger` action under the pending UUID
+`dedup_key`, and maps `resolve` to the exact `resolve` action. The invalid
+`triggered` verb is prohibited. Slack and Teams use their pending,
+escalation/update, and terminal cards; SMTP uses the same phase-specific
+headline.
+
+The generic webhook envelope is the deny-unknown
+[`contracts/hil-notification-lifecycle-v1.schema.json`](contracts/hil-notification-lifecycle-v1.schema.json)
+with a byte-mirrored
+[`fixture`](contracts/hil-notification-lifecycle-v1.fixture.json). It binds
+phase, status, pending and correlation UUIDs, tenant and state namespace,
+agent/method, timestamps, a stable pending-wide dedup key, and a stable
+per-lifecycle-event notification ID. A bounded HTTP retry sends identical JSON
+and the same `Idempotency-Key`; distinct quorum advances and escalation use
+distinct update IDs. The externally mounted webhook bearer credential never
+enters configuration responses, receipts, or logs.
+
+`CLAVENAR_HIL_NOTIFICATION_MODE` is `disabled`, `warn`, or `enforce`.
+`enforce` makes the `notifications` readiness check fail when no complete
+channel exists. A generic webhook is complete only when its URL and validated
+external bearer-token file are both present. The Helm chart exposes the same
+mode, bounded HTTP timeout, webhook URL, and operator-owned Secret projection;
+its provider-neutral default is `warn`.
+
+The production Compose profile selects `enforce` and sends the generic route
+to the authenticated durable operator inbox. HIL and the receiver alone
+receive a distinct `hil-notification-delivery-token`; Alertmanager and operator
+clients do not. The receiver validates stable identity, commits sanitized
+phase metadata and a payload digest to SQLite under `BEGIN IMMEDIATE`, treats
+an exact retry as an idempotent duplicate, and rejects changed bytes under an
+existing ID. Its authenticated receipt API exposes the retained
+trigger/update/resolve history without secret or raw approval payload bytes.
+
+`clavenar_hil_notification_deliveries_total{channel,phase,outcome}` records
+bounded delivery results. `HILNotificationDeliveryFailing` pages after more
+than two failures in ten minutes persist for five minutes. Missing
+enforce-mode configuration is caught by readiness; runtime route, credential,
+or receiver failure is caught by the delivery metric and alert.
+
+This lifecycle does not choose a destination per tenant. Tenant and
+`state_namespace` are scoped inputs to the event and durable receipt, but
+per-tenant destination routing remains a separate work package.
 
 ---
 

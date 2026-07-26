@@ -1067,6 +1067,25 @@ python3 clavenar-e2e/scripts/check-hil-tenant-scope.py --require-source
 # cross-tenant rejection, cursor binding, and zero SSE cross-emission live.
 ```
 
+### 5.9a HIL notification lifecycle
+
+**Concept.** An approval notification must not remain open after its HIL row
+resolves, and a configured production HIL must not report ready when no
+operator route exists.
+
+**Implementation.** Slack, Teams, PagerDuty, authenticated webhook, and SMTP
+share trigger/update/resolve semantics with stable event identity. Partial
+quorum and SLA escalation emit updates; approve, deny, and TTL expiry resolve
+every configured channel. Production uses enforce-mode readiness and a
+distinct external bearer token to a durable operator inbox. Delivery results
+are bounded-label Prometheus counters with a sustained-failure alert.
+
+**Verify.** Protocol mocks exercise all five transports through the real
+notifier calls, the exact webhook fixture validates against
+[`hil-notification-lifecycle-v1.schema.json`](contracts/hil-notification-lifecycle-v1.schema.json),
+and the canonical production smoke retains a sanitized authenticated receipt
+containing both trigger and resolve for one live pending UUID.
+
 ### 5.10 Sessions, CSRF, JWKS cache
 
 **Concept.** Mechanical defaults that don't warrant their own sections.

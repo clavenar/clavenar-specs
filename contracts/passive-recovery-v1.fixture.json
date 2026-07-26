@@ -16,8 +16,8 @@
   },
   "recovery": {
     "inventorySha256": "0188d2400ca88efa6651ddf4f30c3d7aa3a6f17b7301f264ca96aa5ce8df554d",
-    "backupPlanSha256": "5542f4bc8a0baff54489c84ad526e135da54f12ac2ba20f55489f7bcd8cfec3f",
-    "passivePlanSha256": "babb7f8bf6bd0e72715bd02976942aaf994c76352390f61d4c0d1ffe7261855d",
+    "backupPlanSha256": "a05e4fce6f30778c0eb076e77e5b5c3f62f24c07430b30be1945b35aa6c17867",
+    "passivePlanSha256": "5a4fe2365712108d70fe8d14ad1a6cd66d6881b4395aeb8bdbe8680299ca04d6",
     "stateCount": 20,
     "forwardPointId": "passive-backup-20260724T115500Z-aaaaaaaaaaaa",
     "reversePointId": "passive-backup-20260724T121500Z-bbbbbbbbbbbb",
