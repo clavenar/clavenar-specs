@@ -95,7 +95,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | shipped | v1.217.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | shipped | v1.219.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9x | [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) | staged image and chart boundary shipped; PostgreSQL not promoted | v1.220.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
-| 9y | [Supported failure model](#supported-failure-model) | recovery boundary defined; release acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
+| 9y | [Supported failure model](#supported-failure-model) | shipped; weekly cadence explicitly does not meet the critical-state RPO | v1.221.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -4507,8 +4507,8 @@ failure-model acceptance.
 
 ## Supported failure model
 
-**Module status:** **recovery boundary defined; release acceptance in
-progress.**
+**Module status:** **shipped in v1.221.0; the current weekly recovery-point
+cadence explicitly does not meet the critical-state RPO.**
 
 The deny-unknown
 [`contracts/supported-failure-model-v1.schema.json`](contracts/supported-failure-model-v1.schema.json)
