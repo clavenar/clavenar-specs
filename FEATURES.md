@@ -1188,14 +1188,20 @@ clavenarctl agents migrate --identity-db ... --default-envelope '*'
 
 ### 6.4 `regulatory export`
 
-**Concept.** Auditor-facing bundle export from the operator's own machine. Distinct from `agents` CRUD because it talks directly to the ledger (no identity gate today). Returns a `.tar.gz` per the format in §7.
+**Concept.** Auditor-facing bundle export for exactly the tenant authorized by
+the operator credential. Returns a signed `.tar.gz` per the format in §7.
 
-**Implementation.** `clavenarctl regulatory export --from <RFC3339> --to <RFC3339> [--readme PATH] [--include-exports] [--ledger-url URL] --output bundle.tar.gz`. Thin pass-through to `clavenar-sdk::LedgerClient::regulatory_export(window, RegulatoryExportOptions { readme, include_exports })`.
+**Implementation.** `clavenarctl regulatory export --tenant <TENANT> --from
+<RFC3339> --to <RFC3339> [--readme PATH] [--include-exports] [--ledger-url
+URL] --output bundle.tar.gz`. Tenant uses the standard configuration
+precedence. SDK and Ledger refuse missing tenant scope; manifest v8 signs it.
+The Console `/exports` download derives tenant from the authenticated session.
 
 **Verify.**
 
 ```bash
 clavenarctl regulatory export \
+  --tenant acme \
   --from <FROM_RFC3339> --to <TO_RFC3339> \
   --readme ./tech-docs.md \
   --include-exports \
@@ -1263,7 +1269,7 @@ tar -xzf bundle.tar.gz && cat README.txt    # 7-step recipe
 
 ```jsonc
 {
-  "schema_version": "7",
+  "schema_version": "8",
   "generated_at": "...",
   "window": { "from": "...", "to": "..." },
   "row_count": 1234,
@@ -1380,7 +1386,7 @@ cat README.txt
 clavenarctl regulatory export --from <RFC3339> --to <RFC3339> \
   --include-compliance --output pack.tar.gz
 tar -xzf pack.tar.gz && cat clavenar-regulatory-bundle-*/compliance_register.json
-# manifest.json: schema_version "7", article_scope includes 14 + 15
+# manifest.json: schema_version "8", article_scope includes 14 + 15
 ```
 
 ---

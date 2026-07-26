@@ -62,8 +62,8 @@ authoritative wire-contract detail still lives in those sections.
 | 3 | [Tenancy scope](#tenancy-scope) | described | — | (semantics, no new service) |
 | 4 | [Console config page](#console-config-page) | shipped | — | `clavenar-console`, `clavenar-sdk` (+3 public getters) |
 | 5 | [Operator authentication](#operator-authentication) | shipped | — | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
-| 6 | [Regulatory export](#regulatory-export) | shipped (manifest v7; required signing + independent verification in v1.180.0) | — | `clavenar-ledger` (chain v4 evidence rows; backend-agnostic core), `clavenar-identity` (`POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl` |
-| 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v7, runs on Postgres when required bundle signing is disabled), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
+| 6 | [Regulatory export](#regulatory-export) | shipped (manifest v8; tenant-bound export in v1.216.0) | v1.216.0 | `clavenar-ledger` (chain v4 evidence rows; backend-agnostic core), `clavenar-identity` (`POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl`, `clavenar-console` |
+| 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, runs on Postgres when required bundle signing is disabled), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -2087,7 +2087,7 @@ Read-only console surfaces; **no new ledger endpoint and no wire-contract change
 
 EU AI Act Article 11 / 12 audit-bundle export from the existing hash chain. Operator-fetched, operator-stored, signed, time-window scoped. Companion to the cold-tier `/export` (Iceberg + Parquet analytics snapshots) but with a different audience: external regulators, not internal analysts.
 
-**Module status:** **shipped (manifest v7; required signing + independent verification in v1.180.0).** Lives in `clavenar-ledger` + `clavenar-identity` (`POST /sign/blob`) + `clavenar-sdk` + `clavenarctl`. No chain-version change.
+**Module status:** **shipped (manifest v8; tenant-bound export in v1.216.0).** Lives in `clavenar-ledger` + `clavenar-identity` (`POST /sign/blob`) + `clavenar-sdk` + `clavenarctl` + `clavenar-console`. No chain-version change.
 
 ### 1. What this closes
 
@@ -2131,7 +2131,8 @@ NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more 
 
 ```jsonc
 {
-  "schema_version": "7",
+  "schema_version": "8",
+  "tenant": "acme",
   "generated_at": "<RFC 3339 UTC>",
   "window": { "from": "...", "to": "..." },
   "row_count": 1234,
@@ -2210,7 +2211,7 @@ NDJSON over Parquet because the audience reaches for Python / Excel / `jq` more 
 }
 ```
 
-The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so `verified_chain`, `technical_documentation`, `parquet_pointers`, `compliance_register`, `anchors`, `annex_iv`, and `post_market_monitoring_plan` are signed transitively — tampering with any of them breaks both signature verification and a cheap recompute. v1 was the unsigned shape (slice 1); v2 added the `signature` envelope (slice 2); v3 added the optional `technical_documentation` and `parquet_pointers` blocks (slice 3); **v4** added the optional `compliance_register` block; **v5** added the optional `anchors` block; **v6** added the optional `annex_iv` and `post_market_monitoring_plan` blocks; **v7** adds the required `verified_chain` binding governed by `contracts/regulatory-bundle-signing-v1.schema.json`.
+The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so `tenant`, `verified_chain`, `technical_documentation`, `parquet_pointers`, `compliance_register`, `anchors`, `annex_iv`, and `post_market_monitoring_plan` are signed transitively — tampering with any of them breaks both signature verification and a cheap recompute. v1 was the unsigned shape (slice 1); v2 added the `signature` envelope (slice 2); v3 added the optional `technical_documentation` and `parquet_pointers` blocks (slice 3); **v4** added the optional `compliance_register` block; **v5** added the optional `anchors` block; **v6** added the optional `annex_iv` and `post_market_monitoring_plan` blocks; **v7** adds the required `verified_chain` binding governed by `contracts/regulatory-bundle-signing-v1.schema.json`; **v8** requires and signs the authenticated tenant partition.
 
 Official deployments set `CLAVENAR_LEDGER_REGULATORY_SIGNING_REQUIRED=true`. Startup then requires the exact Ledger workload identity, HTTPS Identity endpoint, private workload CA, and bounded-fresh historical-key verifier. Each export performs a fresh complete hash/signature/TSA walk, binds its exact chain head, length, tail version, historical-key lineage, signature counts, and TSA trust result into `verified_chain`, requests the detached signature, and independently verifies that response against the historical key set. Missing identity, workload key, CA, verifier, signing key, signing service, wrong key, invalid signature, lineage race, or incomplete chain verification fails closed; no bundle bytes are emitted.
 
@@ -2243,13 +2244,21 @@ Steps 1-3 are the window-integrity check; steps 5-6 bind it to a freshly verifie
 
 ```
 clavenarctl regulatory export \
+  --tenant <TENANT> \
   --from <RFC3339> --to <RFC3339> \
   [--readme <PATH>] [--include-exports] \
   [--ledger-url <URL>] \
   --output bundle.tar.gz
 ```
 
-Lives under a new top-level `regulatory` verb (own surface — distinct from `agents`; no identity gate today since the ledger doesn't gate `/export/regulatory`). The CLI is a thin pass-through to `LedgerClient::regulatory_export(window, RegulatoryExportOptions { readme, include_exports })` on `clavenar-sdk`.
+Lives under the top-level `regulatory` verb. `--tenant` resolves through the
+normal flag → `CLAVENAR_TENANT` → `default_tenant` chain, and the secure
+transport profile attaches the tenant-bound operator credential. The SDK
+refuses a regulatory request without an explicit tenant; Ledger requires the
+predicate, reads only matching rows, rejects any out-of-partition row before
+signing, and commits the tenant in manifest v8. Console offers the same
+download from `/exports`, deriving the tenant from the verified operator
+session rather than browser input and emitting a no-store audited response.
 
 ### 10. Failure & fallback semantics
 
@@ -2266,6 +2275,30 @@ The ledger never deletes chain rows by default — cold-tier export *copies* row
 - **Production retention floor:** for non-demo deployments the vacuum window must be **≥ 183 days** (EU AI Act Art 19(1) / 26(6) "at least six months"). A shorter value refuses to boot. Disposable demo deployments opt out explicitly with `CLAVENAR_LEDGER_DEMO_MODE=true`; that flag also arms the demo-reset tooling — reset scripts refuse to wipe a ledger whose rendered compose config doesn't carry it.
 - **Legal hold:** `CLAVENAR_LEDGER_LEGAL_HOLD=true` suspends the vacuum entirely while set — exports keep running (copies are fine), deletions stop, and every export pass logs the standing hold. Releasing the hold is a restart with the variable unset.
 - The vacuum-cursor chain semantics (cursor row, `verify_chain` seeding) are unchanged; the floor and hold only gate *whether* the vacuum runs.
+
+### 12. Tenant retention and erasure procedure
+
+The approved procedure is export-before-erasure and is fail closed:
+
+1. Authenticate an Admin for exactly one tenant and create the durable
+   offboarding operation before owner effects.
+2. Fence authority, credentials, caches, Policy, and HIL in the declared saga
+   order.
+3. Produce and retain one signed manifest-v8 final export whose `tenant`
+   matches the operation. Export failure leaves the saga retryable and blocks
+   tombstoning.
+4. Tombstone live tenant reads without rewriting immutable chain bytes. Record
+   minimized deletion receipts; do not claim physical chain erasure.
+5. Advance the HMAC-authenticated retained-backup erasure disposition. Every
+   restore applies that disposition before readiness, while an active legal
+   hold defers destructive deletion and remains auditable.
+6. Verify same-name cross-tenant reads, exports, and restored state remain
+   unaffected.
+
+This is the reviewed public operating boundary. The supported production store
+is SQLite singleton. The Postgres regulatory core applies the same tenant
+predicate and manifest contract, but Postgres image/sidecar promotion and any
+HA claim remain excluded until their separate release gate passes.
 
 ---
 
@@ -2302,7 +2335,7 @@ The catalog is the static source of truth in `clavenar-ledger/src/compliance.rs`
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | POST | `/compliance/evidence?from=…&to=…` (clavenar-ledger, **internal mTLS only**) | — | `application/json` (`ComplianceRegister`) |
-| POST | `/export/regulatory?…&include_compliance=true[&annex_iv=true][&include_post_market_plan=true]` (clavenar-ledger) | optional `text/markdown` | `.tar.gz` with embedded `compliance_register.json` (+ optional `annex_iv_documentation.json` / `post_market_monitoring_plan.json`), manifest v7 |
+| POST | `/export/regulatory?tenant=…&…&include_compliance=true[&annex_iv=true][&include_post_market_plan=true]` (clavenar-ledger) | optional `text/markdown` | `.tar.gz` with embedded `compliance_register.json` (+ optional `annex_iv_documentation.json` / `post_market_monitoring_plan.json`), manifest v8 |
 
 `/compliance/evidence` is the cheap live read the console `/compliance` page renders and re-polls. The `?include_compliance=true` flag on the existing bundle embeds the same register as a signed artifact (one signing path, one tamper-evident container) and widens `article_scope` to include Articles 14 + 15. Both go through one derivation function so the live view and the bundled artifact agree byte-for-byte for the same window. `/compliance/evidence` sits on the ledger's internal mTLS listener only (stripped from the plain `:8083` port exactly like `/export*`). Half-open window `[from, to)`; empty window → `200` with every control `no_data`; inverted/malformed window → `400`.
 
