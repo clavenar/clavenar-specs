@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/secure-transport-profile-v1.schema.json",
+  "title": "Clavenar secure transport profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "tls", "tokenSource", "timeouts", "proxy", "rotation"],
+  "properties": {
+    "contract": {
+      "const": "clavenar.secure-transport-profile/v1"
+    },
+    "tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caBundlePath", "clientCertificatePath", "privateKeyPath"],
+      "properties": {
+        "caBundlePath": {"type": "string", "minLength": 1},
+        "clientCertificatePath": {"type": "string", "minLength": 1},
+        "privateKeyPath": {"type": "string", "minLength": 1}
+      }
+    },
+    "tokenSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "none"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "reference"],
+          "properties": {
+            "kind": {"enum": ["file", "callback"]},
+            "reference": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectMillis", "requestMillis"],
+      "properties": {
+        "connectMillis": {"type": "integer", "minimum": 1, "maximum": 60000},
+        "requestMillis": {"type": "integer", "minimum": 1, "maximum": 600000}
+      }
+    },
+    "proxy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {"mode": {"enum": ["direct", "environment"]}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "url"],
+          "properties": {
+            "mode": {"const": "explicit"},
+            "url": {"type": "string", "format": "uri", "pattern": "^https?://"}
+          }
+        }
+      ]
+    },
+    "rotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {"enum": ["reload-before-request", "explicit-reload"]}
+      }
+    }
+  }
+}

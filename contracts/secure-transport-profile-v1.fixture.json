@@ -1,0 +1,22 @@
+{
+  "contract": "clavenar.secure-transport-profile/v1",
+  "tls": {
+    "caBundlePath": "/run/clavenar/tls/ca.crt",
+    "clientCertificatePath": "/run/clavenar/tls/client.crt",
+    "privateKeyPath": "/run/clavenar/tls/client.key"
+  },
+  "tokenSource": {
+    "kind": "file",
+    "reference": "/run/clavenar/token"
+  },
+  "timeouts": {
+    "connectMillis": 5000,
+    "requestMillis": 10000
+  },
+  "proxy": {
+    "mode": "direct"
+  },
+  "rotation": {
+    "mode": "reload-before-request"
+  }
+}

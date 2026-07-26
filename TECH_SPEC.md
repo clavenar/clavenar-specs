@@ -7381,6 +7381,40 @@ The frozen vector and deny-unknown schema are
 and
 [`contracts/device-authorization-v1.schema.json`](contracts/device-authorization-v1.schema.json).
 
+## Secure client transport profile
+
+**Module status:** **shipped in v1.215.0.**
+
+Every supported CLI network command and SDK uses the same
+`clavenar.secure-transport-profile/v1` boundary for full-stack traffic. The
+profile names one CA bundle, one client certificate, and its separate private
+key; a token source; positive bounded connect and whole-request deadlines; an
+explicit proxy policy; and a rotation mode. Secret bytes never appear in the
+serialized profile, errors, logs, or debug output.
+
+TLS authentication and bearer authorization remain independent and
+least-privilege. The client validates the server chain and hostname against
+only the selected trust bundle and presents only the selected client identity.
+It obtains the current token from the selected source for each request (or
+after an explicit reload in clients whose connection provider is snapshot
+based). Supplying an unrelated token and certificate cannot combine their
+authorities. Missing, empty, unreadable, malformed, expired, wrong-tenant, or
+wrong-purpose credentials fail before application traffic is accepted.
+
+Connect and whole-request deadlines are separate. Proxy policy is exactly one
+of `direct`, `environment`, or an explicit HTTP(S) proxy URL; clients do not
+silently consult ambient proxy variables in `direct` mode. Rotation is either
+`reload-before-request` or `explicit-reload`. A reload constructs and
+validates a complete replacement snapshot before publication, so in-flight
+requests retain the prior immutable snapshot and later requests use the new
+certificate, key, trust bundle, and token together. Partial reloads fail
+without replacing the last valid snapshot.
+
+The frozen vector and deny-unknown schema are
+[`contracts/secure-transport-profile-v1.fixture.json`](contracts/secure-transport-profile-v1.fixture.json)
+and
+[`contracts/secure-transport-profile-v1.schema.json`](contracts/secure-transport-profile-v1.schema.json).
+
 ## Runbooks
 
 On-call runbooks — proxy / NATS / ledger / HIL / identity failure
