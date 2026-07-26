@@ -3114,6 +3114,31 @@ python3 repos/clavenar-e2e/scripts/check_structured_execution.py
 python3 -m pytest repos/clavenar-charts/tests/test_structured_execution.py
 ```
 
+### 21.3 Hard execution ceilings
+
+**Concept.** Evaluation isolation must stay bounded when a command hangs,
+forks descendants, exhausts output, or encounters unexpectedly large file or
+HTTP bodies. Limit selection is a server responsibility, never a caller
+option.
+
+**Implementation.** The exact
+[`clavenar.execution-ceilings/v1`](contracts/execution-ceilings-v1.fixture.json)
+contract fixes the JSON-RPC, wall-clock, CPU, address-space, process,
+file-size, open-file, stdout/stderr, file-tool, directory, search, and fetch
+body limits. Commands start in a new process group. A timeout kills the group
+and reaps the direct child. Pipe readers continue draining after their retain
+limit and append a deterministic truncation marker without retaining discarded
+bytes. The former timeout environment override is rejected. Evaluation-only
+isolation and production exclusion remain unchanged.
+
+**Verify.**
+
+```bash
+python3 -m pytest tests/test_execution_ceilings_contract.py
+python3 repos/clavenar-e2e/scripts/check_execution_ceilings.py
+python3 -m pytest repos/clavenar-charts/tests/test_execution_ceilings.py
+```
+
 ## Verification — end to end
 
 The single command that exercises ~80% of the features above:
