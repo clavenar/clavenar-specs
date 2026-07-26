@@ -639,6 +639,11 @@ extends into the three operational pillars of the agentic enterprise: **cost**,
   so an operator sees which agents drive spend and which burn tokens on loops.
   *(Department / project cost tagging is out of scope — all figures are
   PriceTable estimates, never billed cost.)*
+- **Reproducible subscriptions.** Commercial active-agent units are a separate
+  verified-chain meter: one typed tenant-qualified agent with an authorized
+  tool execution in a rolling 30-day window, with replay collapse, 72-hour
+  late-event finalization, immutable adjustments, and commitment-bearing
+  tenant export. Provider `cost_micros` never feeds this invoice.
 - **Recursive-loop detection.** Identify semantic stuttering and kill the process.
 
 ### 11.2 Dynamic model routing — the broker

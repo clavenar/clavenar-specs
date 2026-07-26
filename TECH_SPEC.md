@@ -30,6 +30,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Tenant lifecycle sagas](#tenant-lifecycle-sagas) — durable idempotent provisioning and authority-first offboarding
 - [HIL legal hold and erasure](#hil-legal-hold-and-erasure) — deadline purge, tenant erasure, legal holds, and minimized deletion evidence
 - [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) — complete trigger/update/resolve fan-out, readiness, and durable operator routing
+- [Active-agent subscription meter](#active-agent-subscription-meter) — tenant-safe rolling qualification, late-event finalization, immutable adjustments, and invoice reconstruction
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -90,6 +91,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9t | [Production federated identity](#production-federated-identity) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9u | [CLI device authorization](#cli-device-authorization) | shipped | v1.214.0 | `clavenar-specs`, `clavenar-ctl`, `clavenar-e2e`, `clavenar-charts` |
 | 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | shipped | v1.217.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
+| 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | contract and implementation acceptance in progress | — | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -4343,6 +4345,99 @@ or receiver failure is caught by the delivery metric and alert.
 This lifecycle does not choose a destination per tenant. Tenant and
 `state_namespace` are scoped inputs to the event and durable receipt, but
 per-tenant destination routing remains a separate work package.
+
+---
+
+## Active-agent subscription meter
+
+**Module status:** contract defined; release acceptance in progress.
+
+The commercial subscription unit is one canonical tenant-qualified agent with
+at least one qualifying event in the half-open 30-day rolling window
+`[as_of - 30 days, as_of)`. It is distinct from provider inspection cost:
+`cost_micros` and `GET /finops/spend` remain estimate-grade operational FinOps
+signals and never determine the subscription invoice.
+
+The deny-unknown
+[`contracts/active-agent-meter-v1.schema.json`](contracts/active-agent-meter-v1.schema.json)
+and byte-mirrored
+[`fixture`](contracts/active-agent-meter-v1.fixture.json) define
+`clavenar.active-agent-meter/v1`, meter version `1.0.0`. An invoice binds the
+tenant, rolling-window bounds, observation boundary, finalization state,
+ordered agent rows, immutable adjustments, net units, verified chain head and
+length, source commitments, and one checksum over the invoice with that
+checksum field omitted.
+
+### Qualification and identity
+
+Only an authorized `call_tool` or `tools/call` execution in the operator state
+namespace qualifies. The row must carry the exact requested tenant and a valid
+agent SVID whose typed `AgentKey` contains the same tenant. The meter projects
+the SVID to `<tenant>/<agent>`; instance rotation therefore does not create a
+new unit, while identical agent names in different tenants can never merge.
+System, demo, denied, unqualified, missing-SVID, cross-tenant, and non-tool rows
+do not qualify.
+
+Legacy synchronous execution rows use the committed Ledger timestamp and the
+stable correlation-plus-method stage identity. Strict
+`execution.completed` forensic rows use the committed producer event ID and
+stage for replay collapse, and the signed envelope's canonical `occurred_at`
+for window membership. The Ledger arrival timestamp remains committed
+separately.
+
+Duplicates collapse by `tenant + AgentKey + stable stage identity`. Ordering is
+byte-stable by agent key, event time, stage identity, and Ledger entry UUID.
+Each agent row commits its contributing stages, and the invoice commits the
+complete ordered qualified-event projection. A replay can therefore increase
+neither event count nor billable units.
+
+### Late events and finalization
+
+An invoice may be observed from `as_of` through exactly
+`as_of + 72 hours`. Events arriving during that grace interval count only when
+their committed occurrence time belongs to the rolling window. Before the
+boundary the invoice is `preliminary`; at the exact boundary it is `final`.
+Requests before `as_of`, after the finalization boundary, with a future
+`as_of`, or with noncanonical timestamps fail closed. Recomputing the same
+final invoice over the same verified chain is byte-deterministic.
+
+### Credits and corrections
+
+Credits and corrections are ordinary immutable current-version Ledger rows
+whose policy payload is `clavenar.active-agent-adjustment/v1`. Each binds the
+tenant, target `as_of`, meter version, UUID idempotency key, kind, non-zero
+unit delta, optional same-tenant `AgentKey`, and bounded reason. Credits must
+be negative. An exact retry returns the retained original receipt; reuse of an
+idempotency key for different bytes returns conflict. Adjustments are ordered
+by UUID, committed separately from qualified events, and cannot reduce net
+units below zero.
+
+### API, export, and authority
+
+The Ledger internal mTLS listener exposes:
+
+| Method and path | Contract |
+|---|---|
+| `GET /finops/active-agents?tenant=&as_of=&observed_through=` | Verified-chain JSON invoice |
+| `GET /finops/active-agents/export?tenant=&as_of=&observed_through=` | Attachment containing the identical JSON invoice bytes |
+| `POST /finops/active-agents/adjustments` | Immutable idempotent credit/correction receipt |
+
+Generated route authority permits only the exact Console workload. Reads use
+`ledger.active-agent.read`; adjustments use the distinct
+`ledger.active-agent.adjust` administrative capability. The browser cannot
+supply tenant authority: `/billing/export` derives the tenant from the
+authenticated operator session, rejects demo and deployment-wide sessions,
+and produces one 16-column CSV whose agent, adjustment, and total rows carry
+the same commitments and invoice checksum. The SDK exposes typed invoice and
+adjustment APIs.
+
+Every API and export request completes a full Ledger verification walk first.
+An invalid, incomplete, unsupported, or commitment-less chain produces no
+invoice. The API response, attachment, Console CSV, and raw contributing
+Ledger stages must reconcile to the same tenant, unit total, commitments, and
+invoice checksum. Production acceptance requires two same-name agents in
+different tenants, a duplicate, a late strict completion, a credit, and a
+correction to reconcile without any cross-tenant row.
 
 ---
 

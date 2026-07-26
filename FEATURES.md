@@ -1086,6 +1086,29 @@ notifier calls, the exact webhook fixture validates against
 and the canonical production smoke retains a sanitized authenticated receipt
 containing both trigger and resolve for one live pending UUID.
 
+### 5.9b Reproducible active-agent subscription meter
+
+**Concept.** Subscription billing must be reconstructible from the verified
+audit chain without merging same-name agents across tenants or turning
+delivery retries into additional units.
+
+**Implementation.** The Ledger derives one active unit per typed
+`<tenant>/<agent>` with an authorized tool execution in a half-open rolling
+30-day window. Stable stage identity collapses duplicates. Strict forensic
+completion rows use committed event time and receive a 72-hour late-arrival
+grace before the invoice becomes final. Immutable idempotent credit/correction
+rows adjust units without rewriting source events. Console-only generated
+capabilities protect the JSON API, identical JSON attachment, and adjustment
+mutation; the Console derives tenant authority from the authenticated session
+and emits a commitment-bearing 16-column CSV.
+
+**Verify.** The
+[`active-agent-meter-v1` fixture](contracts/active-agent-meter-v1.fixture.json)
+validates against its strict schema. Owner tests reconcile same-name tenants,
+a replay duplicate, a late completion, credit and correction rows, API/export
+parity, and raw chain commitments. The live release receipt repeats that
+two-tenant reconciliation over mTLS and binds the exact release and BOM.
+
 ### 5.10 Sessions, CSRF, JWKS cache
 
 **Concept.** Mechanical defaults that don't warrant their own sections.
