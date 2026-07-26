@@ -32,6 +32,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) — complete trigger/update/resolve fan-out, readiness, and durable operator routing
 - [Active-agent subscription meter](#active-agent-subscription-meter) — tenant-safe rolling qualification, late-event finalization, immutable adjustments, and invoice reconstruction
 - [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) — immutable feature-enabled image, verified TLS, exact route scope, and explicit non-HA boundary
+- [Supported failure model](#supported-failure-model) — tested recovery boundaries, component failure behavior, explicit unmet objectives, and exact HA non-claims
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -94,6 +95,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | shipped | v1.217.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | shipped | v1.219.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9x | [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) | staged image and chart boundary shipped; PostgreSQL not promoted | v1.220.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
+| 9y | [Supported failure model](#supported-failure-model) | recovery boundary defined; release acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -4500,6 +4502,55 @@ Ledger process and one external database endpoint, does not assert database
 failover, multi-writer correctness, rollout overlap, or failback, and does not
 change the production SQLite deployment. Those claims require a separate
 failure-model acceptance.
+
+---
+
+## Supported failure model
+
+**Module status:** **recovery boundary defined; release acceptance in
+progress.**
+
+The deny-unknown
+[`contracts/supported-failure-model-v1.schema.json`](contracts/supported-failure-model-v1.schema.json)
+and companion
+[`fixture`](contracts/supported-failure-model-v1.fixture.json) define
+`clavenar.supported-failure-model/v1`. The contract separates three supported
+boundaries:
+
+| Topology | Support level | Writers | Promotion and recovery |
+|---|---|---:|---|
+| Compose cold active/passive | tested manual cold recovery | 1 | externally fence the former writer, verify an exact-release encrypted point, restore all 20 inventory states, then promote manually |
+| Helm single writer | supported deployment boundary | 1 per stateful authority | operator-managed dependency and state restoration; no built-in automatic failover |
+| staged PostgreSQL Ledger | staged Ledger path only | 1 Ledger process | restore the external PostgreSQL endpoint and restart the sole Ledger; no database or Ledger promotion claim |
+
+Availability statements bind to the accepted 20-state inventory, weekly
+scheduled-backup plan, passive-recovery plan, staged PostgreSQL contract,
+authenticated monotonic writer fence, and the accepted cold-passive drill.
+Primary-host loss retains an outage until the old writer is externally fenced.
+A network partition is not proof of fencing. Stale, wrong-release, partial, or
+substituted recovery points are rejected. Loss of a required Ledger, Identity,
+HIL, Policy, Proxy execution, JetStream, Vault, workload-identity, or
+operator-custody boundary keeps its dependent path unavailable until the
+contracted restore or reissue action passes.
+
+Recovery objectives, configuration, acceptance ceilings, and observations are
+different facts. Critical inventory state has a 300-second RPO objective. The
+current backup cadence is weekly (604,800 seconds), and a point may be accepted
+up to 612,000 seconds old. That configuration therefore does **not** meet the
+critical-state RPO. The five-minute passive synchronization timer re-verifies
+and mirrors the latest accepted backup; it does not capture state or create a
+newer recovery point.
+
+The accepted drill observed 46 seconds of loss and 970 seconds to readiness on
+failover, then 20 seconds of loss and 148 seconds to readiness on failback.
+Those measurements are evidence from one drill, not a guaranteed SLO,
+zero-downtime promise, or automatic-failover claim.
+
+The exact non-claims are: no active/active SQLite, no automatic failover, no
+partitioned promotion without external infrastructure fencing, no
+multi-replica Identity/HIL/Policy/NATS/Vault guarantee, no whole-stack high
+availability, and no PostgreSQL promotion beyond the staged single-replica
+path contract.
 
 ---
 

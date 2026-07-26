@@ -318,6 +318,33 @@ sudo -n clavenar-e2e/scripts/check-postgres-ledger-image-live.sh \
   --receipt /tmp/postgres-ledger-receipt.json
 ```
 
+### 1.11.1 Supported recovery and failure model
+
+**Concept.** A tested restore is not the same claim as high availability.
+Operators need one exact account of what stays unavailable, what fails closed,
+which external action restores service, and whether configured schedules meet
+the inventory objectives.
+
+**Implementation.** The strict
+[`clavenar.supported-failure-model/v1`](contracts/supported-failure-model-v1.fixture.json)
+contract enumerates the Compose cold-active/passive, Helm single-writer, and
+staged PostgreSQL Ledger boundaries. It binds all 17 component and dependency
+failure modes to the accepted state inventory, backup and passive plans,
+PostgreSQL scope, monotonic writer fence, and cold-passive drill evidence.
+Weekly capture (604,800 seconds) is recorded separately from the 300-second
+critical-state RPO and 612,000-second point-age ceiling. The configured cadence
+does not meet that RPO. Five-minute passive re-verification does not create a
+recovery point. Drill measurements remain observations rather than an SLO.
+
+**Verify.**
+
+```bash
+cd ../clavenar-specs
+python3 -m unittest tests.test_supported_failure_model_contract
+cd ../clavenar-e2e
+python3 scripts/check_supported_failure_model.py --require-source
+```
+
 ### 1.12 Observe-only mode (`CLAVENAR_MODE=observe`)
 
 **Concept.** New deployments don't want enforcement to bite on day one — false positives during the tuning window stall agents and burn operator trust. Observe mode flips every deny / review verdict to allow at the proxy boundary while still emitting the forensic event, including a `would_deny` / `would_park` annotation. Operators tune policy against real traffic for a week, then promote to `enforce`. The default is `enforce` so a misconfigured environment fails closed.
