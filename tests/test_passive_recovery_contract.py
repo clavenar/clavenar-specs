@@ -99,7 +99,7 @@ class PassiveRecoveryContractTests(unittest.TestCase):
         )
         mutations.append(extra_transition)
         timer = copy.deepcopy(self.fixture)
-        timer["timers"]["passiveSyncActive"] = False
+        timer["timers"]["passiveSyncOnSuccess"] = False
         mutations.append(timer)
         continuity = copy.deepcopy(self.fixture)
         del continuity["failback"]["continuity"]

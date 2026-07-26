@@ -4010,7 +4010,7 @@ reconstructible, and signed-source sets. Captured states appear in exactly one
 capture row. Current workload and simulator private identities are always
 reissued and must not enter a backup.
 
-The Compose implementation runs every five minutes under an exclusive
+The Compose implementation runs weekly under an exclusive
 nonblocking lock. SQLite stores use the online backup API and must pass
 `quick_check`; JetStream, Vault file storage, Caddy, and enabled observability
 stores use bounded stopped-writer snapshots whose cleanup path restarts every
@@ -4097,10 +4097,11 @@ failback. The companion
 [`contracts/passive-recovery-v1.fixture.json`](contracts/passive-recovery-v1.fixture.json)
 binds the exact signed release, recovery inventory, scheduled-backup plan,
 passive plan, forward and reverse points, writer-fence transitions, both
-isolated restores, Ledger continuity, and required timer state.
+isolated restores, Ledger continuity, and required timer/trigger state.
 
 Passive synchronization consumes the verified encrypted restic repository
-produced by the scheduled backup owner. It takes a shared nonblocking source
+produced by the scheduled backup owner and is triggered only after that backup
+completes successfully. It takes a shared nonblocking source
 lock and an exclusive nonblocking target lock, validates the exact 20-state
 partitions and recovery-point age, hashes every encrypted repository object,
 and installs objects by content digest. A parent-bound authenticated manifest

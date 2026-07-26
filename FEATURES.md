@@ -1652,7 +1652,7 @@ verification is not a delivered backup.
 partitions all 20 inventory states and binds one passing capture to the exact
 inventory, release, operational plan, encryption key identifier, restic
 snapshot, encrypted repository delta, and immutable offsite digest. Compose
-runs an overlap-safe persistent five-minute schedule. SQLite uses online
+runs an overlap-safe persistent weekly schedule. SQLite uses online
 backup plus `quick_check`; non-SQLite writers use bounded snapshot/restart
 handling; restricted material is allowlisted; reconstructible workload
 private identities are excluded. Authenticated restic encryption and
@@ -1731,8 +1731,8 @@ transaction is the primary's failback baseline and the chain advances again.
 
 **Verify.** Validate the public schema and semantic transition order, then run
 the assembled source/adversarial owner checks. Production acceptance also
-requires the timed two-restore drill and enabled/active backup, sync, and fence
-timers.
+requires the timed two-restore drill, enabled/active backup and fence timers,
+and the passive sync backup-success trigger.
 
 ```bash
 cd ../clavenar-specs

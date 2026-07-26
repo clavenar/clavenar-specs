@@ -16,8 +16,8 @@
   },
   "recovery": {
     "inventorySha256": "0188d2400ca88efa6651ddf4f30c3d7aa3a6f17b7301f264ca96aa5ce8df554d",
-    "backupPlanSha256": "dcdbe2532e0404e9f76bb9efbc504592ff18eec46105b92805429bef0bdf43ea",
-    "passivePlanSha256": "4153e87270415503a04048b4b8ca811e2731466d4b62a3e573cb842d8330e2f9",
+    "backupPlanSha256": "5542f4bc8a0baff54489c84ad526e135da54f12ac2ba20f55489f7bcd8cfec3f",
+    "passivePlanSha256": "babb7f8bf6bd0e72715bd02976942aaf994c76352390f61d4c0d1ffe7261855d",
     "stateCount": 20,
     "forwardPointId": "passive-backup-20260724T115500Z-aaaaaaaaaaaa",
     "reversePointId": "passive-backup-20260724T121500Z-bbbbbbbbbbbb",
@@ -83,8 +83,8 @@
   "timers": {
     "backupEnabled": true,
     "backupActive": true,
-    "passiveSyncEnabled": true,
-    "passiveSyncActive": true,
+    "passiveSyncTimerDisabled": true,
+    "passiveSyncOnSuccess": true,
     "writerFenceEnabled": true,
     "writerFenceActive": true
   },

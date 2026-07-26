@@ -147,12 +147,12 @@
     "timers": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["backupEnabled", "backupActive", "passiveSyncEnabled", "passiveSyncActive", "writerFenceEnabled", "writerFenceActive"],
+      "required": ["backupEnabled", "backupActive", "passiveSyncTimerDisabled", "passiveSyncOnSuccess", "writerFenceEnabled", "writerFenceActive"],
       "properties": {
         "backupEnabled": {"const": true},
         "backupActive": {"const": true},
-        "passiveSyncEnabled": {"const": true},
-        "passiveSyncActive": {"const": true},
+        "passiveSyncTimerDisabled": {"const": true},
+        "passiveSyncOnSuccess": {"const": true},
         "writerFenceEnabled": {"const": true},
         "writerFenceActive": {"const": true}
       }
