@@ -564,8 +564,8 @@ execution receipts remain a separate required stage.
 
 - **Slack / MS Teams.** A rich-text card to a designated channel: Approve, Deny,
   or Modify.
-- **Mobile push.** Biometric-verified (FaceID/TouchID) approval for critical-infra
-  agents.
+- **Mobile push (deferred).** No biometric mobile-push provider, device
+  enrollment, assertion, or callback path ships today.
 - **Reasoning summarisation.** The agent's chain-of-thought is translated into a
   human-readable justification so reviewers decide in seconds.
 
@@ -574,8 +574,10 @@ execution receipts remain a separate required stage.
 Before a Yellow-tier request reaches an approver, `clavenar-sandbox` statically
 analyses the proposed tool call and annotates the pending with predicted blast
 radius (severity + operation class). This is **static analysis, not shadow
-execution** — it does not run the call; an isolated dry-run executor is roadmap
-(see [§15](#15-roadmap--next-horizon)).
+execution** — it does not run the call. The versioned 40-case adversarial corpus
+pins the reviewed annotation surface, but does not make the analyzer an
+authorization, tenant-authority, or execution-isolation boundary. An isolated
+dry-run executor is roadmap (see [§15](#15-roadmap--next-horizon)).
 
 ### Behavioural learning
 
@@ -588,8 +590,8 @@ company's risk appetite.
 | Feature                | Technology                   | Benefit                                                        |
 |------------------------|------------------------------|----------------------------------------------------------------|
 | State persistence      | SQLite (Pending → decided)   | Resume agent execution where it left off                       |
-| Identity verification  | WebAuthn / OIDC              | Approver is provably authorised                               |
-| Audit trail            | Digital signature            | Cryptographically links human approval to AI action           |
+| Identity verification  | WebAuthn mode / OIDC + RBAC  | Server-derived approver provenance; OIDC step-up is deferred   |
+| Audit trail            | Chain-hashed provenance      | Records the authenticated approver; passkey transition signatures are deferred |
 | TTL                    | Configurable                 | Stale actions time out safely                                  |
 
 ---

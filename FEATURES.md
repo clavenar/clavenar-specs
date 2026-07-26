@@ -450,11 +450,16 @@ open http://localhost:8085/hil
 
 **Implementation.** `clavenar-sandbox` is a pure-Rust static analyzer crate. Proxy calls it in `sandbox_handoff.rs` before posting to HIL; the report is serialized as opaque JSON in `CreatePending.sandbox_report`. HIL persists it verbatim, returns it on `GET /pending/{id}` so the console can render the annotated preview.
 
+The reviewed `clavenar.sandbox-adversarial-corpus/v1` artifact pins 40
+filesystem, shell, HTTP, SQL, malformed, near-miss, and unknown cases. It proves
+deterministic static classification only. Authorization, tenant authority, and
+execution isolation remain outside this crate.
+
 **Verify.**
 
 ```bash
 curl http://localhost:8084/pending/<id> | jq .sandbox_report
-# { "classification": "Network", "severity": "high", "targets": [...], "summary": "..." }
+# { "operation_class": "network", "severity": "risky", "targets": [...], "summary": "..." }
 ```
 
 In the console `/hil/{id}` page, the sandbox report renders above the raw payload.
@@ -2134,15 +2139,16 @@ clavenar-sdk = "0.x.y"
 
 ### 10.4 `clavenar-sandbox`
 
-**Concept.** Pure-Rust static analyzer for MCP tool calls. Classifies a call by `Read`/`Write`/`Exec`/`Network`/`Delete`, severity (`low`/`medium`/`high`), targets (file paths, URLs, IDs), summary (one-line human-readable). Consumed by the proxy for HIL `sandbox_report` (so approvers see a preview, see §2.2).
+**Concept.** Pure-Rust static analyzer for MCP tool calls. Classifies a call by `Read`/`Write`/`Exec`/`Network`/`Delete`/`Unknown`, severity (`safe`/`risky`/`destructive`), targets (file paths, URLs, IDs), summary (one-line human-readable). Consumed by the proxy for HIL `sandbox_report` (so approvers see a preview, see §2.2).
 
-**Implementation.** `repos/clavenar-sandbox/` exports a single function `analyze(method: &str, params: &Value) -> SandboxReport`. No external state, no network — pure static analysis.
+**Implementation.** `repos/clavenar-sandbox/` exports a single function `analyze(method: &str, params: &Value) -> SandboxReport`. No external state, no network — pure static analysis. Version 0.2.0 binds the 40-case reviewed adversarial corpus and explicitly carries no authorization or isolation claim.
 
 **Verify.**
 
 ```bash
-cargo run -p clavenar-sandbox-cli -- --method tools/call --params '{"name":"shell","args":{"command":"rm -rf /etc"}}'
-# Output: classification=Delete, severity=high, summary="rm -rf /etc/..."
+cd repos/clavenar-sandbox
+cargo test adversarial_corpus_matches_static_annotation_boundary
+# 40 corpus cases match their exact operation_class and severity
 ```
 
 ### 10.5 TypeScript SDK (`@clavenar/agent-sdk`)

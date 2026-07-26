@@ -33,6 +33,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Active-agent subscription meter](#active-agent-subscription-meter) — tenant-safe rolling qualification, late-event finalization, immutable adjustments, and invoice reconstruction
 - [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) — immutable feature-enabled image, verified TLS, exact route scope, and explicit non-HA boundary
 - [Supported failure model](#supported-failure-model) — tested recovery boundaries, component failure behavior, explicit unmet objectives, and exact HA non-claims
+- [Residual product dispositions](#residual-product-dispositions) — exact shipped/deferred status and evidence boundary for every remaining G-20 claim
 - [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
 - [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
 - [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
@@ -96,6 +97,7 @@ authoritative wire-contract detail still lives in those sections.
 | 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | shipped | v1.219.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9x | [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) | staged image and chart boundary shipped; PostgreSQL not promoted | v1.220.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
 | 9y | [Supported failure model](#supported-failure-model) | shipped; weekly cadence explicitly does not meet the critical-state RPO | v1.221.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
+| 9z | [Residual product dispositions](#residual-product-dispositions) | contract defined; release acceptance in progress | — | `clavenar-specs`, `clavenar-sandbox`, `clavenar-e2e`, `clavenar-charts` |
 | 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
 | 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
 | 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
@@ -303,7 +305,7 @@ Identity, in Clavenar's threat model, is **necessary but insufficient** (§13.1)
 | T2 | Agent A impersonates Agent B in an A→B call | No A2A check today; Brain sees the *receiving* agent's view only | SVID-bound `actor_token` + audience binding rejects mismatch |
 | T3 | Compromised supply chain: agent binary swapped post-deploy | Undetected | Capability attestation gates Yellow-tier tools |
 | T4 | Insider replays a ledger row claiming "the agent did it" | Possible — `agent_id` is not signed by the agent, only stamped by the proxy | Per-action signature chain anchored to ledger `prev_hash` provides non-repudiation |
-| T5 | Human user repudiates an HIL approval ("not me") | WebAuthn approver auth covers approver side | WI binds the *delegation* user→agent so the agent's own action is also non-repudiable |
+| T5 | Human user repudiates an HIL approval ("not me") | Auth-mode-specific approver provenance is recorded, but the transition has no approver WebAuthn signature | WI binds the *delegation* user→agent; cryptographic approver transition signatures remain separate and deferred |
 
 **Out of scope:** governing the human IdP itself (delegate to Okta/Entra), key custody for the issuing CA (delegate to Vault Transit / KMS), cross-tenant federation v1 (single-tenant first).
 
@@ -4554,6 +4556,38 @@ path contract.
 
 ---
 
+## Residual product dispositions
+
+**Module status:** contract defined; release acceptance in progress.
+
+The deny-unknown
+[`contracts/residual-product-disposition-v1.schema.json`](contracts/residual-product-disposition-v1.schema.json)
+and companion
+[`fixture`](contracts/residual-product-disposition-v1.fixture.json) define
+`clavenar.residual-product-disposition/v1`. Exactly nine G-20 residuals receive
+one status. Unknown, missing, substituted, or evidence-free shipped rows fail
+validation.
+
+| Residual | Status | Exact supported boundary |
+|---|---|---|
+| Per-tenant notification-channel selection | deferred | The global delivery lifecycle ships, but channels remain deployment-configured rather than tenant-selectable. |
+| WebAuthn signatures over HIL transitions | deferred | Authenticated provenance and issuer custody do not constitute an approver passkey signature over a transition. |
+| WebAuthn step-up for high-impact decisions and lifecycle operations | deferred | OIDC/RBAC ships; no fresh per-operation passkey ceremony is enforced. |
+| Multi-replica policy-rule consistency | deferred | The supported policy engine remains single-replica; behavioral-history KV is a different state class. |
+| Exact CLI policy CRUD parity | deferred | Test, learn, scaffold, library, and exchange workflows do not equal create/read/update/activate/deactivate/delete parity. |
+| Pinned real-provider deep-review accuracy benchmark | deferred | The deterministic 25-case mock corpus is not a published real-provider accuracy result. |
+| Sandbox severity adversarial corpus | shipped | Version 0.2.0 pins 40 reviewed classifications. This is static annotation only, never authorization, tenant-authority enforcement, or execution isolation. |
+| Biometric mobile-push approval | deferred | No provider, device-enrollment, biometric-assertion, or callback path ships. |
+| Hard-gated approver-group routing | deferred | Quorum and advisory escalation control count and routing; they do not restrict a pending to one named group. |
+
+The shipped sandbox row binds the exact public corpus digest and owner commit.
+The analyzer is a pure tenant-agnostic function: it carries no identity or
+authority, and its callers retain tenant authentication and authorization.
+Every deferred row records the evidence required before promotion. An adjacent
+feature cannot be used as substitute evidence.
+
+---
+
 ## Production alert delivery lifecycle
 
 **Module status:** **shipped 2026-07-24** in release `1.200.0`
@@ -6445,7 +6479,7 @@ flowchart LR
   T4 -->|per-action ed25519 signature in row| ID
   T4 -->|prev_hash chain — tampering breaks every later signature| L4
   T5 -->|delegation grant — act.sub binds the human| ID
-  T5 -->|WebAuthn approver signature on HIL state-transition| L3
+  T5 -->|authenticated decided_by provenance — no approver-signature claim| L4
 ```
 
 
@@ -7384,7 +7418,7 @@ requests.
 
 | Threat | Defense |
 |---|---|
-| An attacker decides on a pending without approver auth. | OIDC + WebAuthn step-up gates `POST /pending/{id}/decide`. The HIL service requires a verified bearer for every state transition. The proxy never decides on its own behalf. |
+| An attacker decides on a pending without approver auth. | OIDC + RBAC gates `POST /pending/{id}/decide`; WebAuthn is a separate selectable authentication mode. Per-decision WebAuthn step-up over OIDC remains deferred. The proxy never decides on its own behalf. |
 
 #### Tampering
 
@@ -7402,7 +7436,7 @@ operator's identity is on the row.
 
 | Threat | Defense |
 |---|---|
-| An attacker auto-approves their own request. | OIDC + RBAC. The `approver` role is required to call `decide`. WebAuthn step-up adds a possession factor. |
+| An attacker auto-approves their own request. | OIDC + RBAC. The `approver` role is required to call `decide`. A fresh WebAuthn step-up ceremony is not a current per-decision boundary. |
 
 ### clavenar-identity
 
@@ -7492,10 +7526,11 @@ year-2 product question (out of scope, see "Out of scope" below).
 #### Operator authentication
 
 The full operator surface lives in [Operator
-authentication](#operator-authentication): OIDC for bootstrap,
-WebAuthn for step-up on Yellow-tier approvals, basic-admin for solo
-evaluation, RBAC, Slack / Teams self-link for cross-channel
-identity, and viewer-or-better gates on every console read route.
+authentication](#operator-authentication): OIDC and WebAuthn as selectable
+authentication modes, basic-admin for solo evaluation, RBAC, Slack / Teams
+self-link for cross-channel identity, and viewer-or-better gates on every
+console read route. Per-decision WebAuthn step-up over an OIDC session remains
+deferred.
 
 #### Time
 
