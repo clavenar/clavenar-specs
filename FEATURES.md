@@ -1100,7 +1100,9 @@ grace before the invoice becomes final. Immutable idempotent credit/correction
 rows adjust units without rewriting source events. Console-only generated
 capabilities protect the JSON API, identical JSON attachment, and adjustment
 mutation; the Console derives tenant authority from the authenticated session
-and emits a commitment-bearing 16-column CSV.
+and emits a commitment-bearing 16-column CSV. The invoice pins the verified
+chain position at `observed_through`, so later concurrent appends cannot change
+the API response or attachment for the same query.
 
 **Verify.** The
 [`active-agent-meter-v1` fixture](contracts/active-agent-meter-v1.fixture.json)

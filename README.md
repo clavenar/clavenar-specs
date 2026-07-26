@@ -643,7 +643,9 @@ extends into the three operational pillars of the agentic enterprise: **cost**,
   verified-chain meter: one typed tenant-qualified agent with an authorized
   tool execution in a rolling 30-day window, with replay collapse, 72-hour
   late-event finalization, immutable adjustments, and commitment-bearing
-  tenant export. Provider `cost_micros` never feeds this invoice.
+  tenant export pinned to its exact observation boundary. Later chain appends
+  cannot change an issued invoice. Provider `cost_micros` never feeds this
+  invoice.
 - **Recursive-loop detection.** Identify semantic stuttering and kill the process.
 
 ### 11.2 Dynamic model routing — the broker

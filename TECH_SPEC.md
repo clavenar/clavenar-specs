@@ -4364,9 +4364,11 @@ and byte-mirrored
 [`fixture`](contracts/active-agent-meter-v1.fixture.json) define
 `clavenar.active-agent-meter/v1`, meter version `1.0.0`. An invoice binds the
 tenant, rolling-window bounds, observation boundary, finalization state,
-ordered agent rows, immutable adjustments, net units, verified chain head and
-length, source commitments, and one checksum over the invoice with that
-checksum field omitted.
+ordered agent rows, immutable adjustments, net units, the verified chain head
+and length at the exact observation boundary, source commitments, and one
+checksum over the invoice with that checksum field omitted. Rows appended
+after `observed_through` cannot move that pinned source position or change an
+already-issued invoice.
 
 ### Qualification and identity
 
@@ -4399,7 +4401,9 @@ their committed occurrence time belongs to the rolling window. Before the
 boundary the invoice is `preliminary`; at the exact boundary it is `final`.
 Requests before `as_of`, after the finalization boundary, with a future
 `as_of`, or with noncanonical timestamps fail closed. Recomputing the same
-final invoice over the same verified chain is byte-deterministic.
+invoice remains byte-deterministic while unrelated rows continue appending:
+the full chain must verify, but the invoice commits the last chain position at
+or before `observed_through`.
 
 ### Credits and corrections
 
