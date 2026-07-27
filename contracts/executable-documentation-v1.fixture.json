@@ -132,7 +132,7 @@
       "repository": "clavenar-ctl",
       "sourcePath": "README.md",
       "sourceMarkers": [
-        "cargo install --path .",
+        "cargo install --locked --path .",
         "clavenarctl doctor"
       ],
       "runner": "cargo-cli",
@@ -158,8 +158,13 @@
     },
     {
       "id": "postgres",
-      "values": "tests/values-postgres.yaml",
-      "set": [],
+      "values": null,
+      "set": [
+        "persistence.ledger.enabled=false",
+        "services.ledger.postgres.enabled=true",
+        "services.ledger.postgres.dsnSecretName=ledger-postgres-dsn",
+        "services.ledger.postgres.tlsCaSecretName=ledger-postgres-ca"
+      ],
       "expectedDocuments": 20,
       "phases": ["staged", "public"]
     },
