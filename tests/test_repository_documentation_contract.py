@@ -18,14 +18,14 @@ FIXTURE = json.loads(
 class RepositoryDocumentationContractTests(unittest.TestCase):
     def test_fixture_validates_and_totals_are_exact(self) -> None:
         jsonschema.Draft202012Validator(SCHEMA).validate(FIXTURE)
-        self.assertEqual(FIXTURE["release"], "1.236.0")
+        self.assertEqual(FIXTURE["release"], "1.237.0")
         self.assertEqual(
             FIXTURE["totals"],
             {
                 "repositories": 30,
                 "publicRepositories": 29,
                 "restrictedRepositories": 1,
-                "markdownFiles": 257,
+                "markdownFiles": 260,
                 "workspaceInputs": 2,
                 "checks": 9,
                 "claimStates": 4,
@@ -42,7 +42,7 @@ class RepositoryDocumentationContractTests(unittest.TestCase):
         self.assertEqual(len(names), 30)
         self.assertEqual(
             sum(item["markdownFiles"] for item in repositories),
-            257,
+            260,
         )
         self.assertEqual(
             [item["name"] for item in repositories if item["visibility"] == "restricted"],

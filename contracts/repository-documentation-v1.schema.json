@@ -24,7 +24,7 @@
       "const": 1
     },
     "release": {
-      "const": "1.236.0"
+      "const": "1.237.0"
     },
     "repositories": {
       "type": "array",
@@ -192,7 +192,7 @@
         "repositories": {"const": 30},
         "publicRepositories": {"const": 29},
         "restrictedRepositories": {"const": 1},
-        "markdownFiles": {"const": 257},
+        "markdownFiles": {"const": 260},
         "workspaceInputs": {"const": 2},
         "checks": {"const": 9},
         "claimStates": {"const": 4},

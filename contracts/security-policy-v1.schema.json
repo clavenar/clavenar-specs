@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/security-policy-v1.schema.json",
+  "title": "Clavenar canonical security-policy inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "policyVersion",
+    "effectiveDate",
+    "canonicalPath",
+    "canonicalSha256",
+    "contact",
+    "repositories",
+    "requiredSections",
+    "requiredMarkers",
+    "forbiddenMarkers",
+    "checks",
+    "totals"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.security-policy/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.237.0"
+    },
+    "policyVersion": {
+      "const": "1.0.0"
+    },
+    "effectiveDate": {
+      "const": "2026-07-27"
+    },
+    "canonicalPath": {
+      "const": "clavenar-specs/SECURITY.md"
+    },
+    "canonicalSha256": {
+      "const": "sha256:720e58fca68ef711f1f69d4746339ce9b2b1753bcf4f25213cd484931e506c35"
+    },
+    "contact": {
+      "const": "vanteguardlabs@gmail.com"
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^clavenar-[a-z0-9]+(?:-[a-z0-9]+)*$"
+      }
+    },
+    "requiredSections": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "Reporting a vulnerability",
+          "Supported versions",
+          "Scope",
+          "Runtime and deployment boundary",
+          "Workflow and release evidence",
+          "Response process",
+          "Safe harbor",
+          "Disclosure"
+        ]
+      }
+    },
+    "requiredMarkers": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "forbiddenMarkers": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "repository-inventory",
+          "root-policy-presence",
+          "tracked-policy",
+          "exact-policy-content",
+          "policy-version",
+          "canonical-contact",
+          "supported-version-window",
+          "runtime-boundary",
+          "workflow-and-response-evidence"
+        ]
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositories",
+        "securityFiles",
+        "contacts",
+        "requiredSections",
+        "requiredMarkers",
+        "forbiddenMarkers",
+        "checks",
+        "responseTargets"
+      ],
+      "properties": {
+        "repositories": {"const": 30},
+        "securityFiles": {"const": 30},
+        "contacts": {"const": 1},
+        "requiredSections": {"const": 8},
+        "requiredMarkers": {"const": 12},
+        "forbiddenMarkers": {"const": 7},
+        "checks": {"const": 9},
+        "responseTargets": {"const": 4}
+      }
+    }
+  }
+}
