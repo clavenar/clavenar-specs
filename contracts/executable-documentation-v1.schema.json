@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/executable-documentation-v1.schema.json",
+  "title": "Clavenar executable documentation release inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "phases",
+    "containerImages",
+    "website",
+    "quickstarts",
+    "helmRecipes",
+    "totals"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.executable-documentation/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.235.0"
+    },
+    "phases": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "staged"},
+        {"const": "public"}
+      ],
+      "items": false
+    },
+    "containerImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rust", "node", "python", "go", "java", "dotnet", "helm"],
+      "properties": {
+        "rust": {"$ref": "#/$defs/image"},
+        "node": {"$ref": "#/$defs/image"},
+        "python": {"$ref": "#/$defs/image"},
+        "go": {"$ref": "#/$defs/image"},
+        "java": {"$ref": "#/$defs/image"},
+        "dotnet": {"$ref": "#/$defs/image"},
+        "helm": {"$ref": "#/$defs/image"}
+      }
+    },
+    "website": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "sourceRoots", "checks", "phases"],
+      "properties": {
+        "repository": {"const": "clavenar-website"},
+        "sourceRoots": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "local-links",
+              "fragments",
+              "assets",
+              "external-links",
+              "route-behavior-schema"
+            ]
+          }
+        },
+        "phases": {"$ref": "#/$defs/phases"}
+      }
+    },
+    "quickstarts": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/quickstart"}
+    },
+    "helmRecipes": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/helmRecipe"}
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quickstarts", "helmRecipes", "websiteChecks", "phases"],
+      "properties": {
+        "quickstarts": {"const": 8},
+        "helmRecipes": {"const": 6},
+        "websiteChecks": {"const": 5},
+        "phases": {"const": 2}
+      }
+    }
+  },
+  "$defs": {
+    "image": {
+      "type": "string",
+      "pattern": "^[a-z0-9./-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$"
+    },
+    "phases": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "staged"},
+        {"const": "public"}
+      ],
+      "items": false
+    },
+    "quickstart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "repository",
+        "sourcePath",
+        "sourceMarkers",
+        "runner",
+        "package",
+        "phases",
+        "expected"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+        "repository": {"type": "string", "pattern": "^clavenar-[a-z0-9-]+$"},
+        "sourcePath": {"type": "string", "minLength": 1},
+        "sourceMarkers": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "runner": {
+          "enum": [
+            "cargo-sdk",
+            "pnpm-sdk",
+            "python-sdk",
+            "go-sdk",
+            "maven-sdk",
+            "dotnet-sdk",
+            "cargo-lite",
+            "cargo-cli"
+          ]
+        },
+        "package": {"type": "string", "minLength": 1},
+        "phases": {"$ref": "#/$defs/phases"},
+        "expected": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "install",
+              "compile",
+              "owner-tests",
+              "runtime-health",
+              "allow-deny-review",
+              "help"
+            ]
+          }
+        }
+      }
+    },
+    "helmRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "values", "set", "expectedDocuments", "phases"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+        "values": {
+          "type": ["string", "null"]
+        },
+        "set": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 3}
+        },
+        "expectedDocuments": {"type": "integer", "minimum": 1},
+        "phases": {"$ref": "#/$defs/phases"}
+      }
+    }
+  }
+}

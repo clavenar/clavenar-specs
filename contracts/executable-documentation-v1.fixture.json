@@ -1,0 +1,194 @@
+{
+  "contract": "clavenar.executable-documentation/v1",
+  "schemaVersion": 1,
+  "release": "1.235.0",
+  "phases": [
+    "staged",
+    "public"
+  ],
+  "containerImages": {
+    "rust": "rust:1.88.0-bookworm@sha256:af306cfa71d987911a781c37b59d7d67d934f49684058f96cf72079c3626bfe0",
+    "node": "node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3",
+    "python": "python:3.13-bookworm@sha256:353cf2106d143e1d28f5d7c10c5f5c0387085bba22ef0f7f7e52c2c330fb1779",
+    "go": "golang:1.24-bookworm@sha256:1a6d4452c65dea36aac2e2d606b01b4a029ec90cc1ae53890540ce6173ea77ac",
+    "java": "maven:3.9-eclipse-temurin-17@sha256:1ed5d1f54416b706707b4f3238f63a20bb06aab27c6d240090a2bb9ad895ed45",
+    "dotnet": "mcr.microsoft.com/dotnet/sdk:8.0@sha256:3c0edbfe1549dd93fb789dc96299a40df865ad7bffefcaf38e8c05940686d641",
+    "helm": "alpine/helm:3.18.4@sha256:e7ecbf4a200dea73d64bfb8cb0936829164945f2b4d02a0274093073ee8d264f"
+  },
+  "website": {
+    "repository": "clavenar-website",
+    "sourceRoots": [
+      "src",
+      "public",
+      "css",
+      "js"
+    ],
+    "checks": [
+      "local-links",
+      "fragments",
+      "assets",
+      "external-links",
+      "route-behavior-schema"
+    ],
+    "phases": [
+      "staged",
+      "public"
+    ]
+  },
+  "quickstarts": [
+    {
+      "id": "rust-sdk",
+      "repository": "clavenar-sdk",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "cargo add clavenar-sdk",
+        "ClavenarClient::builder"
+      ],
+      "runner": "cargo-sdk",
+      "package": "clavenar-sdk",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests"]
+    },
+    {
+      "id": "typescript-sdk",
+      "repository": "clavenar-typescript-sdk",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "pnpm add @clavenar/agent-sdk",
+        "clavenarWrap"
+      ],
+      "runner": "pnpm-sdk",
+      "package": "@clavenar/agent-sdk",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests"]
+    },
+    {
+      "id": "python-sdk",
+      "repository": "clavenar-python-sdk",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "pip install clavenar-agent-sdk",
+        "clavenar_wrap"
+      ],
+      "runner": "python-sdk",
+      "package": "clavenar-agent-sdk",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests"]
+    },
+    {
+      "id": "go-sdk",
+      "repository": "clavenar-go-sdk",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "go get github.com/clavenar/clavenar-go-sdk",
+        "clavenar.New"
+      ],
+      "runner": "go-sdk",
+      "package": "github.com/clavenar/clavenar-go-sdk",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests"]
+    },
+    {
+      "id": "java-sdk",
+      "repository": "clavenar-java-sdk",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "com.clavenar",
+        "ClavenarInspector"
+      ],
+      "runner": "maven-sdk",
+      "package": "com.clavenar:agent-sdk",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests"]
+    },
+    {
+      "id": "dotnet-sdk",
+      "repository": "clavenar-dotnet-sdk",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "dotnet add package Clavenar.AgentSdk",
+        "ClavenarInspector"
+      ],
+      "runner": "dotnet-sdk",
+      "package": "Clavenar.AgentSdk",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests"]
+    },
+    {
+      "id": "rust-lite",
+      "repository": "clavenar-lite",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "docker run -p 8088:8088",
+        "clavenar-lite verify"
+      ],
+      "runner": "cargo-lite",
+      "package": "clavenar-lite",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests", "runtime-health", "allow-deny-review"]
+    },
+    {
+      "id": "rust-cli",
+      "repository": "clavenar-ctl",
+      "sourcePath": "README.md",
+      "sourceMarkers": [
+        "cargo install --path .",
+        "clavenarctl doctor"
+      ],
+      "runner": "cargo-cli",
+      "package": "clavenar-ctl",
+      "phases": ["staged", "public"],
+      "expected": ["install", "compile", "owner-tests", "help"]
+    }
+  ],
+  "helmRecipes": [
+    {
+      "id": "default",
+      "values": null,
+      "set": [],
+      "expectedDocuments": 20,
+      "phases": ["staged", "public"]
+    },
+    {
+      "id": "all-on",
+      "values": "tests/values-all-on.yaml",
+      "set": [],
+      "expectedDocuments": 20,
+      "phases": ["staged", "public"]
+    },
+    {
+      "id": "postgres",
+      "values": "tests/values-postgres.yaml",
+      "set": [],
+      "expectedDocuments": 20,
+      "phases": ["staged", "public"]
+    },
+    {
+      "id": "bundled",
+      "values": "tests/values-bundled.yaml",
+      "set": [],
+      "expectedDocuments": 20,
+      "phases": ["staged", "public"]
+    },
+    {
+      "id": "optional-listeners",
+      "values": "tests/values-optional.yaml",
+      "set": [],
+      "expectedDocuments": 20,
+      "phases": ["staged", "public"]
+    },
+    {
+      "id": "production",
+      "values": "tests/values-production.yaml",
+      "set": [],
+      "expectedDocuments": 20,
+      "phases": ["staged", "public"]
+    }
+  ],
+  "totals": {
+    "quickstarts": 8,
+    "helmRecipes": 6,
+    "websiteChecks": 5,
+    "phases": 2
+  }
+}

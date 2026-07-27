@@ -18,6 +18,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Compliance derivation boundaries](#compliance-derivation-boundaries) — configured authorities, bounded key freshness, explicit degraded modes, and status limitations
 - [Retention claim boundaries](#retention-claim-boundaries) — configured duration, exact technical controls, recovery-point scope, and fixed-duration promotion evidence
 - [Route and schema release inventory](#route-and-schema-release-inventory) — generated route authority, source-bound types, and executable examples
+- [Executable documentation release inventory](#executable-documentation-release-inventory) — two-phase clean execution of install, quickstart, website, and Helm paths
 - [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
@@ -76,6 +77,8 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6b | [Compliance derivation boundaries](#compliance-derivation-boundaries) | shipped | v1.230.0 | `clavenar-specs`, `clavenar-proxy`, `clavenar-identity`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
 | 6c | [Retention claim boundaries](#retention-claim-boundaries) | shipped | v1.231.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
 | 6d | [Public operational information boundary](#public-operational-information-boundary) | shipped | v1.232.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | shipped | v1.234.0 | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
+| 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | release acceptance in progress | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8060,6 +8063,28 @@ the strict release schema is
 [`contracts/route-schema-release-v1.schema.json`](contracts/route-schema-release-v1.schema.json).
 Readable endpoint and example guidance is in
 [`docs/ROUTE_SCHEMA_INVENTORY.md`](docs/ROUTE_SCHEMA_INVENTORY.md).
+
+## Executable documentation release inventory
+
+**Module status:** **release acceptance in progress for v1.235.0.**
+
+[`clavenar.executable-documentation/v1`](contracts/executable-documentation-v1.fixture.json)
+is the release authority for user-executable documentation. It inventories
+eight quickstart/install paths across the Rust, TypeScript, Python, Go, Java,
+.NET, Lite, and CLI owners; six Helm configuration recipes; and five website
+link, fragment, asset, external-reference, and route/behavior/schema checks.
+
+Every path runs twice from an isolated clean environment. The `staged` phase
+binds execution to the exact F-05 candidate source graph before publication.
+The `public` phase first verifies the immutable released BOM against that same
+source graph, then repeats every command and URL check. A source-only build,
+owner CI pass, or syntax scan cannot substitute for either phase. All runner
+images are digest-pinned, and each quickstart binds its package, owning
+repository, documentation markers, expected outcomes, and both required
+phases.
+
+The strict schema is
+[`contracts/executable-documentation-v1.schema.json`](contracts/executable-documentation-v1.schema.json).
 ### Rooted file and outbound target boundary
 
 The exact

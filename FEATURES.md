@@ -3283,3 +3283,21 @@ mirrors.
 python3 -m pytest tests/test_route_schema_release_contract.py
 python3 repos/clavenar-e2e/scripts/generate_route_schema_release.py --check
 ```
+
+### Executable staged and public documentation
+
+[`clavenar.executable-documentation/v1`](contracts/executable-documentation-v1.fixture.json)
+binds eight SDK/Rust/Lite/CLI install and quickstart paths, six Helm recipes,
+and website local/external link, fragment, asset, route, behavior, and schema
+checks to exact `staged` and `public` executions. Both phases use immutable
+clean-container runners; the public phase additionally verifies the released
+BOM before repeating the commands.
+
+```bash
+python3 -m pytest tests/test_executable_documentation_contract.py
+python3 repos/clavenar-e2e/scripts/check_executable_documentation.py \
+  --source-root repos --require-source
+DOCKER="sudo -n docker" \
+  repos/clavenar-e2e/scripts/run-executable-documentation.sh \
+  --phase staged --source-root repos --release-version 1.235.0
+```
