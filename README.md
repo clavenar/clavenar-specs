@@ -783,7 +783,7 @@ certification or conclusion that an organization complies.
 |------------------|------------------------------------------------------------------|----------------------------------|
 | Automatic logging| Real-time capture of every tool call and decision                | Immutable JSON-RPC logs          |
 | Tamper-proofing  | Cryptographically hashed and chained                             | SHA-256 audit trail              |
-| Retention        | 183-day enforced deletion floor (non-demo) + legal hold; S3-compatible Iceberg cold tier | Regulatory export API            |
+| Retention        | Deployment-configured lifecycle; non-demo vacuum has a 15,811,200-second minimum only when enabled; legal hold and LocalFS/S3-compatible export are separate configured controls | Regulatory export API |
 
 > **The shift in burden of proof.** When the regulator knocks, you do not show them
 > a black-box LLM — you show a Clavenar audit trail proving control the entire time.

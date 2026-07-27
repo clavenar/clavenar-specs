@@ -3227,3 +3227,18 @@ predicate for one exact window, not a conformity assessment.
 python3 -m pytest tests/test_compliance_derivation_boundaries_contract.py
 python3 repos/clavenar-e2e/scripts/check_compliance_derivation_boundaries.py
 ```
+
+### Contract-tested retention claims
+
+[`clavenar.retention-claim-boundaries/v1`](contracts/retention-claim-boundaries-v1.fixture.json)
+separates deployment-configured retention policy from exact HIL payload
+deadlines, the opt-in Ledger vacuum minimum, weekly recovery-point cadence, and
+LocalFS/S3-compatible export support. Those implementation facts do not create
+a universal duration, immutable lifecycle, or permanent-retention promise. A
+fixed-duration claim remains prohibited until one deployment has the complete
+approved lifecycle receipt.
+
+```bash
+python3 -m pytest tests/test_retention_claim_boundaries_contract.py
+python3 repos/clavenar-e2e/scripts/check_retention_claim_boundaries.py
+```

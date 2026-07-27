@@ -16,6 +16,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
 - [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
 - [Compliance derivation boundaries](#compliance-derivation-boundaries) — configured authorities, bounded key freshness, explicit degraded modes, and status limitations
+- [Retention claim boundaries](#retention-claim-boundaries) — configured duration, exact technical controls, recovery-point scope, and fixed-duration promotion evidence
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
@@ -71,6 +72,7 @@ authoritative wire-contract detail still lives in those sections.
 | 6 | [Regulatory export](#regulatory-export) | shipped (manifest v8; tenant-bound export in v1.216.0) | v1.216.0 | `clavenar-ledger` (chain v4 evidence rows; backend-agnostic core), `clavenar-identity` (`POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl`, `clavenar-console` |
 | 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, backend-agnostic with required signing when Identity is configured), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
 | 6b | [Compliance derivation boundaries](#compliance-derivation-boundaries) | shipped | v1.230.0 | `clavenar-specs`, `clavenar-proxy`, `clavenar-identity`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
+| 6c | [Retention claim boundaries](#retention-claim-boundaries) | shipped | v1.231.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -2367,11 +2369,25 @@ session rather than browser input and emitting a no-store audited response.
 
 ### 11. Retention floor & legal hold
 
-The ledger never deletes chain rows by default — cold-tier export *copies* rows out (`CLAVENAR_LEDGER_EXPORT_RETENTION_SECS` only controls when a row becomes export-eligible); the sole deletion path is the opt-in post-export vacuum.
+The ledger does not enable chain-row vacuum by default — cold-tier export
+*copies* rows out (`CLAVENAR_LEDGER_EXPORT_RETENTION_SECS` only controls when a
+row becomes export-eligible); the sole deletion path is the opt-in post-export
+vacuum. Disabled vacuum describes current configuration state, not a promise
+that rows are retained forever.
 
-- **Vacuum opt-in:** `CLAVENAR_LEDGER_VACUUM_RETENTION_SECS` enables pruning of exported rows older than the window. Unset (the default) keeps every row forever.
-- **Production retention floor:** for non-demo deployments the vacuum window must be **≥ 183 days** (EU AI Act Art 19(1) / 26(6) "at least six months"). A shorter value refuses to boot. Disposable demo deployments opt out explicitly with `CLAVENAR_LEDGER_DEMO_MODE=true`; that flag also arms the demo-reset tooling — reset scripts refuse to wipe a ledger whose rendered compose config doesn't carry it.
-- **Legal hold:** `CLAVENAR_LEDGER_LEGAL_HOLD=true` suspends the vacuum entirely while set — exports keep running (copies are fine), deletions stop, and every export pass logs the standing hold. Releasing the hold is a restart with the variable unset.
+- **Vacuum opt-in:** `CLAVENAR_LEDGER_VACUUM_RETENTION_SECS` enables pruning of
+  exported rows older than the configured window. Unset leaves automatic
+  vacuum disabled.
+- **Non-demo minimum vacuum window:** when vacuum is enabled outside demo mode,
+  the value must be at least 15,811,200 seconds. A shorter value refuses to
+  boot. Official Compose explicitly selects
+  `CLAVENAR_LEDGER_DEMO_MODE=true`; that flag also arms the demo-reset tooling.
+  This startup minimum is not a configured deployment duration or customer
+  retention promise.
+- **Legal-hold control:** `CLAVENAR_LEDGER_LEGAL_HOLD=true` suspends the vacuum
+  while set — exports keep running, deletions stop, and every export pass logs
+  the standing hold. A deployment must configure, operate, and approve that
+  control; its presence in source does not prove a standing hold.
 - The vacuum-cursor chain semantics (cursor row, `verify_chain` seeding) are unchanged; the floor and hold only gate *whether* the vacuum runs.
 
 ### 12. Tenant retention and erasure procedure
@@ -7053,9 +7069,9 @@ v3/v4 `entry_payloads` store — whose bytes are content-hashed into the
 chain row — this archive is **purgeable**: the chain commits only to
 `tool_params_sha256`, never to these bytes, so deleting an archive row
 can never break `GET /verify`. That is how data-subject erasure coexists
-with the ≥183-day chain retention floor (Regulatory export §11): the
-verifiable verdict + hash stay on chain forever, the human-readable
-payload purges on request. The store is opt-in and **cold-path only**
+with the configured chain-vacuum boundary (Regulatory export §11): the
+verifiable verdict + hash remain while the chain row remains, and the
+human-readable payload can purge earlier on request. The store is opt-in and **cold-path only**
 (a cache hit doesn't recompute the mask, so its row carries no archive —
 the same honest limitation as `normalized_input_sha256`), and a degraded
 mask is never archived (it would be raw PII). **Mock-mode caveat:** mock
@@ -7078,9 +7094,9 @@ it onto the forensic event, and the ledger stores it on the
 `CLAVENAR_LEDGER_RETENTION_PURGE_INTERVAL_SECS`) removes rows once their
 class window elapses — touching **only** the purgeable sibling table,
 never the chain `entries`, and paused by `CLAVENAR_LEDGER_LEGAL_HOLD`.
-This is the data-minimization counterpart to the chain retention floor:
-the hash chain is held ≥ the floor for integrity, while the *readable*
-masked params purge per class — which may be **shorter** than the floor,
+This is the data-minimization counterpart to the chain-vacuum boundary:
+the hash chain follows the configured chain-row lifecycle, while the *readable*
+masked params purge per class — which may be **shorter** than that lifecycle,
 since dropping the sibling row can never break `GET /verify`. The
 chain-vacuum cascade (which purges archive rows alongside the chain rows
 they key) remains the backstop for any class left unconfigured.
@@ -7932,6 +7948,33 @@ attestation.
 
 The strict schema is
 [`contracts/compliance-derivation-boundaries-v1.schema.json`](contracts/compliance-derivation-boundaries-v1.schema.json).
+
+## Retention claim boundaries
+
+**Module status:** **shipped in v1.231.0.**
+
+Retention duration, storage destination, deletion, legal hold, and key
+lifecycle are configured per deployment and data class. Implemented technical
+bounds are not a universal retention promise. The exact
+[`clavenar.retention-claim-boundaries/v1`](contracts/retention-claim-boundaries-v1.fixture.json)
+contract separates four current controls:
+
+| Control | Exact implemented value | Claim boundary |
+|---|---|---|
+| HIL sensitive payloads | Tier deadlines are 86,400, 604,800, or 2,592,000 seconds; minimized metadata is capped at 2,592,000 seconds. | Purpose-and-tier HIL handling does not select Ledger, export, backup, or customer-data retention. |
+| Ledger vacuum | Vacuum is disabled by default. A non-demo deployment that enables it cannot configure less than 15,811,200 seconds. Official Compose selects demo mode; legal hold is off unless configured. | A startup minimum and current disabled state are not a fixed-duration or permanent-retention promise. |
+| Recovery points | Scheduled capture is every 604,800 seconds with a 612,000-second maximum accepted age. No repository-prune or object-lock policy is configured by this contract. | Backup cadence is not a retention period, repository lifecycle, or immutable-storage guarantee. |
+| Export storage | LocalFS and S3-compatible destinations are supported; official regulatory manifests can be signed. | A destination and signed manifest do not configure object lock, deletion, legal hold, key retention, cost, or restore policy. |
+
+A fixed-duration claim requires a separate approved lifecycle receipt bound to
+the exact deployment, storage policy, verification date, and public wording.
+That receipt requires provisioned immutable lifecycle storage plus tested
+deletion, legal hold, key retention, restore, reviewed cost, counsel approval,
+and a claim-register authorization. Until then the fixed-duration and
+immutable-lifecycle statuses remain `not-approved`.
+
+The strict schema is
+[`contracts/retention-claim-boundaries-v1.schema.json`](contracts/retention-claim-boundaries-v1.schema.json).
 ### Rooted file and outbound target boundary
 
 The exact

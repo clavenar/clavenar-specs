@@ -1,0 +1,285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clavenar.com/schemas/retention-claim-boundaries-v1.schema.json",
+  "title": "Clavenar retention claim boundaries v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractId",
+    "contractVersion",
+    "release",
+    "publicClaim",
+    "implementedControls",
+    "futureFixedDurationClaim",
+    "gates"
+  ],
+  "properties": {
+    "contractId": {
+      "const": "clavenar.retention-claim-boundaries/v1"
+    },
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "release": {
+      "const": "1.231.0"
+    },
+    "publicClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "durationStatus",
+        "storageDestinationStatus",
+        "universalDurationSeconds",
+        "fixedDurationApproved",
+        "immutableLifecycleApproved",
+        "boundary"
+      ],
+      "properties": {
+        "durationStatus": {
+          "const": "operator-deployer-configured"
+        },
+        "storageDestinationStatus": {
+          "const": "operator-deployer-configured"
+        },
+        "universalDurationSeconds": {
+          "const": null
+        },
+        "fixedDurationApproved": {
+          "const": false
+        },
+        "immutableLifecycleApproved": {
+          "const": false
+        },
+        "boundary": {
+          "const": "Retention duration, storage destination, deletion, legal hold, and key lifecycle are configured per deployment and data class. Implemented technical bounds are not a universal retention promise."
+        }
+      }
+    },
+    "implementedControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hilPayload",
+        "ledgerVacuum",
+        "recoveryPoint",
+        "exportStorage"
+      ],
+      "properties": {
+        "hilPayload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract",
+            "source",
+            "maximumRetentionSeconds",
+            "terminalPayloadRetentionSeconds",
+            "metadataRetentionSeconds",
+            "boundary"
+          ],
+          "properties": {
+            "contract": {
+              "const": "clavenar.hil-retention/v1"
+            },
+            "source": {
+              "const": "clavenar-specs/contracts/hil-retention-v1.fixture.json"
+            },
+            "maximumRetentionSeconds": {
+              "const": 2592000
+            },
+            "terminalPayloadRetentionSeconds": {
+              "const": {
+                "auto": 86400,
+                "standard": 604800,
+                "strict": 2592000
+              }
+            },
+            "metadataRetentionSeconds": {
+              "const": 2592000
+            },
+            "boundary": {
+              "const": "These purpose-and-tier deadlines govern HIL payload and minimized metadata handling; they do not set a universal Ledger, export, backup, or customer-data retention period."
+            }
+          }
+        },
+        "ledgerVacuum": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sources",
+            "enabledByDefault",
+            "nonDemoMinimumVacuumSeconds",
+            "officialComposeDemoMode",
+            "legalHoldEnabledByDefault",
+            "boundary"
+          ],
+          "properties": {
+            "sources": {
+              "const": [
+                "clavenar-ledger/src/export.rs",
+                "clavenar-ledger/src/main.rs",
+                "clavenar-e2e/prod/docker-compose.yml"
+              ]
+            },
+            "enabledByDefault": {
+              "const": false
+            },
+            "nonDemoMinimumVacuumSeconds": {
+              "const": 15811200
+            },
+            "officialComposeDemoMode": {
+              "const": true
+            },
+            "legalHoldEnabledByDefault": {
+              "const": false
+            },
+            "boundary": {
+              "const": "The non-demo value is a minimum accepted vacuum window only when vacuum is enabled. Disabled vacuum is current configuration state, not a promise that rows are retained forever."
+            }
+          }
+        },
+        "recoveryPoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract",
+            "source",
+            "backupIntervalSeconds",
+            "maximumAcceptedAgeSeconds",
+            "repositoryRetentionPolicy",
+            "automaticPrune",
+            "objectLockConfigured",
+            "boundary"
+          ],
+          "properties": {
+            "contract": {
+              "const": "clavenar.backup-set-manifest/v1"
+            },
+            "source": {
+              "const": "clavenar-e2e/contracts/backup-set-manifest-v1.fixture.json"
+            },
+            "backupIntervalSeconds": {
+              "const": 604800
+            },
+            "maximumAcceptedAgeSeconds": {
+              "const": 612000
+            },
+            "repositoryRetentionPolicy": {
+              "const": "not-configured"
+            },
+            "automaticPrune": {
+              "const": false
+            },
+            "objectLockConfigured": {
+              "const": false
+            },
+            "boundary": {
+              "const": "The backup interval and accepted recovery-point age are recovery objectives. Backup cadence is not a retention period, repository lifecycle, or immutable-storage guarantee."
+            }
+          }
+        },
+        "exportStorage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "destinations",
+            "signedManifestSupported",
+            "destinationLifecycleConfiguredByClavenar",
+            "boundary"
+          ],
+          "properties": {
+            "source": {
+              "const": "clavenar-ledger/src/export.rs"
+            },
+            "destinations": {
+              "const": [
+                "localfs",
+                "s3-compatible"
+              ]
+            },
+            "signedManifestSupported": {
+              "const": true
+            },
+            "destinationLifecycleConfiguredByClavenar": {
+              "const": false
+            },
+            "boundary": {
+              "const": "A signed export manifest commits artifact integrity. Selecting LocalFS or S3-compatible storage does not configure object lock, deletion, legal hold, key retention, cost, or restore policy."
+            }
+          }
+        }
+      }
+    },
+    "futureFixedDurationClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "requiredEvidence",
+        "restorationRule"
+      ],
+      "properties": {
+        "status": {
+          "const": "not-approved"
+        },
+        "requiredEvidence": {
+          "const": [
+            "provisioned-immutable-lifecycle",
+            "tested-deletion",
+            "tested-legal-hold",
+            "tested-key-retention",
+            "reviewed-cost",
+            "tested-restore",
+            "counsel-approval",
+            "claim-register-receipt"
+          ]
+        },
+        "restorationRule": {
+          "const": "A fixed-duration claim requires a separate approved lifecycle receipt bound to the exact deployment, storage policy, verification date, and public wording."
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "built",
+        "deployed",
+        "retiredPhrases",
+        "requiredBoundaries"
+      ],
+      "properties": {
+        "source": {
+          "const": true
+        },
+        "built": {
+          "const": true
+        },
+        "deployed": {
+          "const": true
+        },
+        "retiredPhrases": {
+          "const": [
+            "seven-year retention",
+            "7-year retention",
+            "retained for seven years",
+            "signed Parquet manifests to S3 for seven-year retention",
+            "seven-year signed S3 retention",
+            "signed S3 records with seven-year retention",
+            "keeps every row forever",
+            "183-day enforced deletion floor"
+          ]
+        },
+        "requiredBoundaries": {
+          "const": [
+            "configured per deployment",
+            "not a universal retention promise",
+            "backup cadence is not a retention period",
+            "a fixed-duration claim requires a separate approved lifecycle receipt"
+          ]
+        }
+      }
+    }
+  }
+}
