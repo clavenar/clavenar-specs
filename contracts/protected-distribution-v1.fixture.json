@@ -24,8 +24,8 @@
       "manifest": "pom.xml",
       "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
       "repository": "clavenar-java-sdk",
-      "tag": "v1.5.0",
-      "version": "1.5.0"
+      "tag": "v1.5.1",
+      "version": "1.5.1"
     },
     {
       "access": "authenticated-registry-and-anonymous-release",
@@ -110,5 +110,5 @@
   "publicationEvent": "clavenar-protected-publication",
   "requiredActor": "vanteguardlabs",
   "schemaVersion": 1,
-  "stackRelease": "1.240.5"
+  "stackRelease": "1.240.6"
 }
