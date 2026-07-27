@@ -8,8 +8,8 @@ visual index. Five views, top-down by abstraction:
    external services Clavenar depends on.
 2. [Container View](#2-container-view) — the four-layer hot path plus
    the orchestrators around it.
-3. [Deployment Topology](#3-deployment-topology) — how `prod` and `dev`
-   share a host-side Caddy.
+3. [Deployment Boundary](#3-deployment-boundary) — sanitized product roles
+   without live host or environment mapping.
 4. [Demo-Prefix End-to-End](#4-demo-prefix-end-to-end) — visitor →
    token → cookie → correlation ID, the per-visitor isolation flow.
 5. [Trust Chain](#5-trust-chain) — every credential Clavenar issues,
@@ -28,7 +28,7 @@ flowchart LR
 
   subgraph Clavenar[Clavenar]
     direction TB
-    Edge[Caddy + console + website + demo-mint]
+    Edge[edge + console + website + demo-mint]
     Core[proxy + brain + policy + ledger + HIL + identity]
   end
 
@@ -36,9 +36,9 @@ flowchart LR
   Vault[Vault — secrets + transit ed25519]
   Anthropic[Anthropic API]
   Voyage[Voyage AI — embeddings]
-  Turnstile[Cloudflare Turnstile]
-  R2[Cloudflare R2 — backups]
-  LE[Let's Encrypt — ACME]
+  Challenge[Browser challenge provider]
+  Recovery[Operator-configured recovery storage]
+  PKI[Operator-configured public PKI]
 
   Visitor -->|HTTPS| Edge
   Operator -->|HTTPS + OIDC| Edge
@@ -52,9 +52,9 @@ flowchart LR
   Core -->|/sign HTTP, transit ed25519| Vault
   Core -->|prompt evaluation| Anthropic
   Core -->|persona embeddings| Voyage
-  Edge -->|widget verify| Turnstile
-  Edge -->|weekly ledger snapshot| R2
-  Edge -->|ACME HTTP-01| LE
+  Edge -->|widget verify| Challenge
+  Edge -->|encrypted recovery point| Recovery
+  Edge -->|certificate protocol| PKI
 ```
 
 ## 2. Container View
@@ -74,23 +74,23 @@ flowchart TD
   Browser[Browser — visitor or operator]
 
   subgraph L1[Layer 1 — Data Plane]
-    Proxy[clavenar-proxy 8443]
+    Proxy[clavenar-proxy]
   end
 
   subgraph L2L3[Layer 2 plus Layer 3 — Semantic plus Governance]
-    Brain[clavenar-brain 8081]
-    Policy[clavenar-policy-engine 8082]
+    Brain[clavenar-brain]
+    Policy[clavenar-policy-engine]
   end
 
   subgraph L4[Layer 4 — Forensic Store]
-    Ledger[clavenar-ledger 8083]
+    Ledger[clavenar-ledger]
   end
 
   Bus[NATS / JetStream — forensic subjects plus shared durable KV]
 
   subgraph Orch[Orchestrators]
-    HIL[clavenar-hil 8084]
-    Identity[clavenar-identity 8086]
+    HIL[clavenar-hil]
+    Identity[clavenar-identity]
     Sandbox[clavenar-sandbox — path-dep into proxy]
     DeepReview[clavenar-deep-review]
     DemoMint[clavenar-demo-mint]
@@ -100,7 +100,7 @@ flowchart TD
 
   subgraph Edge[Edge plus UI]
     Caddy[Caddy — TLS terminator]
-    Console[clavenar-console 8085]
+    Console[clavenar-console]
     Website[clavenar-website — static]
   end
 
@@ -146,88 +146,49 @@ flowchart TD
   DemoMint -->|publish demo-mint events| Bus
 ```
 
-## 3. Deployment Topology
+## 3. Deployment Boundary
 
-Single VPS runs both `prod` (`clavenar-prod` compose project, standard
-ports) and `dev` (`clavenar-dev`, +10000 offset). The production website/Caddy
-service is the only browser edge; dev has no website vhost. The reserved
-DEV/operator hostname `console.clavenar.com` is a static 404 during the
-bootstrap phase. The native production `:8085` and dev `:18085` operator
-listeners are host-loopback-only and require mTLS through an SSH tunnel.
+This is sanitized product architecture. Public entry points are interfaces,
+not a topology disclosure. A deployment presents a browser edge, an
+agent-facing mTLS edge, operator-authenticated control surfaces, application
+roles, durable state, secret custody, and recovery storage. The portable
+Compose and chart contracts describe supported role wiring without asserting a
+live host map.
+
+Deployment-specific operating procedures are maintained privately: host and
+provider placement, region, environment co-location, internal and reserved
+hostnames, listener and service-port maps, perimeter and DNS rules, backup
+destination and lifecycle, destructive reset procedures, and operator access.
 
 ```mermaid
 flowchart LR
-  Internet((Internet))
-  Browser[Visitor browser]
-  Operator[Operator browser]
-  Agent[AI agent]
+  Browser[Visitor browser] -->|HTTPS| PublicEdge[Public browser edge]
+  Operator[Authenticated operator] -->|approved control channel| OperatorEdge[Operator edge]
+  Agent[AI agent] -->|mTLS MCP| AgentEdge[Agent edge]
 
-  subgraph Host[Demo VPS — Europe/Berlin]
-    direction TB
-    HostCaddy[prod website/Caddy — 80 + 443 — auto-LE]
+  PublicEdge --> Website[website]
+  PublicEdge --> Demo[demo console + token mint]
+  OperatorEdge --> Console[operator console]
+  AgentEdge --> Pipeline[proxy + brain + policy + HIL]
 
-    subgraph Prod[clavenar-prod project — standard ports]
-      direction TB
-      P_proxy[proxy 8443]
-      P_brain[brain 8081]
-      P_policy[policy 8082]
-      P_ledger[ledger 8083]
-      P_hil[hil 8084]
-      P_console[console — loopback 8085 mTLS + internal 9085 demo]
-      P_identity[identity 8086]
-      P_demomint[demo-mint]
-      P_sim[simulator]
-      P_stub[upstream-stub]
-      P_dr[deep-review]
-      P_nats[NATS 4222]
-      P_vault[Vault 8200]
-      P_vols[(ledger-data + hil-data + identity-data + secrets + caddy-data)]
-    end
-
-    subgraph Dev[clavenar-dev project — plus10000 ports]
-      direction TB
-      D_proxy[proxy 19443]
-      D_brain[brain 18081]
-      D_policy[policy 18082]
-      D_ledger[ledger 18083]
-      D_hil[hil 18084]
-      D_console[console — loopback 18085 mTLS + internal 9085 demo]
-      D_identity[identity 18086]
-      D_sim[simulator]
-      D_stub[upstream-stub]
-      D_dr[deep-review]
-      D_nats[NATS 14222]
-      D_vault[Vault 18200]
-      D_vols[(ledger-data + hil-data + identity-data + secrets + caddy-data)]
-    end
-  end
-
-  Internet --> Browser
-  Internet --> Agent
-
-  Browser -->|clavenar.com| HostCaddy
-  Browser -->|demo.clavenar.com| HostCaddy
-  Browser -->|console.clavenar.com — static 404| HostCaddy
-  Operator -->|SSH tunnel + native mTLS — loopback 8085| P_console
-  Operator -->|SSH tunnel + native mTLS — loopback 18085| D_console
-  Agent -->|mTLS — 8443| P_proxy
-
-  HostCaddy -->|demo.clavenar.com — curated 9085| P_console
-  HostCaddy -->|demo.clavenar.com /verify only| P_ledger
-  HostCaddy -->|demo.clavenar.com /mint| P_demomint
+  Demo --> Pipeline
+  Console --> Pipeline
+  Pipeline --> Evidence[ledger + forensic bus]
+  Pipeline --> Identity[identity + secret custody]
+  Evidence --> Recovery[encrypted recovery storage]
 ```
 
 ## 4. Demo-Prefix End-to-End
 
 How a visitor session gets its own correlation-ID namespace. The 8-hex
-prefix is minted at Turnstile-time, ridden as a cookie, spliced into
+prefix is minted after challenge verification, ridden as a cookie, spliced into
 every UUIDv4 the proxy emits, and used by HIL + ledger to gate reads
 to the visitor's own traffic.
 
 ```mermaid
 sequenceDiagram
   participant Visitor
-  participant TS as Cloudflare Turnstile
+  participant Challenge as Browser challenge provider
   participant Mint as demo-mint
   participant Console as clavenar-console
   participant Proxy as clavenar-proxy
@@ -235,12 +196,12 @@ sequenceDiagram
   participant Ledger as clavenar-ledger
   participant Sim as clavenar-simulator
 
-  Visitor->>TS: solve widget
-  TS-->>Visitor: cf-turnstile-response token
-  Visitor->>Mint: GET /mint?cf-turnstile-response=...
-  Mint->>TS: server-side verify
-  TS-->>Mint: OK
-  Mint-->>Visitor: 303 demo.clavenar.com/#token=<HS256 JWT — prefix, sub, exp, iat>
+  Visitor->>Challenge: solve widget
+  Challenge-->>Visitor: one-use response token
+  Visitor->>Mint: submit response token
+  Mint->>Challenge: server-side verify
+  Challenge-->>Mint: OK
+  Mint-->>Visitor: 303 public demo origin with fragment JWT
   Note over Visitor,Console: Fragment never sent to server. Console JS reads it client-side.
   Visitor->>Console: POST /api/demo-session/exchange — body has JWT
   Console-->>Visitor: Set-Cookie clavenar_demo_session — HttpOnly Secure SameSite=Lax

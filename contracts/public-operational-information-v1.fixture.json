@@ -1,0 +1,69 @@
+{
+  "contractId": "clavenar.public-operational-information/v1",
+  "contractVersion": "1.0.0",
+  "release": "1.232.0",
+  "policy": {
+    "mode": "restrictive",
+    "publicRepositoryInvariant": "sanitized-product-and-contract-information-only",
+    "operationalProceduresLocation": "private",
+    "exceptionStatus": "none-approved"
+  },
+  "allowedPublicClasses": [
+    "sanitized-product-architecture",
+    "public-service-entry-points",
+    "portable-contracts-and-defaults",
+    "protected-release-and-security-evidence",
+    "externally-observable-behavior"
+  ],
+  "prohibitedDeploymentSpecificClasses": [
+    "host-provider-region-or-cost",
+    "host-colocation-or-environment-map",
+    "internal-or-reserved-hostnames",
+    "perimeter-vendor-firewall-or-dns-configuration",
+    "backup-provider-bucket-location-or-lifecycle",
+    "destructive-reset-schedule-or-volume-procedure",
+    "live-service-port-map-or-private-address",
+    "ssh-tunnel-or-host-access-procedure"
+  ],
+  "classificationBoundary": "Product roles, protocols, public service entry points, portable defaults, release evidence, and externally observable behavior may be public. Live deployment topology and operating procedures are private.",
+  "futureException": {
+    "status": "none-approved",
+    "requiredReceipt": "reviewed-classification-receipt",
+    "requiredFields": [
+      "detailId",
+      "sourceCommit",
+      "publicSurface",
+      "necessity",
+      "threatReview",
+      "expiresOn",
+      "docsApproval",
+      "securityApproval"
+    ],
+    "maximumValidityDays": 90
+  },
+  "gates": {
+    "source": true,
+    "built": true,
+    "deployed": true,
+    "retiredPhrases": [
+      "live in prod on the demo VPS today",
+      "the demo-VPS deploy axis",
+      "Single Hetzner VPS",
+      "VPS firewall: Cloudflare IP ranges only",
+      "Cloudflare R2",
+      "Europe/Berlin",
+      "plus10000 ports",
+      "clavenar-demo-reset.timer",
+      "weekly demo-reset systemd timer",
+      "SSH tunnel + native mTLS",
+      "UptimeRobot",
+      "28-day lifecycle"
+    ],
+    "requiredBoundaries": [
+      "sanitized product architecture",
+      "deployment-specific operating procedures are maintained privately",
+      "public entry points are interfaces, not a topology disclosure",
+      "a public exception requires a reviewed classification receipt"
+    ]
+  }
+}

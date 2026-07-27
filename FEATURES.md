@@ -3242,3 +3242,24 @@ approved lifecycle receipt.
 python3 -m pytest tests/test_retention_claim_boundaries_contract.py
 python3 repos/clavenar-e2e/scripts/check_retention_claim_boundaries.py
 ```
+
+### Contract-tested public operational information
+
+[`clavenar.public-operational-information/v1`](contracts/public-operational-information-v1.fixture.json)
+selects the restrictive publication policy. Public repositories retain
+sanitized product architecture, public interfaces, portable contracts and
+defaults, externally observable behavior, and protected release or security
+evidence. Deployment-specific operating procedures are maintained privately.
+Public entry points are interfaces, not a topology disclosure.
+
+Live host/provider/region maps, internal listeners and hostnames, perimeter
+configuration, backup destinations and lifecycle, destructive reset
+procedures, cost, and operator access are prohibited without an exception.
+There is no approved exception in release 1.232.0. A public exception requires
+a reviewed classification receipt bound to an exact source commit, surface,
+necessity, threat review, Docs/Security approvals, and expiry.
+
+```bash
+python3 -m pytest tests/test_public_operational_information_contract.py
+python3 repos/clavenar-e2e/scripts/check_public_operational_information.py
+```

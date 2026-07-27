@@ -17,6 +17,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
 - [Compliance derivation boundaries](#compliance-derivation-boundaries) — configured authorities, bounded key freshness, explicit degraded modes, and status limitations
 - [Retention claim boundaries](#retention-claim-boundaries) — configured duration, exact technical controls, recovery-point scope, and fixed-duration promotion evidence
+- [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
@@ -57,8 +58,8 @@ Consolidated technical record for Clavenar. Each major section below was previou
 One-glance reference for *what shipped when* and *which services
 each module landed on*. Each row mirrors a section below; the
 authoritative wire-contract detail still lives in those sections.
-**Status legend:** **shipped** = live in prod on the demo VPS today;
-**designed** = TECH_SPEC entry exists but no compose / chart shipment.
+**Status legend:** **shipped** = protected release evidence exists for the
+module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 
 | § | Module | Status | Landed | Services touched |
 |---|---|---|---|---|
@@ -73,6 +74,7 @@ authoritative wire-contract detail still lives in those sections.
 | 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, backend-agnostic with required signing when Identity is configured), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
 | 6b | [Compliance derivation boundaries](#compliance-derivation-boundaries) | shipped | v1.230.0 | `clavenar-specs`, `clavenar-proxy`, `clavenar-identity`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
 | 6c | [Retention claim boundaries](#retention-claim-boundaries) | shipped | v1.231.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
+| 6d | [Public operational information boundary](#public-operational-information-boundary) | shipped | v1.232.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -112,9 +114,9 @@ authoritative wire-contract detail still lives in those sections.
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
 | 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
 
-Versions in the **Landed** column reference `clavenar-internal-specs/VERSION`
-(the demo-VPS deploy axis) or chain versions where the wire schema
-moved. Modules without a single landed version were rolled in over
+Versions in the **Landed** column reference the protected product release
+version or chain versions where the wire schema moved. Modules without a
+single landed version were rolled in over
 several patches and the per-section "Module status" line carries the
 detail.
 
@@ -2521,12 +2523,53 @@ Derivation lives in **clavenar-ledger**, not the console, for three reasons: (1)
 
 ---
 
+## Public operational information boundary
+
+**Module status:** **shipped in v1.232.0.** The strict release contract is
+[`clavenar.public-operational-information/v1`](contracts/public-operational-information-v1.fixture.json);
+its exact schema is
+[`contracts/public-operational-information-v1.schema.json`](contracts/public-operational-information-v1.schema.json).
+
+Public repositories contain sanitized product architecture: roles, trust
+boundaries, protocols, portable defaults, public service entry points,
+externally observable behavior, and protected release or security evidence.
+Public entry points are interfaces, not a topology disclosure. They do not
+reveal which environments share a host, private listeners, internal or reserved
+hostnames, perimeter rules, storage providers, destructive reset procedures,
+or operator access paths.
+
+Deployment-specific operating procedures are maintained privately. That
+includes live host, provider, region, environment map, internal address,
+service-port map, firewall and DNS configuration, backup destination and
+lifecycle, reset schedule, volume procedure, cost, and host-access detail.
+Portable protocol defaults remain public when an integrator needs them; their
+presence does not assert that a live deployment uses the same map.
+
+No exception is approved in this release. A public exception requires a
+reviewed classification receipt that binds one detail to an exact source
+commit and surface, records necessity and threat review, names Docs and
+Security approvals, and expires within 90 days. Source, built-site, assembled,
+and deployed gates reject both retired deployment wording and an unreceipted
+exception.
+
+---
+
 ## Demo experience
 
 
 Companion to none of the existing sections in form. Where [Console config page](#console-config-page) is one read-only page and [Agent onboarding](#agent-onboarding-wao) is a multi-service initiative with a chain version bump, this section sits between: a public demo surface that spans the marketing site, a token-mint service, the existing operator console, and the backend stack, but introduces no new long-running storage and no chain version change.
 
-**Module status:** **shipped.** Extends `clavenar-website` (guided tour + `/#contact` CTA), introduces `clavenar-demo-mint` (small Rust HS256-issuing service behind Cloudflare Turnstile, not a CF Worker — the original CF-Worker plan was dropped for parity with the rest of the in-stack Rust services and to keep the mint event auditable through the same NATS plumbing every other component uses), `clavenar-console` (demo-session cookie + curated `/demo` scenarios + `/demo/fire/{scenario}` endpoint), `clavenar-proxy` (correlation-ID splicing for the `X-Clavenar-Demo-Prefix` header), `clavenar-hil` + `clavenar-ledger` (token-prefix-scoped read filters and HIL decide enforcement), `clavenar-chaos-catalog` (pure-data attack catalog consumed by both `clavenar-chaos-monkey` CLI and console `/demo/fire`), `clavenar-simulator` (`--hil-skip-agent-id-prefix demo-` so visitors aren't auto-approved out from under themselves). Hosted at `clavenar.com` (marketing) + `demo.clavenar.com` (curated demo surface).
+**Module status:** **shipped.** Extends `clavenar-website` (guided tour +
+`/#contact` CTA), introduces `clavenar-demo-mint` (a Rust HS256-issuing
+service protected by a browser challenge), `clavenar-console` (demo-session
+cookie + curated `/demo` scenarios + `/demo/fire/{scenario}` endpoint),
+`clavenar-proxy` (correlation-ID splicing for the
+`X-Clavenar-Demo-Prefix` header), `clavenar-hil` + `clavenar-ledger`
+(token-prefix-scoped read filters and HIL decide enforcement),
+`clavenar-chaos-catalog` (pure-data attack catalog), and
+`clavenar-simulator` (`--hil-skip-agent-id-prefix demo-`). The public
+marketing and curated demo entry points are documented interfaces, not a
+description of their deployment topology.
 
 Design decided by a `/grill-me` walkthrough. Thirteen architectural decisions resolved in sequence; four confirmations on operational tradeoffs. This section is the consolidated record + a snapshot of how the build ultimately landed (one substrate substitution: in-stack Rust mint instead of CF Worker).
 
@@ -2583,11 +2626,18 @@ Total auto-play: ~90s. Click-through mode stretches to ~3 min with explanation p
 
 **Auto-play is the default** (CISO-friendly). A "step through with explanations" toggle in the corner gives evaluators a click-through path; same animation frames, denser annotation. The centerpiece scenario (wire transfer) is non-negotiable — it's the single most photogenic Clavenar moment, the only one that shows *control plane* rather than *filter*.
 
-The tour is **fully client-side** (animations + pre-canned responses). No backend hit until the handoff CTA. This is the lazy-session decision: most marketing-site traffic should never touch the VPS.
+The tour is **fully client-side** (animations + pre-canned responses). No
+backend hit occurs until the handoff CTA. This lazy-session decision keeps most
+marketing-site traffic away from the application backend.
 
 #### 3.2 Console handoff
 
-CTA at end of tour: visitor passes Cloudflare Turnstile on `clavenar.com/#contact` → POSTs to `clavenar-demo-mint` at `demo.clavenar.com/mint` → mint issues a 30-min HS256 JWT carrying `sub`, `correlation_prefix` (8 hex chars, `demo-` prefix), and `agent_id` (`demo-<hex>-bot`) → 303-redirects to `demo.clavenar.com/#token=<jwt>`.
+CTA at end of tour: visitor passes the configured browser challenge at
+`clavenar.com/#contact` → POSTs to `clavenar-demo-mint` at the public demo
+entry point → mint issues a 30-min HS256 JWT carrying `sub`,
+`correlation_prefix` (8 hex chars, `demo-` prefix), and `agent_id`
+(`demo-<hex>-bot`) → 303-redirects to the public demo entry point with the
+token in the URL fragment.
 
 Browser JS shim (`clavenar-console/templates/base.html`) reads the URL fragment, POSTs to `/api/demo-session/exchange` → console sets HttpOnly `Secure SameSite=Lax` cookie, redirects to the clean URL. Standard fragment-auth pattern; the token never appears in server logs. (The `SameSite=Lax` choice over the originally-planned `Strict` is the only deviation from the design — the Strict variant blocked the post-mint navigation cross-site bounce.)
 
@@ -2606,53 +2656,49 @@ The `auditor-fights-back` scenario additionally exercises closed-loop containmen
 
 HIL approve/deny works on the visitor's own pendings (per-prefix filter enforces). Simulator's auto-decide path skips agent IDs starting with `demo-` (via `--hil-skip-agent-id-prefix demo-` / `SIM_HIL_SKIP_AGENT_ID_PREFIX=demo-`) so visitors aren't raced.
 
-### 4. Backend topology
+### 4. Sanitized product architecture
 
-```
-Cloudflare (CDN + WAF + Turnstile JS)
-    │
-    └──► clavenar.com   — Hetzner VPS, single region, single compose stack
-            └── docker-compose --profile stack up -d
-                ├── nats, vault, bootstrap
-                ├── ledger, policy-engine, brain, hil, identity, proxy, console
-                ├── deep-review (forensic auditor)
-                ├── upstream-stub, simulator (always running, ambient traffic)
-                ├── demo-mint (HS256 token issuer behind Turnstile)
-                ├── caddy (TLS termination, Let's Encrypt)
-                └── website (Caddy-served static)
-```
+The demo surface uses the same product roles as a self-hosted deployment:
+static marketing content, a challenge-protected token mint, the curated
+console, the proxy and decision pipeline, HIL, Identity, Ledger, the forensic
+bus, and simulated traffic. TLS terminates before the public applications.
+Every successful mint can publish a forensic event through the same durable
+bus used by the rest of the product.
 
-Subdomains served by Caddy on the same host:
+`clavenar.com` and the public demo origin are public service entry points.
+Public entry points are interfaces, not a topology disclosure: this document
+does not describe host placement, environment co-location, private listeners,
+perimeter configuration, or operator access. Those deployment-specific
+operating procedures are maintained privately.
 
-- `clavenar.com` — marketing site (static).
-- `demo.clavenar.com` — curated demo surface (console + demo-mint behind same domain).
-- `console.clavenar.com` — reserved DEV/operator hostname, served as a static 404 during the native-mTLS bootstrap phase. It never proxies the operator listener, which remains loopback-only and reachable through an SSH tunnel with native mTLS.
-
-VPS firewall: Cloudflare IP ranges only on the public surfaces. The mint endpoint runs in-stack rather than at the CDN edge — chosen for consistency with the rest of the Rust stack and ability to emit ledger events from the mint event (the original CF-Worker plan couldn't write to NATS without a tunnel back through the VPS anyway). One externally provisioned HS256 file is projected independently to the mint and three validators; no key value is embedded in Compose or a container environment.
+One externally provisioned HS256 file is projected independently to the mint
+and each validator; no key value is embedded in Compose or a container
+environment. That custody rule is a portable product invariant rather than a
+live host map.
 
 ### 5. Security model
 
 Mint hardening: `/mint` is per-IP rate-limited (fixed window) and every
-Cloudflare Turnstile solve token is single-use — a replayed token mints
-nothing even inside Turnstile's own validity window.
+browser-challenge solve token is single-use — a replayed token mints nothing
+even inside the provider's own validity window.
 
 #### 5.1 Token mint
 
-`clavenar-demo-mint` (Rust service, port 9200, behind Caddy at `/mint`) holds:
+`clavenar-demo-mint` holds:
 
-- `CLAVENAR_DEMO_MINT_TURNSTILE_SECRET` — Cloudflare Turnstile siteverify secret.
+- the browser-challenge verification secret, projected from a file;
 - `CLAVENAR_DEMO_SESSION_HS256_FILE` — file containing the HS256 signing key, shared with `clavenar-console`, `clavenar-ledger`, and `clavenar-hil` through workload-specific secret projections. The corresponding inline variables remain development compatibility only; production strict-source guards reject them, weak/default values, and ambiguous dual sources.
 
 Mint shape:
 
 ```
-GET /mint?cf-turnstile-response=<token>   (token from the clavenar.com/#contact Turnstile widget)
+GET /mint?<challenge-response>=<token>
   →
-  1. siteverify Turnstile (reject on fail)
+  1. verify the browser challenge (reject on fail)
   2. correlation_prefix = "demo-" + 8 hex chars
   3. agent_id = "demo-" + 8 hex chars + "-bot"
   4. HS256 JWT { sub: <prefix>, prefix, agent_id, exp: now+30min }
-  5. 303 → `https://demo.clavenar.com/#token=<jwt>`
+  5. 303 → configured public demo origin with `#token=<jwt>`
 ```
 
 Every successful mint emits a `demo.session_minted` chain v1 forensic event to `clavenar.forensic` with `agent_id = "demo-mint"`, `correlation_id = <prefix>-mint`, and the pseudonymous `sub` carried in `signal`. The ledger appends the row alongside proxy/policy events so the audit chain has a record of when each demo session was created. `CLAVENAR_DEMO_MINT_NATS_URL` toggles it (unset → the mint still serves; the chain just doesn't get a session-creation row).
@@ -2671,42 +2717,30 @@ The `OR source = 'simulator'` is essential — it's how the visitor sees ambient
 
 #### 5.3 Abuse layering
 
-1. Cloudflare Bot Fight Mode + WAF (free, edge).
-2. Cloudflare Turnstile validation at mint endpoint.
-3. Per-token quota: 50 ledger writes / 50 HIL pendings over 30-min lifetime, then 429.
-4. VPS firewall: Cloudflare IP ranges only.
-5. Brain stays in `mock-key` mode on demo (no Anthropic cost).
-6. Deep-review pinned to `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP=200000` (~$12/day Opus) and `CLAVENAR_DEEP_REVIEW_ANTHROPIC_API_KEY=mock-key` so even if the API key is ever wired, daily spend is bounded.
+1. A deployment-configured edge abuse-control layer.
+2. Single-use browser-challenge validation at the mint endpoint.
+3. Per-token quota: 50 ledger writes / 50 HIL pendings over the 30-min
+   lifetime, then 429.
+4. Deployment-configured network ingress policy.
+5. Brain stays in mock mode on the public demo.
+6. Deep review has an explicit deployment-configured daily token cap.
 
-### 6. Operations
+### 6. Operational boundary
 
-#### 6.1 Hosting
+Hosting placement, environment maps, perimeter and DNS rules, private
+listeners, monitoring vendors, backup destinations and lifecycle, reset
+schedules and volume procedures, operator access, and live cost controls are
+deployment-specific operating procedures maintained privately. The public
+contract retains only externally observable product behavior and portable
+safety invariants.
 
-- **Single Hetzner VPS** runs the entire stack: marketing site, demo-mint, console, all backends. ~$20-30/mo.
-- **TLS**: Caddy with Let's Encrypt for `clavenar.com` and `demo.clavenar.com`; `tls internal` for the operator-only `*-dev` mirrors.
-- **Backups**: weekly snapshot of `ledger-data` volume to Cloudflare R2 (28-day lifecycle, ~$1/mo).
-
-#### 6.2 Failure mode
+#### 6.1 Failure mode
 
 **Fail-open**: marketing site (CDN) is independent of backend; tour always works. When the backend `/health` is down, the "open in console" CTA swaps to an email-us banner client-side. No 503 page, no spinner-of-doom. The visitor still gets the tour and a way to reach you.
 
-`/health` composite endpoint is unauthenticated, internal-network-only between containers, returns 200 iff `ledger:8083/health AND hil:8084/health AND console:8085/health` all respond within 1s.
-
-#### 6.3 Monitoring
-
-- **UptimeRobot** free tier, 5-min ping to `/health`. Email + SMS on outage.
-- **Plausible Analytics** for the funnel (no cookie banner needed).
-- On-call truth: it's the operator. SLA = "best effort, business hours, ~15 min response time." Documented in `clavenar-website/README.md`.
-
-No status page (broadcasts outages to competitors / journalists; CISOs don't subscribe). Failure-state banner is the entire status surface.
-
-#### 6.4 Reset cadence
-
-**Weekly auto-reset.** Schedule fires Sundays 03:00 UTC via `clavenar-demo-reset.service` + `clavenar-demo-reset.timer`; script `clavenar-e2e/prod/run-demo-reset.sh` wipes the `clavenar-prod_ledger-data` and `clavenar-prod_hil-data` volumes while preserving `caddy-data` (LE certs!), `secrets`, and `identity-data`. This deviates from the original "never auto-reset" plan: in practice an unbounded demo chain accumulated noisy traffic faster than the cryptographic-realness narrative needed, and resetting the chain weekly gives every visitor a freshly-coherent timeline. The hash-chain integrity story is now demonstrated on the *current* week's rows; long-term integrity demos run off the dev mirror.
-
-#### 6.5 Cost ceiling
-
-~$40/mo total (Hetzner VPS + R2 backups). If costs cross $100/mo, investigate — the most likely cause is a deep-review API key with the daily cap raised. The demo VPS pins `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP=200000` (~$12/day Opus) as the ceiling.
+`/health` exposes one composite readiness result. Exact dependency addresses,
+timeouts, alert routes, schedules, and response procedures are private
+operations.
 
 ### 7. Sequencing (historical — shipped 2026-05)
 
@@ -2714,12 +2748,15 @@ No status page (broadcasts outages to competitors / journalists; CISOs don't sub
 |---|---|---|
 | 1 | Tour animation (3 scenarios, auto-play + click-through) + polished marketing page + Plausible events wired | Visual story worked; copy landed; conversion measurable |
 | 2 | Receipts-page handoff (live chain rows fetched by sentinel correlation-id, `curl /verify` snippet) | Cryptographic-realness flex without backend complexity |
-| 3 | VPS + compose deployed at `demo.clavenar.com`; CF DNS + WAF in front | Real console URL works; ops baseline |
-| 4 | `clavenar-demo-mint` (in-stack Rust + Turnstile) + console demo-session cookie + HIL approve-prefix enforcement | Per-session isolation; defense-in-depth. *Deviation: in-stack Rust mint replaced the originally-planned CF Worker.* |
+| 3 | Protected release deployed to the public demo entry point | Real console URL works; operations baseline |
+| 4 | `clavenar-demo-mint` + browser challenge + console demo-session cookie + HIL approve-prefix enforcement | Per-session isolation; defense-in-depth |
 | 5 | Ledger filter enforcement; `clavenar-chaos-catalog` library; `/demo/fire` curated attack menu | Full kick-the-tires console |
-| 6 | Simulator `--hil-skip-agent-id-prefix demo-`; UptimeRobot; weekly R2 backups; weekly demo-reset systemd timer | Production-grade ops |
+| 6 | Simulator `--hil-skip-agent-id-prefix demo-`; private monitoring, recovery, and reset procedures | Production-grade operations |
 
-Watch-out that held: **never deploy the console with auth disabled on a non-loopback bind.** Console refuses to boot in this configuration unless `CLAVENAR_CONSOLE_ALLOW_BASIC_ADMIN_NETWORK=true` is set, which is the documented opt-in for the demo VPS (where the open posture is intentional and Caddy + Cloudflare IP allowlist gate the surface).
+Watch-out that held: **never deploy the console with authentication disabled
+on an operator listener.** Console startup and release gates enforce the
+approved deployment mode; exact listener and perimeter configuration is
+private.
 
 ### 8. Out of scope
 
@@ -2737,7 +2774,8 @@ Watch-out that held: **never deploy the console with auth disabled on a non-loop
 - ~~Animation copy and narrative beats per scenario~~ — finalized in the clavenar-website tour.
 - ~~Token-expiry-mid-session UX~~ — 401 surfaces as a banner; visitor returns to `clavenar.…/#contact` for a fresh token.
 - ~~CSS / brand polish on the demo console vs. operator console default~~ — single console build serves both; demo-session cookie is the only state difference.
-- ~~Domain choice~~ — resolved 2026-05-08: `clavenar.com` + `demo.clavenar.com` (operator surface, also serves the mint endpoint at `/mint`).
+- ~~Public entry points~~ — the website and curated demo interfaces are
+  published; their backing topology is intentionally not.
 - ~~Where the `clavenar-chaos-catalog` crate lives~~ — new sibling repo; consumed as a path-dep by `clavenar-chaos-monkey` CLI and `clavenar-console` `/demo/fire`.
 
 Still open after ship:
@@ -2749,7 +2787,8 @@ Still open after ship:
 The four operational tradeoffs that gated the green light, all confirmed at the time and still held during the build:
 
 1. The week-2 kill-switch was real — receipts-only would have shipped if metrics had said so. Metrics cleared the threshold; the full handoff shipped.
-2. Single VPS, no HA, "best effort business hours" demo SLA is acceptable.
+2. The supported failure boundary and public availability wording remain
+   explicit; exact hosting and response procedures are private.
 3. `clavenar-chaos-catalog` extraction is in scope; chaos-monkey becomes a thin wrapper. **Held.**
 4. A shared HS256 JWT secret across the mint service + ledger + HIL is acceptable. **Held**, except custody moved from a tracked Compose anchor to externally provisioned, per-workload file projections. Coordinated generation rotation and explicit rejection of the exact prior token now ship as the deployment lifecycle control described under operator authentication.
 
@@ -4887,7 +4926,7 @@ All knobs are env-driven. Defaults in parens.
 | `CLAVENAR_DEEP_REVIEW_SAMPLE_RATE_GREEN` | `0.01` | Fraction of brain-Green events reviewed |
 | `CLAVENAR_DEEP_REVIEW_SAMPLE_RATE_FLAGGED` | `1.0` | Fraction of brain-Yellow/Red events reviewed |
 | `CLAVENAR_DEEP_REVIEW_CONCURRENCY` | `4` | Max concurrent in-flight reviews (tokio semaphore) |
-| `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP` | `1_000_000` | Input + output tokens per UTC day (~$60/day Opus). Demo VPS pins `200_000` |
+| `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP` | `1_000_000` | Input + output tokens per UTC day; deployments should set a reviewed cost ceiling |
 | `CLAVENAR_DEEP_REVIEW_RETRY_BUDGET_SECS` | `60` | Per-event wall-clock budget across retries |
 | `CLAVENAR_DEEP_REVIEW_PAGE_CONFIDENCE` | `0.85` | Confidence floor for paging on Red |
 | `CLAVENAR_DEEP_REVIEW_ALERT_WEBHOOK` | (none) | Slack-shape webhook URL; disabled when unset |
@@ -6031,7 +6070,7 @@ proceed against these.
    we don't need at v1.
 4. **Chain v3 event sampling: emit every refresh.** ~480 rows/
    day at default cadence with 10 services. Acceptable for the
-   demo VPS; the operator-relevant `caller_kind` field surfaces
+   public demo; the operator-relevant `caller_kind` field surfaces
    the "stuck on bootstrap" signal a sampled stream would lose.
    If the row volume becomes load-bearing at scale, sampling
    is a follow-up tunable rather than a wire-contract change.
