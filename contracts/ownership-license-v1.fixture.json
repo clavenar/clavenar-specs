@@ -1,0 +1,297 @@
+{
+  "contract": "clavenar.ownership-license/v1",
+  "schemaVersion": 1,
+  "release": "1.238.0",
+  "policyVersion": "1.0.0",
+  "effectiveDate": "2026-07-27",
+  "owner": "Vanteguard Labs",
+  "publicLicenseExpression": "Apache-2.0",
+  "restrictedLicenseExpression": "LicenseRef-Clavenar-Proprietary-Internal",
+  "publicLicenseSha256": "sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "publicNoticeSha256": "sha256:e4f3ff57333158fcd3b8e79d61dc09b2b881b888855beff78bc19056c5548f40",
+  "restrictedLicenseSha256": "sha256:7b93cc58cda45ef4899d415eb2444cd7996978569a6d2fefe71f88ccbd5e72ba",
+  "restrictedNoticeSha256": "sha256:2ae627b9335efe87c5249d6956484607443433dfe4b9a9afca86d808e2d2f7c2",
+  "repositories": [
+    {
+      "name": "clavenar-brain",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-chaos-catalog",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "source"]
+    },
+    {
+      "name": "clavenar-chaos-monkey",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-charts",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["helm-chart", "source"]
+    },
+    {
+      "name": "clavenar-console",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-ctl",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["binary", "cargo-package", "source"]
+    },
+    {
+      "name": "clavenar-deep-review",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-demo-mint",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-dotnet-sdk",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["dotnet-package", "source"]
+    },
+    {
+      "name": "clavenar-e2e",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["compose-distribution", "source"]
+    },
+    {
+      "name": "clavenar-exec",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-go-sdk",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["go-module", "source"]
+    },
+    {
+      "name": "clavenar-hil",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-identity",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-internal-specs",
+      "visibility": "restricted",
+      "licenseExpression": "LicenseRef-Clavenar-Proprietary-Internal",
+      "deliverables": ["governance-record", "source"]
+    },
+    {
+      "name": "clavenar-java-sdk",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["maven-package", "source"]
+    },
+    {
+      "name": "clavenar-ledger",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-lite",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["binary", "cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-policy-engine",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-proxy",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-python-sdk",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["python-package", "source"]
+    },
+    {
+      "name": "clavenar-sandbox",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "source"]
+    },
+    {
+      "name": "clavenar-sdk",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "source"]
+    },
+    {
+      "name": "clavenar-shadow-scanner",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["binary", "cargo-package", "source"]
+    },
+    {
+      "name": "clavenar-shared",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "source"]
+    },
+    {
+      "name": "clavenar-simulator",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "oci-image", "source"]
+    },
+    {
+      "name": "clavenar-specs",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["public-contract", "source"]
+    },
+    {
+      "name": "clavenar-typescript-sdk",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["npm-package", "source"]
+    },
+    {
+      "name": "clavenar-website",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["oci-image", "source", "static-site"]
+    },
+    {
+      "name": "clavenar-workload-identity",
+      "visibility": "public",
+      "licenseExpression": "Apache-2.0",
+      "deliverables": ["cargo-package", "source"]
+    }
+  ],
+  "metadata": {
+    "cargoManifests": [
+      "clavenar-brain/Cargo.toml",
+      "clavenar-chaos-catalog/Cargo.toml",
+      "clavenar-chaos-monkey/Cargo.toml",
+      "clavenar-console/Cargo.toml",
+      "clavenar-ctl/Cargo.toml",
+      "clavenar-deep-review/Cargo.toml",
+      "clavenar-demo-mint/Cargo.toml",
+      "clavenar-exec/Cargo.toml",
+      "clavenar-hil/Cargo.toml",
+      "clavenar-identity/Cargo.toml",
+      "clavenar-ledger/Cargo.toml",
+      "clavenar-lite/Cargo.toml",
+      "clavenar-policy-engine/Cargo.toml",
+      "clavenar-proxy/Cargo.toml",
+      "clavenar-sandbox/Cargo.toml",
+      "clavenar-sdk/Cargo.toml",
+      "clavenar-shadow-scanner/Cargo.toml",
+      "clavenar-shared/Cargo.toml",
+      "clavenar-simulator/Cargo.toml",
+      "clavenar-workload-identity/Cargo.toml"
+    ],
+    "npmManifests": [
+      "clavenar-console/static/package.json",
+      "clavenar-typescript-sdk/package.json",
+      "clavenar-website/package.json"
+    ],
+    "pythonManifests": [
+      "clavenar-python-sdk/pyproject.toml"
+    ],
+    "mavenManifests": [
+      "clavenar-java-sdk/examples/custom-dispatcher/pom.xml",
+      "clavenar-java-sdk/examples/native-anthropic/pom.xml",
+      "clavenar-java-sdk/examples/native-openai/pom.xml",
+      "clavenar-java-sdk/examples/pom.xml",
+      "clavenar-java-sdk/examples/realtime/pom.xml",
+      "clavenar-java-sdk/pom.xml"
+    ],
+    "dotnetManifests": [
+      "clavenar-dotnet-sdk/src/Clavenar.AgentSdk/Clavenar.AgentSdk.csproj"
+    ],
+    "goManifests": [
+      "clavenar-go-sdk/adapters/anthropic/go.mod",
+      "clavenar-go-sdk/adapters/openai/go.mod",
+      "clavenar-go-sdk/examples/go.mod",
+      "clavenar-go-sdk/go.mod"
+    ],
+    "helmCharts": [
+      "clavenar-charts/charts/clavenar/Chart.yaml"
+    ],
+    "imageDockerfiles": [
+      "clavenar-brain/Dockerfile",
+      "clavenar-chaos-monkey/Dockerfile",
+      "clavenar-console/Dockerfile",
+      "clavenar-deep-review/Dockerfile",
+      "clavenar-demo-mint/Dockerfile",
+      "clavenar-exec/Dockerfile",
+      "clavenar-hil/Dockerfile",
+      "clavenar-identity/Dockerfile",
+      "clavenar-ledger/Dockerfile",
+      "clavenar-lite/Dockerfile",
+      "clavenar-policy-engine/Dockerfile",
+      "clavenar-proxy/Dockerfile",
+      "clavenar-simulator/Dockerfile",
+      "clavenar-website/Dockerfile"
+    ]
+  },
+  "checks": [
+    "repository-inventory",
+    "root-license-presence",
+    "root-notice-presence",
+    "tracked-legal-files",
+    "exact-public-legal-content",
+    "exact-restricted-legal-content",
+    "owner-and-visibility",
+    "deliverable-coverage",
+    "package-metadata",
+    "image-metadata",
+    "chart-metadata",
+    "public-restricted-boundary"
+  ],
+  "totals": {
+    "repositories": 30,
+    "publicRepositories": 29,
+    "restrictedRepositories": 1,
+    "licenseFiles": 30,
+    "noticeFiles": 30,
+    "licenseExpressions": 2,
+    "deliverableClasses": 14,
+    "cargoManifests": 20,
+    "npmManifests": 3,
+    "pythonManifests": 1,
+    "mavenManifests": 6,
+    "dotnetManifests": 1,
+    "goManifests": 4,
+    "helmCharts": 1,
+    "imageDockerfiles": 14,
+    "metadataFiles": 50,
+    "checks": 12
+  }
+}

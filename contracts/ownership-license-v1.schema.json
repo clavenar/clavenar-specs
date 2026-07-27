@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/ownership-license-v1.schema.json",
+  "title": "Clavenar ownership and license inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "policyVersion",
+    "effectiveDate",
+    "owner",
+    "publicLicenseExpression",
+    "restrictedLicenseExpression",
+    "publicLicenseSha256",
+    "publicNoticeSha256",
+    "restrictedLicenseSha256",
+    "restrictedNoticeSha256",
+    "repositories",
+    "metadata",
+    "checks",
+    "totals"
+  ],
+  "properties": {
+    "contract": {"const": "clavenar.ownership-license/v1"},
+    "schemaVersion": {"const": 1},
+    "release": {"const": "1.238.0"},
+    "policyVersion": {"const": "1.0.0"},
+    "effectiveDate": {"const": "2026-07-27"},
+    "owner": {"const": "Vanteguard Labs"},
+    "publicLicenseExpression": {"const": "Apache-2.0"},
+    "restrictedLicenseExpression": {
+      "const": "LicenseRef-Clavenar-Proprietary-Internal"
+    },
+    "publicLicenseSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "publicNoticeSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "restrictedLicenseSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "restrictedNoticeSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "visibility",
+          "licenseExpression",
+          "deliverables"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^clavenar-[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "visibility": {"enum": ["public", "restricted"]},
+          "licenseExpression": {
+            "enum": [
+              "Apache-2.0",
+              "LicenseRef-Clavenar-Proprietary-Internal"
+            ]
+          },
+          "deliverables": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "binary",
+                "cargo-package",
+                "compose-distribution",
+                "dotnet-package",
+                "go-module",
+                "governance-record",
+                "helm-chart",
+                "maven-package",
+                "npm-package",
+                "oci-image",
+                "public-contract",
+                "python-package",
+                "source",
+                "static-site"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cargoManifests",
+        "npmManifests",
+        "pythonManifests",
+        "mavenManifests",
+        "dotnetManifests",
+        "goManifests",
+        "helmCharts",
+        "imageDockerfiles"
+      ],
+      "properties": {
+        "cargoManifests": {"$ref": "#/$defs/pathList"},
+        "npmManifests": {"$ref": "#/$defs/pathList"},
+        "pythonManifests": {"$ref": "#/$defs/pathList"},
+        "mavenManifests": {"$ref": "#/$defs/pathList"},
+        "dotnetManifests": {"$ref": "#/$defs/pathList"},
+        "goManifests": {"$ref": "#/$defs/pathList"},
+        "helmCharts": {"$ref": "#/$defs/pathList"},
+        "imageDockerfiles": {"$ref": "#/$defs/pathList"}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositories",
+        "publicRepositories",
+        "restrictedRepositories",
+        "licenseFiles",
+        "noticeFiles",
+        "licenseExpressions",
+        "deliverableClasses",
+        "cargoManifests",
+        "npmManifests",
+        "pythonManifests",
+        "mavenManifests",
+        "dotnetManifests",
+        "goManifests",
+        "helmCharts",
+        "imageDockerfiles",
+        "metadataFiles",
+        "checks"
+      ],
+      "properties": {
+        "repositories": {"const": 30},
+        "publicRepositories": {"const": 29},
+        "restrictedRepositories": {"const": 1},
+        "licenseFiles": {"const": 30},
+        "noticeFiles": {"const": 30},
+        "licenseExpressions": {"const": 2},
+        "deliverableClasses": {"const": 14},
+        "cargoManifests": {"const": 20},
+        "npmManifests": {"const": 3},
+        "pythonManifests": {"const": 1},
+        "mavenManifests": {"const": 6},
+        "dotnetManifests": {"const": 1},
+        "goManifests": {"const": 4},
+        "helmCharts": {"const": 1},
+        "imageDockerfiles": {"const": 14},
+        "metadataFiles": {"const": 50},
+        "checks": {"const": 12}
+      }
+    }
+  },
+  "$defs": {
+    "pathList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^clavenar-[a-z0-9]+(?:-[a-z0-9]+)*/.+$"
+      }
+    }
+  }
+}
