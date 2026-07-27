@@ -110,5 +110,5 @@
   "publicationEvent": "clavenar-protected-publication",
   "requiredActor": "vanteguardlabs",
   "schemaVersion": 1,
-  "stackRelease": "1.240.3"
+  "stackRelease": "1.240.4"
 }
