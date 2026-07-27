@@ -850,9 +850,11 @@ four-layer substrate.
 - **Clavenar Collective.** Opt-in, signature-only federated threat intelligence
   (k-anonymity + differential privacy, cross-tenant clustering in a TEE). The brain
   pre-loads peer-observed detectors at the edge.
-- **Insured by Clavenar.** Turn the admissible forensic ledger into an
-  underwriting signal so a partner carrier can price AI-incident coverage on real
-  telemetry instead of a questionnaire.
+- **Insured by Clavenar.** Explore whether independently verifiable forensic
+  evidence can support an underwriting signal so a partner carrier can price
+  AI-incident coverage on real telemetry instead of a questionnaire.
+  Admissibility and insurer acceptance require separate counsel and carrier
+  review.
 
 ---
 

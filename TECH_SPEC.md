@@ -61,7 +61,7 @@ authoritative wire-contract detail still lives in those sections.
 | § | Module | Status | Landed | Services touched |
 |---|---|---|---|---|
 | 1 | [Identity service](#identity-service) | shipped | — | `clavenar-identity` (new, port 8086 / 8186), `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil` |
-| 1a | [Workload attestation verifier contract](#6-capability-attestation) | contract shipped; production verifier pending | v1.125.0 | `clavenar-proxy`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-e2e`, `clavenar-charts` |
+| 1a | [Workload attestation verifier contract](#6-capability-attestation) | real `k8s-key-bound` verifier shipped and production-required | v1.131.0 | `clavenar-proxy`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-e2e`, `clavenar-charts` |
 | 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | shipped | chain v3 | `clavenar-identity`, `clavenar-ctl` (new binary `clavenarctl`), `clavenar-console`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-chaos-monkey` |
 | 2a | [Pre-flight certification](#agent-onboarding-wao) | shipped | v1.22.0 | `clavenar-ctl` (`agents certify`), `clavenar-identity` (`/agents/{id}/certification` + `CertificationMode` gate + `certified_at_version`), `clavenar-chaos-catalog` (`agent_cert` family), `clavenar-ledger` (no change — v3 `agent.certified` rows), `clavenar-console` (cert badge) |
 | 3 | [Tenancy scope](#tenancy-scope) | described | — | (semantics, no new service) |
@@ -675,18 +675,19 @@ Console (`clavenar-console`) needs a "Delegation: alice@acme via support-bot-3" 
 
 ### 9. Migration & rollout
 
-Five phases, each independently shippable. Identity, signing, and federation
-phases shipped. The attestation policy scaffold and verifier contract shipped;
-the production verifier and enforcement migration remain pending.
+Five phases were independently shippable and are now shipped for the supported
+production profile. Attestation enforcement uses the real
+`k8s-key-bound` verifier with signed tenant-scoped measurement approvals.
 
 1. **SVID issuance, no enforcement.** *(shipped)* `clavenar-identity` mints SVIDs alongside the existing CA. Proxy parses the SPIFFE SAN from the cert and falls back to CN for legacy clients.
 2. **Delegation grants.** *(shipped)* `/grant` emits strict EdDSA compact JWS, HIL records the verified delegation principal, and proxy rejects invalid (`grant_invalid`), expired (`grant_expired`), or unverifiable-during-bounded-JWKS-outage (`grant_jwks_unavailable`) grants. Grants are also **just-in-time**: optional `max_uses` (metered at the proxy gate, `grant_usage_exhausted`), `nbf` / `not_after` validity windows (`grant_not_yet_valid`), and optional **recurring weekly windows** (`recurrence`, rejected off-window with `grant_outside_schedule`), with use-exhausted and unused-by-deadline grants self-revoking as `grant.auto_revoked` chain events (see [§ Suspend is hard](#identity-service)).
 3. **Action signing (chain v2).** *(shipped)* Ledger gained v2 dispatch (`HashableEntryV2` with `agent_spiffe`, `signature`, `key_id`); proxy calls `/sign` after the verdict resolves; verifier exposes JWKS-based per-row signature check; mixed-v1/v2 export verifies.
-4. **Attestation enforcement.** *(scaffold + contract shipped; production verifier pending)* `policies/attestation.rego` contains `attestation_required` rules and the proxy carries a legacy mock/header test path. Contract 1.0.0 now defines the only acceptable production verifier boundary. The mock/header path, checked-in global allowlist, and legacy `AttestationClaims` do not constitute real verification.
+4. **Attestation enforcement.** *(shipped for the supported production profile)* Contract 1.0.0 binds the real `k8s-key-bound` verifier result to the CSR key, current SVID generation, SPIFFE identity, tenant, workload, instance, signed measurement approval, trust anchor, and verifier policy. Production refuses mock, disabled, missing, incomplete, or unavailable verifier configuration before listener bind. Caller-supplied legacy attestation headers are inert and cannot create a positive claim. TPM, SGX, Nitro, and other evidence kinds require a separately configured and verified provider before they may be claimed as deployed.
 5. **Cross-tenant federation.** *(shipped)* SPIFFE bundle endpoint at `GET /.well-known/spiffe-bundle`; certificate-capability and typed-request-bound `/actor-token` mint + `/actor-token/redeem` with peer-bundle freshness gate (`peer_bundle_unknown:<td>` / `peer_bundle_stale:<td>`) and atomic shared durable replay reservation; federation poller; two-tenant and multi-replica restart/partition e2e in `clavenar-e2e`.
 
-No real-attestation or production-code-integrity claim is unblocked by the
-contract alone.
+The supported real-verifier claim is limited to the exact production profile
+above. The contract alone does not establish another evidence provider or a
+general claim about all code running in a customer environment.
 
 ### 10. Test surface
 
@@ -7843,6 +7844,33 @@ On-call runbooks — proxy / NATS / ledger / HIL / identity failure
 modes, issuer-key compromise, and routine issuer-key rotation — are
 operational procedures maintained privately in
 `clavenar-internal-specs/RUNBOOKS.md`, not in this public spec.
+
+## Documentation claim boundaries
+
+**Module status:** **shipped in v1.229.0.**
+
+Public claims distinguish an implemented supported profile, a configurable
+capability, an evaluation surface, a signed release artifact, and a customer
+production deployment. Those states are not interchangeable. Production
+requires the supported `k8s-key-bound` attestation verifier; other evidence
+kinds are contract vocabulary until a deployment configures and verifies a
+supported provider. HIL derives approver provenance from the authenticated
+principal, but the resulting channel record does not decide organizational or
+legal authority.
+
+Official regulatory exports and protected release artifacts have their own
+required signature-verification paths. Generic rows, screenshots, control
+mappings, and marketing pages are not all signed attestations. Retention is
+configured per deployment and data class within enforced lifecycle bounds.
+Technical evidence can support review, but certification, admissibility,
+acceptance, and compliance remain determinations for the customer, counsel,
+assessor, regulator, or court.
+
+The exact machine-readable boundary and its source, built, and deployed gates
+are
+[`contracts/documentation-claim-boundaries-v1.fixture.json`](contracts/documentation-claim-boundaries-v1.fixture.json)
+and
+[`contracts/documentation-claim-boundaries-v1.schema.json`](contracts/documentation-claim-boundaries-v1.schema.json).
 ### Rooted file and outbound target boundary
 
 The exact

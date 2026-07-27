@@ -3197,3 +3197,18 @@ otherwise unsafe combinations refuse startup.
 python3 -m pytest tests/test_hosted_lite_safety_contract.py
 python3 repos/clavenar-e2e/scripts/check_hosted_lite_safety.py
 ```
+
+### Contract-tested documentation claims
+
+[`clavenar.documentation-claim-boundaries/v1`](contracts/documentation-claim-boundaries-v1.fixture.json)
+classifies attestation, approver provenance, signing, admissibility, retention,
+and deployment claims by the exact evidence that supports them. Public source,
+built pages, and the deployed origin reject retired unconditional wording.
+Retention is configured per deployment; control mappings are not certification
+or legal advice; and release, evaluation, demo, and customer-production states
+remain distinct.
+
+```bash
+python3 -m pytest tests/test_documentation_claim_boundaries_contract.py
+python3 repos/clavenar-e2e/scripts/check_documentation_claim_boundaries.py
+```

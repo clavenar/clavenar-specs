@@ -1,0 +1,216 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clavenar.com/schemas/documentation-claim-boundaries-v1.schema.json",
+  "title": "Clavenar documentation claim boundaries v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractId",
+    "contractVersion",
+    "release",
+    "claims",
+    "gates"
+  ],
+  "properties": {
+    "contractId": {
+      "const": "clavenar.documentation-claim-boundaries/v1"
+    },
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "release": {
+      "const": "1.229.0"
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "boundary",
+          "approval"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "attestation",
+              "approver-provenance",
+              "signing",
+              "admissibility",
+              "retention",
+              "deployment"
+            ]
+          },
+          "status": {
+            "enum": [
+              "implemented-supported-profile",
+              "server-derived",
+              "artifact-specific",
+              "external-determination",
+              "deployment-configured",
+              "release-and-environment-specific"
+            ]
+          },
+          "boundary": {
+            "type": "string",
+            "minLength": 80,
+            "maxLength": 400
+          },
+          "approval": {
+            "enum": [
+              "security",
+              "counsel-and-representative-assessor",
+              "security-privacy-and-counsel",
+              "security-and-docs"
+            ]
+          }
+        }
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "attestation"
+              },
+              "status": {
+                "const": "implemented-supported-profile"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "approver-provenance"
+              },
+              "status": {
+                "const": "server-derived"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "signing"
+              },
+              "status": {
+                "const": "artifact-specific"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "admissibility"
+              },
+              "status": {
+                "const": "external-determination"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "retention"
+              },
+              "status": {
+                "const": "deployment-configured"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "deployment"
+              },
+              "status": {
+                "const": "release-and-environment-specific"
+              }
+            },
+            "required": [
+              "id",
+              "status"
+            ]
+          }
+        }
+      ]
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "built",
+        "deployed",
+        "retiredPhrases",
+        "requiredBoundaries"
+      ],
+      "properties": {
+        "source": {
+          "const": true
+        },
+        "built": {
+          "const": true
+        },
+        "deployed": {
+          "const": true
+        },
+        "retiredPhrases": {
+          "const": [
+            "admissible forensic ledger",
+            "signed Parquet manifests to S3 for seven-year retention",
+            "production verifier pending"
+          ]
+        },
+        "requiredBoundaries": {
+          "const": [
+            "configured per deployment",
+            "not legal advice",
+            "not certification",
+            "exact release"
+          ]
+        }
+      }
+    }
+  }
+}

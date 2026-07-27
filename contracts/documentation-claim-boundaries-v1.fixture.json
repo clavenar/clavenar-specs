@@ -1,0 +1,59 @@
+{
+  "contractId": "clavenar.documentation-claim-boundaries/v1",
+  "contractVersion": "1.0.0",
+  "release": "1.229.0",
+  "claims": [
+    {
+      "id": "attestation",
+      "status": "implemented-supported-profile",
+      "boundary": "Production requires the supported k8s-key-bound verifier profile. TPM, SGX, Nitro, and other evidence kinds are contract vocabulary unless a deployment configures and verifies a supported provider.",
+      "approval": "security"
+    },
+    {
+      "id": "approver-provenance",
+      "status": "server-derived",
+      "boundary": "HIL derives decision principal and channel provenance from the authenticated principal. That proves the recorded channel, not the approver's organizational authority or the legal sufficiency of the decision.",
+      "approval": "security"
+    },
+    {
+      "id": "signing",
+      "status": "artifact-specific",
+      "boundary": "Official regulatory exports and protected release artifacts have required verification paths. Generic ledger rows, screenshots, mappings, and marketing pages are not all independently signed attestations.",
+      "approval": "security"
+    },
+    {
+      "id": "admissibility",
+      "status": "external-determination",
+      "boundary": "Clavenar supplies verifiable technical evidence. Admissibility, acceptance, certification, and compliance remain determinations for the customer, counsel, assessor, regulator, or court.",
+      "approval": "counsel-and-representative-assessor"
+    },
+    {
+      "id": "retention",
+      "status": "deployment-configured",
+      "boundary": "Retention is selected and operated per deployment and data class within enforced lifecycle bounds. No public page may describe a seven-year storage deployment without a separate approved lifecycle receipt.",
+      "approval": "security-privacy-and-counsel"
+    },
+    {
+      "id": "deployment",
+      "status": "release-and-environment-specific",
+      "boundary": "A source feature, signed release, evaluation stack, public demo, and customer production deployment are distinct states. Claims name the exact state proved by their receipt.",
+      "approval": "security-and-docs"
+    }
+  ],
+  "gates": {
+    "source": true,
+    "built": true,
+    "deployed": true,
+    "retiredPhrases": [
+      "admissible forensic ledger",
+      "signed Parquet manifests to S3 for seven-year retention",
+      "production verifier pending"
+    ],
+    "requiredBoundaries": [
+      "configured per deployment",
+      "not legal advice",
+      "not certification",
+      "exact release"
+    ]
+  }
+}
