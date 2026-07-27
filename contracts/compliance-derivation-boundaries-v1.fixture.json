@@ -1,0 +1,154 @@
+{
+  "contractId": "clavenar.compliance-derivation-boundaries/v1",
+  "contractVersion": "1.0.0",
+  "release": "1.230.0",
+  "configurationSources": [
+    {
+      "id": "capability-attestation",
+      "authority": "The production deployment selects identity-k8s-key-bound and signed tenant-scoped measurement approvals. Runtime lookup, not caller input, supplies the verified result.",
+      "verification": "The exact verifier lifecycle and production startup-refusal matrix prove provider, issuer, tenant, workload, instance, CSR key, SVID generation, measurement, freshness, and approval bindings.",
+      "bounds": {
+        "evidenceAgeSeconds": 300,
+        "verifiedResultLifetimeSeconds": 900,
+        "proxyCacheCeilingSeconds": 300
+      }
+    },
+    {
+      "id": "delegation-jwks",
+      "authority": "Proxy startup configuration names Identity's JWKS URL, refresh cadence, maximum staleness, fetch deadline, response-size ceiling, key-count ceiling, and canonical key requirements.",
+      "verification": "A presented compact JWS is authenticated before claims are decoded. Cold or stale snapshots reject; a failed refresh retains the prior snapshot only inside the configured maximum age.",
+      "bounds": {
+        "refreshSecondsMinimum": 1,
+        "refreshSecondsMaximum": 300,
+        "stalenessSecondsMinimum": 2,
+        "stalenessSecondsMaximum": 900,
+        "fetchTimeoutSecondsMaximum": 30
+      }
+    },
+    {
+      "id": "compliance-register",
+      "authority": "Ledger's static control catalog derives schema-v3 evidence from an exact chain window, complete cryptographic verification, overlapping export count, and server-derived decision provenance.",
+      "verification": "POST /compliance/evidence and compliance_register.json in a signed regulatory export call the same pure derivation engine and expose metrics plus representative sequence numbers.",
+      "bounds": {
+        "statusCount": 3,
+        "sampleSequenceMaximum": 5,
+        "schemaVersion": 3
+      }
+    }
+  ],
+  "degradedModes": [
+    {
+      "id": "authorized-signing-unavailable",
+      "posture": "fail-open-loud",
+      "scope": "An already Authorized, non-attestation-required call may proceed without an Identity action signature.",
+      "signal": "signing_unavailable",
+      "evidenceBoundary": "The resulting legacy row is not signed evidence and cannot satisfy a signature-dependent derivation."
+    },
+    {
+      "id": "revocation-cache-degraded",
+      "posture": "fail-open-loud",
+      "scope": "A request may proceed while the in-flight revocation mirror has never synchronized or has lost its watch; issuance remains gated by Identity.",
+      "signal": "clavenar_proxy_revocation_cache_degraded",
+      "evidenceBoundary": "Sampled revocation_check_degraded rows expose the coverage loss; the interval cannot support a complete in-flight-revocation claim."
+    },
+    {
+      "id": "request-mask-degraded",
+      "posture": "fail-open-loud",
+      "scope": "After authorization, masking failure forwards the original request because masking is a data-minimization defense, not an authorization gate.",
+      "signal": "clavenar_proxy_request_mask_degraded_total",
+      "evidenceBoundary": "The counter records the loss of masking; the affected request cannot support a claim that provider-bound parameters were minimized."
+    },
+    {
+      "id": "tool-definition-scan-degraded",
+      "posture": "fail-open-loud",
+      "scope": "A tools/list response may be relayed unscanned when the definition scanner is unavailable; catalog hashing still records definition drift.",
+      "signal": "clavenar_proxy_tool_definition_scan_degraded_total",
+      "evidenceBoundary": "The interval cannot support complete tool-definition poisoning coverage because that optional inspection did not run."
+    },
+    {
+      "id": "tool-name-lookalike-scan-degraded",
+      "posture": "fail-open-loud",
+      "scope": "An optional tool-name lookalike scan may fall back after the primary authorization and policy gates have passed.",
+      "signal": "clavenar_proxy_tool_name_lookalike_scan_degraded_total",
+      "evidenceBoundary": "The interval cannot support complete tool-name lookalike-detection coverage because that optional inspection did not run."
+    }
+  ],
+  "failClosedModes": [
+    {
+      "id": "delegation-jwks-cold-or-stale",
+      "condition": "A request presents x-clavenar-grant while no completely validated JWKS snapshot exists inside its configured maximum age.",
+      "outcome": "503 grant_jwks_unavailable",
+      "evidenceBoundary": "No unverified delegation principal or advisory claim enters the pipeline."
+    },
+    {
+      "id": "attestation-verifier-unavailable",
+      "condition": "A capability-attestation-required request lacks an exact-current verified result or the configured verifier/readiness authority is unavailable.",
+      "outcome": "attestation_verifier_unavailable",
+      "evidenceBoundary": "No caller-supplied attestation claim substitutes for runtime verification."
+    },
+    {
+      "id": "grant-usage-store-degraded",
+      "condition": "A max_uses delegation grant cannot reserve its next use in the shared durable compare-and-set authority.",
+      "outcome": "503 control_state_unavailable",
+      "evidenceBoundary": "The request is rejected instead of consuming an unmetered delegation use."
+    },
+    {
+      "id": "regulatory-export-verification-incomplete",
+      "condition": "Chain, historical key, RFC 3161, exact Ledger workload identity, or Identity signing verification does not complete.",
+      "outcome": "no regulatory export bytes",
+      "evidenceBoundary": "An incomplete export is never presented as a signed assessment artifact."
+    }
+  ],
+  "derivations": [
+    {
+      "id": "human-oversight",
+      "inputs": [
+        "exact chain window",
+        "server-derived decided_by",
+        "server-derived approver_provenance"
+      ],
+      "satisfiedWhen": "At least one recorded human decision exists and every included human decision uses webauthn, oidc, or saml provenance.",
+      "partialWhen": "At least one included human decision lacks attested provenance.",
+      "noDataWhen": "No included human decision exists; system and auth-disabled rows are excluded from the human count.",
+      "limitation": "Satisfied describes the logged channel predicate for the selected window, not the approver's organizational authority or compliance with an external duty."
+    },
+    {
+      "id": "cryptographic-control-evidence",
+      "inputs": [
+        "exact chain window",
+        "chain validity",
+        "historical signing-key verification",
+        "RFC 3161 verification",
+        "verified signed-row counts"
+      ],
+      "satisfiedWhen": "The derivation-specific predicate is met on a valid cryptographically verified chain.",
+      "partialWhen": "The window contains evidence but complete chain or cryptographic verification, signed coverage, or the derivation-specific predicate is absent.",
+      "noDataWhen": "The selected window contains no applicable rows.",
+      "limitation": "A signed bundle proves integrity and issuer verification for its committed artifacts; it does not make every source fact true or every mapping an attestation."
+    },
+    {
+      "id": "control-mapping-status",
+      "inputs": [
+        "named runtime artifact",
+        "derivation metric",
+        "representative chain sequences"
+      ],
+      "satisfiedWhen": "The named mechanical predicate evaluates to satisfied for the exact release, deployment, and selected window.",
+      "partialWhen": "Only part of the named runtime predicate is evidenced or a required verification is incomplete.",
+      "noDataWhen": "The exact window has no applicable facts.",
+      "limitation": "Evidence status is a technical projection. Certification, conformity, legal sufficiency, and the surrounding organizational process remain external determinations."
+    }
+  ],
+  "gates": {
+    "source": true,
+    "assembled": true,
+    "built": true,
+    "deployed": true,
+    "requiredPhrases": [
+      "fail-open paths and their signals",
+      "cold or stale JWKS rejects",
+      "satisfied is a mechanical predicate",
+      "not a conformity assessment"
+    ]
+  }
+}

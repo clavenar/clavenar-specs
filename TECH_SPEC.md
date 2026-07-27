@@ -15,6 +15,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [CLI device authorization](#cli-device-authorization) — bounded RFC 8628 operator login and disjoint operator/agent authority
 - [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
 - [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
+- [Compliance derivation boundaries](#compliance-derivation-boundaries) — configured authorities, bounded key freshness, explicit degraded modes, and status limitations
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
 - [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
@@ -69,6 +70,7 @@ authoritative wire-contract detail still lives in those sections.
 | 5 | [Operator authentication](#operator-authentication) | shipped | — | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
 | 6 | [Regulatory export](#regulatory-export) | shipped (manifest v8; tenant-bound export in v1.216.0) | v1.216.0 | `clavenar-ledger` (chain v4 evidence rows; backend-agnostic core), `clavenar-identity` (`POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl`, `clavenar-console` |
 | 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, backend-agnostic with required signing when Identity is configured), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
+| 6b | [Compliance derivation boundaries](#compliance-derivation-boundaries) | shipped | v1.230.0 | `clavenar-specs`, `clavenar-proxy`, `clavenar-identity`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -7871,6 +7873,65 @@ are
 [`contracts/documentation-claim-boundaries-v1.fixture.json`](contracts/documentation-claim-boundaries-v1.fixture.json)
 and
 [`contracts/documentation-claim-boundaries-v1.schema.json`](contracts/documentation-claim-boundaries-v1.schema.json).
+
+## Compliance derivation boundaries
+
+**Module status:** **shipped in v1.230.0.**
+
+Compliance evidence is derived only from named configured authorities and an
+exact release, deployment, and time window. The
+[`clavenar.compliance-derivation-boundaries/v1`](contracts/compliance-derivation-boundaries-v1.fixture.json)
+contract freezes those inputs, the fail-open paths and their signals, the
+fail-closed verification paths, and the limitations on every status.
+
+### Configured authorities and freshness
+
+| Boundary | Authority | Bounded verification |
+|---|---|---|
+| Capability attestation | Production selects `identity-k8s-key-bound`; Identity derives the result from configured verifier trust and signed tenant-scoped measurement approvals. Caller headers are inert. | Evidence age ≤300 seconds, verified-result lifetime ≤900 seconds, and Proxy cache ≤300 seconds. Every CSR key, SVID generation, SPIFFE, tenant, workload, instance, measurement, issuer, and policy binding must match. |
+| Delegation JWKS | Proxy startup configuration names Identity's `/jwks.json`, refresh cadence, maximum staleness, fetch deadline, response-size ceiling, key-count ceiling, and canonical Ed25519 key requirements. | Refresh is 1–300 seconds, maximum staleness is 2–900 seconds and must exceed refresh, and fetch timeout is ≤30 seconds. A failed refresh retains only a completely validated prior snapshot inside that bound. |
+| Compliance register | Ledger schema v3's static control catalog consumes an exact chain slice, complete cryptographic result, overlapping export count, and HIL's server-derived decision provenance. | The live `POST /compliance/evidence` view and signed bundle `compliance_register.json` call the same pure derivation engine; each status carries exact metrics and at most five representative sequence numbers. |
+
+Cold or stale JWKS rejects a request that presents a delegation grant with
+`503 grant_jwks_unavailable`; there is no unsigned or advisory-claim fallback.
+Unavailable exact-current attestation returns
+`attestation_verifier_unavailable`. A max-use grant whose shared durable CAS
+authority cannot reserve the next use rejects `503 control_state_unavailable`.
+Incomplete chain, historical-key, RFC 3161, Ledger workload-identity, or
+Identity-signing verification emits no regulatory export bytes.
+
+### Explicit degraded modes
+
+The following fail-open behavior is narrowly scoped and loud. It never earns
+credit for the unavailable control:
+
+| Condition | Permitted behavior | Required signal and evidence limit |
+|---|---|---|
+| Identity action signing unavailable after an Authorized, non-attestation-required decision | The call may proceed with a legacy unsigned row. | `signing_unavailable`; the row cannot satisfy a signature-dependent derivation. |
+| In-flight revocation mirror unsynchronized | The request may proceed; Identity still gates issuance. | `clavenar_proxy_revocation_cache_degraded` plus sampled `revocation_check_degraded`; the interval cannot prove complete in-flight revocation. |
+| Request masking unavailable after authorization | Forward the original parameters. | `clavenar_proxy_request_mask_degraded_total`; the request cannot prove provider-bound minimization. |
+| Optional tool-definition scan unavailable | Relay `tools/list`; retain catalog hashing. | `clavenar_proxy_tool_definition_scan_degraded_total`; the interval cannot prove complete definition-poisoning coverage. |
+| Optional tool-name lookalike scan unavailable | Continue after the primary authorization and policy gates. | `clavenar_proxy_tool_name_lookalike_scan_degraded_total`; the interval cannot prove complete lookalike coverage. |
+
+### Derivation status semantics
+
+The only statuses are `satisfied`, `partial`, and `no_data`. Satisfied is a
+mechanical predicate over the named inputs for the exact window. For human
+oversight it requires at least one included human decision and
+`webauthn`/`oidc`/`saml` provenance on every included decision; `system` and
+`auth-disabled` rows are excluded. Partial means some applicable evidence
+exists but a required predicate or verification is incomplete. No-data means
+the window contains no applicable fact; it is not a pass.
+
+Every register carries the wire disclaimer that it is a projection of logged
+forensic facts, not a conformity assessment. A satisfied row does not decide
+organizational authority, legal sufficiency, certification, or customer
+compliance. A signed export proves integrity and issuer verification for the
+artifacts it commits, not that every source fact is true or every mapping is an
+attestation.
+
+The strict schema is
+[`contracts/compliance-derivation-boundaries-v1.schema.json`](contracts/compliance-derivation-boundaries-v1.schema.json).
 ### Rooted file and outbound target boundary
 
 The exact

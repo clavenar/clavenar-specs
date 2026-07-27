@@ -751,6 +751,14 @@ tracker.
 For any company deploying autonomous agents in high-risk categories (recruitment,
 finance, critical infrastructure), compliance is no longer optional.
 
+Clavenar's register is a technical evidence projection, not a conformity
+assessment. The versioned compliance-derivation contract names the configured
+attestation, delegation-key, and Ledger authorities; all fail-open paths and
+their signals; and the exact `satisfied` / `partial` / `no_data` predicates.
+Cold or stale JWKS rejects a presented delegation grant. Satisfied is a
+mechanical predicate for one exact release, deployment, and time window, not a
+certification or conclusion that an organization complies.
+
 ### 13.1 Article 14 — human oversight
 
 - **Explainable intervention.** Clavenar translates JSON-RPC tool calls into plain

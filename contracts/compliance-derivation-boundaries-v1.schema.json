@@ -1,0 +1,464 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clavenar.com/schemas/compliance-derivation-boundaries-v1.schema.json",
+  "title": "Clavenar compliance derivation boundaries v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractId",
+    "contractVersion",
+    "release",
+    "configurationSources",
+    "degradedModes",
+    "failClosedModes",
+    "derivations",
+    "gates"
+  ],
+  "properties": {
+    "contractId": {
+      "const": "clavenar.compliance-derivation-boundaries/v1"
+    },
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "release": {
+      "const": "1.230.0"
+    },
+    "configurationSources": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/definitions/configurationSource"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "capability-attestation"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "delegation-jwks"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "compliance-register"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        }
+      ]
+    },
+    "degradedModes": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/definitions/degradedMode"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "authorized-signing-unavailable"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "revocation-cache-degraded"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "request-mask-degraded"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "tool-definition-scan-degraded"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "tool-name-lookalike-scan-degraded"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        }
+      ]
+    },
+    "failClosedModes": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/definitions/failClosedMode"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "delegation-jwks-cold-or-stale"
+              },
+              "outcome": {
+                "const": "503 grant_jwks_unavailable"
+              }
+            },
+            "required": [
+              "id",
+              "outcome"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "attestation-verifier-unavailable"
+              },
+              "outcome": {
+                "const": "attestation_verifier_unavailable"
+              }
+            },
+            "required": [
+              "id",
+              "outcome"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "grant-usage-store-degraded"
+              },
+              "outcome": {
+                "const": "503 control_state_unavailable"
+              }
+            },
+            "required": [
+              "id",
+              "outcome"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "regulatory-export-verification-incomplete"
+              },
+              "outcome": {
+                "const": "no regulatory export bytes"
+              }
+            },
+            "required": [
+              "id",
+              "outcome"
+            ]
+          }
+        }
+      ]
+    },
+    "derivations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/definitions/derivation"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "human-oversight"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "cryptographic-control-evidence"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "const": "control-mapping-status"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        }
+      ]
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "assembled",
+        "built",
+        "deployed",
+        "requiredPhrases"
+      ],
+      "properties": {
+        "source": {
+          "const": true
+        },
+        "assembled": {
+          "const": true
+        },
+        "built": {
+          "const": true
+        },
+        "deployed": {
+          "const": true
+        },
+        "requiredPhrases": {
+          "const": [
+            "fail-open paths and their signals",
+            "cold or stale JWKS rejects",
+            "satisfied is a mechanical predicate",
+            "not a conformity assessment"
+          ]
+        }
+      }
+    }
+  },
+  "definitions": {
+    "configurationSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "authority",
+        "verification",
+        "bounds"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "capability-attestation",
+            "delegation-jwks",
+            "compliance-register"
+          ]
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 100
+        },
+        "verification": {
+          "type": "string",
+          "minLength": 100
+        },
+        "bounds": {
+          "type": "object",
+          "minProperties": 3,
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "degradedMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "posture",
+        "scope",
+        "signal",
+        "evidenceBoundary"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "authorized-signing-unavailable",
+            "revocation-cache-degraded",
+            "request-mask-degraded",
+            "tool-definition-scan-degraded",
+            "tool-name-lookalike-scan-degraded"
+          ]
+        },
+        "posture": {
+          "const": "fail-open-loud"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 80
+        },
+        "signal": {
+          "type": "string",
+          "minLength": 15
+        },
+        "evidenceBoundary": {
+          "type": "string",
+          "minLength": 80
+        }
+      }
+    },
+    "failClosedMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "condition",
+        "outcome",
+        "evidenceBoundary"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "delegation-jwks-cold-or-stale",
+            "attestation-verifier-unavailable",
+            "grant-usage-store-degraded",
+            "regulatory-export-verification-incomplete"
+          ]
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 80
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 20
+        },
+        "evidenceBoundary": {
+          "type": "string",
+          "minLength": 70
+        }
+      }
+    },
+    "derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "inputs",
+        "satisfiedWhen",
+        "partialWhen",
+        "noDataWhen",
+        "limitation"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "human-oversight",
+            "cryptographic-control-evidence",
+            "control-mapping-status"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 10
+          }
+        },
+        "satisfiedWhen": {
+          "type": "string",
+          "minLength": 80
+        },
+        "partialWhen": {
+          "type": "string",
+          "minLength": 50
+        },
+        "noDataWhen": {
+          "type": "string",
+          "minLength": 40
+        },
+        "limitation": {
+          "type": "string",
+          "minLength": 100
+        }
+      }
+    }
+  }
+}

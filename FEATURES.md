@@ -1472,7 +1472,7 @@ cat README.txt
 
 **Concept.** The Article 11/12 bundle covers documentation + logging. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), plus the operational-monitoring controls auditors ask about under SOC 2 / ISO 27001, are *auto-derived from the chain* — no operator prose required. A live JSON register the operator renders at `/compliance` and downloads as a signed pack. It is evidence projection, not a legal conformity assessment, and says so on the wire.
 
-**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of five seed controls (`EU-AI-Act-Article-14`, `-15`, `ISO-27001-8.13`, `SOC2-CC7.2`, `SOC2-CC7.3`), each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v2: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, representative `sample_seqs`, and a narrative). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (current manifest **v7**, block introduced in v4, committed by sha256, `article_scope` widened to 14 + 15) — both go through one derivation function so the live view and the bundled artifact agree. The derivation and required Identity signing are backend-agnostic, so `/compliance/evidence` and signed regulatory exports work on the staged PostgreSQL path too. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) **and their channel provenance** — Satisfied demands every human decision rode an attested channel (`webauthn` / `oidc` / `saml`, stamped server-side by HIL from the verified principal); demo sessions, plain bearer stamps, and auth-disabled bypasses never count, system/auto decisions are excluded from the human count entirely, and the `provenance_summary` metric tags every decision channel so an auditor sees exactly what decided. Article 15 derives from deny-signal distribution + `verify_chain` pass + signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
+**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of eleven EU AI Act, ISO 27001, SOC 2, NIST AI RMF, and NIST GenAI Profile controls, each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v3: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, at most five representative `sample_seqs`, a narrative, and aggregate cryptographic verification). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (current manifest **v8**, block introduced in v4, committed by sha256) — both go through one derivation function so the live view and the bundled artifact agree. The derivation and required Identity signing are backend-agnostic, so `/compliance/evidence` and signed regulatory exports work on the staged PostgreSQL path too. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) **and their channel provenance** — Satisfied demands every human decision rode an attested channel (`webauthn` / `oidc` / `saml`, stamped server-side by HIL from the verified principal); demo sessions, plain bearer stamps, and auth-disabled bypasses never count, system/auto decisions are excluded from the human count entirely, and the `provenance_summary` metric tags every decision channel so an auditor sees exactly what decided. Article 15 derives from deny-signal distribution + complete cryptographic verification + verified signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
 
 **Verify.**
 
@@ -3211,4 +3211,19 @@ remain distinct.
 ```bash
 python3 -m pytest tests/test_documentation_claim_boundaries_contract.py
 python3 repos/clavenar-e2e/scripts/check_documentation_claim_boundaries.py
+```
+
+### Explicit compliance derivation boundaries
+
+[`clavenar.compliance-derivation-boundaries/v1`](contracts/compliance-derivation-boundaries-v1.fixture.json)
+binds attestation, delegation JWKS, and schema-v3 register evidence to their
+configured authorities and freshness limits. It inventories five fail-open
+paths with their exact loud signals, four fail-closed verification paths, and
+the `satisfied` / `partial` / `no_data` predicates and limitations. Cold or
+stale JWKS rejects presented delegation, and satisfied is a mechanical
+predicate for one exact window, not a conformity assessment.
+
+```bash
+python3 -m pytest tests/test_compliance_derivation_boundaries_contract.py
+python3 repos/clavenar-e2e/scripts/check_compliance_derivation_boundaries.py
 ```
