@@ -3180,3 +3180,20 @@ python3 -m pytest tests/test_outbound_resolution_pinning_contract.py
 python3 repos/clavenar-e2e/scripts/check_outbound_resolution_pinning.py
 python3 -m pytest repos/clavenar-charts/tests/test_outbound_resolution_pinning.py
 ```
+
+### Fail-closed hosted Lite profile
+
+[`clavenar.hosted-lite-safety/v1`](contracts/hosted-lite-safety-v1.fixture.json)
+keeps local developer defaults available while requiring every hosted template
+to select a startup-enforced profile. Hosted Lite requires distinct agent and
+operator credentials, enforce mode, a bounded per-agent rate limit, durable
+absolute SQLite state on a persistent volume, at least one running machine,
+and an explicit `mcp-jsonrpc-v1` HTTPS adapter. Request and response bodies,
+operation time, JSON-RPC version, and response identity are server-bounded.
+Missing, ambiguous, overlapping, ephemeral, placeholder, incompatible, or
+otherwise unsafe combinations refuse startup.
+
+```bash
+python3 -m pytest tests/test_hosted_lite_safety_contract.py
+python3 repos/clavenar-e2e/scripts/check_hosted_lite_safety.py
+```
