@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/artifact-license-audit-v1.schema.json",
+  "title": "Clavenar exact release artifact license audit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "policyVersion",
+    "effectiveDate",
+    "owner",
+    "firstPartyLicenseExpression",
+    "licenseSha256",
+    "noticeSha256",
+    "packageLegalPaths",
+    "imageLegalPaths",
+    "packageSubjects",
+    "imageSubjects",
+    "dependencyPolicy",
+    "checks",
+    "totals"
+  ],
+  "properties": {
+    "contract": {"const": "clavenar.artifact-license-audit/v1"},
+    "schemaVersion": {"const": 1},
+    "release": {"const": "1.239.0"},
+    "policyVersion": {"const": "1.0.0"},
+    "effectiveDate": {"const": "2026-07-27"},
+    "owner": {"const": "Vanteguard Labs"},
+    "firstPartyLicenseExpression": {"const": "Apache-2.0"},
+    "licenseSha256": {"$ref": "#/$defs/digest"},
+    "noticeSha256": {"$ref": "#/$defs/digest"},
+    "packageLegalPaths": {
+      "const": ["LICENSE", "NOTICE"]
+    },
+    "imageLegalPaths": {
+      "const": [
+        "usr/share/licenses/clavenar/LICENSE",
+        "usr/share/licenses/clavenar/NOTICE"
+      ]
+    },
+    "packageSubjects": {
+      "type": "array",
+      "minItems": 31,
+      "maxItems": 31,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^package:clavenar-[^:]+:[^:]+:.+$"
+      }
+    },
+    "imageSubjects": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject", "repository"],
+        "properties": {
+          "subject": {
+            "type": "string",
+            "pattern": "^image:[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "repository": {
+            "type": "string",
+            "pattern": "^clavenar-[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        }
+      }
+    },
+    "dependencyPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cargoAllow",
+        "deniedMarkers",
+        "sourceReferenceDisposition",
+        "scannerNoAssertionDisposition",
+        "reciprocalAggregateDisposition"
+      ],
+      "properties": {
+        "cargoAllow": {
+          "type": "array",
+          "minItems": 17,
+          "maxItems": 17,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "deniedMarkers": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "sourceReferenceDisposition": {"const": "not-redistributed"},
+        "scannerNoAssertionDisposition": {"const": "recorded-not-approved"},
+        "reciprocalAggregateDisposition": {
+          "const": "retain-upstream-notices-and-source-offers"
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packages",
+        "images",
+        "sboms",
+        "provenance",
+        "primaryArtifacts",
+        "releaseRecords",
+        "cargoPackages",
+        "checks"
+      ],
+      "properties": {
+        "packages": {"const": 31},
+        "images": {"const": 11},
+        "sboms": {"const": 42},
+        "provenance": {"const": 42},
+        "primaryArtifacts": {"const": 42},
+        "releaseRecords": {"const": 126},
+        "cargoPackages": {"const": 20},
+        "checks": {"const": 17}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

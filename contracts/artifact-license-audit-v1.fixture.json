@@ -1,0 +1,160 @@
+{
+  "contract": "clavenar.artifact-license-audit/v1",
+  "schemaVersion": 1,
+  "release": "1.239.0",
+  "policyVersion": "1.0.0",
+  "effectiveDate": "2026-07-27",
+  "owner": "Vanteguard Labs",
+  "firstPartyLicenseExpression": "Apache-2.0",
+  "licenseSha256": "sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "noticeSha256": "sha256:e4f3ff57333158fcd3b8e79d61dc09b2b881b888855beff78bc19056c5548f40",
+  "packageLegalPaths": [
+    "LICENSE",
+    "NOTICE"
+  ],
+  "imageLegalPaths": [
+    "usr/share/licenses/clavenar/LICENSE",
+    "usr/share/licenses/clavenar/NOTICE"
+  ],
+  "packageSubjects": [
+    "package:clavenar-brain:Cargo.toml:clavenar-brain",
+    "package:clavenar-chaos-catalog:Cargo.toml:clavenar-chaos-catalog",
+    "package:clavenar-chaos-monkey:Cargo.toml:clavenar-chaos-monkey",
+    "package:clavenar-charts:charts/clavenar/Chart.yaml:clavenar",
+    "package:clavenar-console:Cargo.toml:clavenar-console",
+    "package:clavenar-ctl:Cargo.toml:clavenar-ctl",
+    "package:clavenar-deep-review:Cargo.toml:clavenar-deep-review",
+    "package:clavenar-demo-mint:Cargo.toml:clavenar-demo-mint",
+    "package:clavenar-dotnet-sdk:src/Clavenar.AgentSdk/Clavenar.AgentSdk.csproj:Clavenar.AgentSdk",
+    "package:clavenar-exec:Cargo.toml:clavenar-exec",
+    "package:clavenar-hil:Cargo.toml:clavenar-hil",
+    "package:clavenar-identity:Cargo.toml:clavenar-identity",
+    "package:clavenar-java-sdk:examples/custom-dispatcher/pom.xml:custom-dispatcher",
+    "package:clavenar-java-sdk:examples/native-anthropic/pom.xml:native-anthropic",
+    "package:clavenar-java-sdk:examples/native-openai/pom.xml:native-openai",
+    "package:clavenar-java-sdk:examples/pom.xml:clavenar-agent-sdk-examples",
+    "package:clavenar-java-sdk:examples/realtime/pom.xml:realtime",
+    "package:clavenar-java-sdk:pom.xml:agent-sdk",
+    "package:clavenar-ledger:Cargo.toml:clavenar-ledger",
+    "package:clavenar-lite:Cargo.toml:clavenar-lite",
+    "package:clavenar-policy-engine:Cargo.toml:clavenar-policy-engine",
+    "package:clavenar-proxy:Cargo.toml:clavenar-proxy",
+    "package:clavenar-python-sdk:pyproject.toml:clavenar-agent-sdk",
+    "package:clavenar-sandbox:Cargo.toml:clavenar-sandbox",
+    "package:clavenar-sdk:Cargo.toml:clavenar-sdk",
+    "package:clavenar-shadow-scanner:Cargo.toml:clavenar-shadow-scanner",
+    "package:clavenar-shared:Cargo.toml:clavenar-shared",
+    "package:clavenar-simulator:Cargo.toml:clavenar-simulator",
+    "package:clavenar-typescript-sdk:package.json:@clavenar/agent-sdk",
+    "package:clavenar-website:package.json:clavenar-website",
+    "package:clavenar-workload-identity:Cargo.toml:clavenar-workload-identity"
+  ],
+  "imageSubjects": [
+    {
+      "subject": "image:assurance",
+      "repository": "clavenar-chaos-monkey"
+    },
+    {
+      "subject": "image:brain",
+      "repository": "clavenar-brain"
+    },
+    {
+      "subject": "image:console",
+      "repository": "clavenar-console"
+    },
+    {
+      "subject": "image:deep-review",
+      "repository": "clavenar-deep-review"
+    },
+    {
+      "subject": "image:hil",
+      "repository": "clavenar-hil"
+    },
+    {
+      "subject": "image:identity",
+      "repository": "clavenar-identity"
+    },
+    {
+      "subject": "image:ledger",
+      "repository": "clavenar-ledger"
+    },
+    {
+      "subject": "image:policy-engine",
+      "repository": "clavenar-policy-engine"
+    },
+    {
+      "subject": "image:proxy",
+      "repository": "clavenar-proxy"
+    },
+    {
+      "subject": "image:simulator",
+      "repository": "clavenar-simulator"
+    },
+    {
+      "subject": "image:upstream-stub",
+      "repository": "clavenar-simulator"
+    }
+  ],
+  "dependencyPolicy": {
+    "cargoAllow": [
+      "0BSD",
+      "Apache-2.0",
+      "Apache-2.0 WITH LLVM-exception",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "BSL-1.0",
+      "CC0-1.0",
+      "CDLA-Permissive-2.0",
+      "ISC",
+      "MIT",
+      "MIT-0",
+      "MPL-2.0",
+      "OpenSSL",
+      "Unicode-3.0",
+      "Unicode-DFS-2016",
+      "Unlicense",
+      "Zlib"
+    ],
+    "deniedMarkers": [
+      "AGPL-",
+      "BUSL-",
+      "Commons-Clause",
+      "Elastic-License",
+      "LicenseRef-Clavenar-Proprietary-Internal",
+      "PolyForm-",
+      "SSPL-"
+    ],
+    "sourceReferenceDisposition": "not-redistributed",
+    "scannerNoAssertionDisposition": "recorded-not-approved",
+    "reciprocalAggregateDisposition": "retain-upstream-notices-and-source-offers"
+  },
+  "checks": [
+    "archive-license-bytes",
+    "archive-no-vendored-dependencies",
+    "archive-notice-bytes",
+    "archive-safe-paths",
+    "artifact-subject-inventory",
+    "cargo-hosted-gate",
+    "cargo-license-policy",
+    "image-license-bytes",
+    "image-notice-bytes",
+    "image-oci-labels",
+    "image-upstream-notices",
+    "incremental-reuse-exact-audit",
+    "provenance-exact-subject-binding",
+    "restricted-content-exclusion",
+    "sbom-denied-term-rejection",
+    "sbom-exact-subject-binding",
+    "sbom-first-party-license"
+  ],
+  "totals": {
+    "packages": 31,
+    "images": 11,
+    "sboms": 42,
+    "provenance": 42,
+    "primaryArtifacts": 42,
+    "releaseRecords": 126,
+    "cargoPackages": 20,
+    "checks": 17
+  }
+}
