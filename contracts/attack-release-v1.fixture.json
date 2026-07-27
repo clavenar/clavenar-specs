@@ -1,0 +1,168 @@
+{
+  "contractId": "clavenar.attack-release/v1",
+  "contractVersion": "1.0.0",
+  "release": "1.233.0",
+  "proxyCategories": [
+    {
+      "name": "agent_cert",
+      "scenarioIds": [
+        "agent_cert_envelope_exceeded",
+        "agent_cert_grant_replay",
+        "agent_cert_malformed_mcp",
+        "agent_cert_poisoned_result"
+      ]
+    },
+    {
+      "name": "attestation",
+      "scenarioIds": [
+        "cross_agent_impersonation",
+        "unattested_binary"
+      ]
+    },
+    {
+      "name": "business_hours",
+      "scenarioIds": [
+        "bulk_export_hours",
+        "pubsec_voter_modify",
+        "secret_rotate_off_window"
+      ]
+    },
+    {
+      "name": "control",
+      "scenarioIds": [
+        "control_allow"
+      ]
+    },
+    {
+      "name": "deception",
+      "scenarioIds": [
+        "decoy_lure_export_credentials",
+        "decoy_trap_dump_secrets"
+      ]
+    },
+    {
+      "name": "denylist",
+      "scenarioIds": [
+        "ai_gov_eval_bypass",
+        "ai_gov_model_swap",
+        "ai_gov_training_egress",
+        "ato_combo_reset_refund",
+        "biotech_ae_suppress",
+        "biotech_esig_bypass",
+        "biotech_gxp_audit_delete",
+        "biotech_trial_unblind",
+        "capmkts_cat_modify",
+        "capmkts_closing_auction",
+        "classified_secret_access",
+        "coding_release_tag_overwrite",
+        "comp_export_all_employees",
+        "cybersec_backup_encryption_off",
+        "cybersec_dlp_bypass",
+        "dataset_exfil_external_bucket",
+        "denylist_shell",
+        "denylist_sql",
+        "devops_cloudtrail_disable",
+        "ecommerce_payout_redirect",
+        "education_background_check_skip",
+        "energy_bcsi_export",
+        "energy_relay_disable",
+        "fast_track_above_threshold",
+        "finance_bulk_money",
+        "finance_tax_modify_filed",
+        "foia_cui_leak",
+        "government_classified_destroy_no_witness",
+        "grade_external_email_no_consent",
+        "healthcare_claim_upcode",
+        "hr_iam_offboard_skip",
+        "iam_grant_unattested_deny",
+        "insurance_no_cause_rescind",
+        "legal_attorney_log_delete",
+        "logistics_eccn_misclass",
+        "manufacturing_firmware_unsigned",
+        "marketing_coppa_collect",
+        "ml_weights_external_share",
+        "model_deploy_unsigned",
+        "package_install_unverified_registry",
+        "payments_pci_scope_widen",
+        "payments_wallet_seed_export",
+        "phi_egress_unattested",
+        "phi_email_external",
+        "plc_bypass_interlock",
+        "policy_phi_external_email",
+        "price_table_external_egress",
+        "privileged_doc_external_send",
+        "pubsec_emergency_alert",
+        "pubsec_foil_close_noreview",
+        "pubsec_police_records_purge",
+        "recruit_pii_external_email",
+        "refund_above_threshold",
+        "refund_to_external_email",
+        "support_screen_share_no_consent",
+        "telecom_e911_address_modify",
+        "telecom_wps_strip",
+        "transcript_bulk_unattested",
+        "work_product_to_pacer"
+      ]
+    },
+    {
+      "name": "hil",
+      "scenarioIds": [
+        "hil_denied",
+        "hil_expired",
+        "infra_apply_prod_rollout",
+        "plc_safety_device_review"
+      ]
+    },
+    {
+      "name": "identity",
+      "scenarioIds": [
+        "cross_tenant_unfederated",
+        "expired_grant",
+        "stolen_svid_replay"
+      ]
+    },
+    {
+      "name": "injection",
+      "scenarioIds": [
+        "aigov_system_role_inject",
+        "injection_classic",
+        "injection_jailbreak"
+      ]
+    },
+    {
+      "name": "multi_turn",
+      "scenarioIds": [
+        "multi_turn_rapport_strike"
+      ]
+    },
+    {
+      "name": "supply_chain",
+      "scenarioIds": [
+        "compromised_package_install",
+        "malicious_code_reverse_shell",
+        "reverse_shell_via_pr_bot"
+      ]
+    },
+    {
+      "name": "velocity",
+      "scenarioIds": [
+        "velocity_breaker"
+      ]
+    }
+  ],
+  "directIdentityScenarioIds": [
+    "decommissioned_name_reuse",
+    "envelope_widen_unauthorized",
+    "migration_replay",
+    "owner_team_spoof",
+    "scope_outside_envelope",
+    "suspended_agent_grant",
+    "unregistered_agent_enforce"
+  ],
+  "totals": {
+    "proxyCategories": 12,
+    "proxyScenarios": 86,
+    "directIdentityScenarios": 7,
+    "listedScenarios": 93
+  }
+}

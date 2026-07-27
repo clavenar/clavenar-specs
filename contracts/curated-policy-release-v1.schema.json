@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://specs.clavenar.com/contracts/curated-policy-release-v1.schema.json",
+  "title": "Clavenar curated policy release manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractId",
+    "contractVersion",
+    "release",
+    "sourceLibrary",
+    "crossCuttingBaseline",
+    "industryFamilies",
+    "totals"
+  ],
+  "properties": {
+    "contractId": {
+      "const": "clavenar.curated-policy-release/v1"
+    },
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "release": {
+      "const": "1.233.0"
+    },
+    "sourceLibrary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "templates",
+        "domains"
+      ],
+      "properties": {
+        "templates": {
+          "const": 577
+        },
+        "domains": {
+          "const": 24
+        }
+      }
+    },
+    "crossCuttingBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slug",
+        "policyIds"
+      ],
+      "properties": {
+        "slug": {
+          "const": "cross-cutting"
+        },
+        "policyIds": {
+          "$ref": "#/definitions/sixPolicies"
+        }
+      }
+    },
+    "industryFamilies": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "severity",
+          "tier",
+          "frameworks",
+          "filter",
+          "policyIds"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium"
+            ]
+          },
+          "tier": {
+            "enum": [
+              "deny",
+              "review",
+              "mixed"
+            ]
+          },
+          "frameworks": {
+            "type": "string",
+            "minLength": 1
+          },
+          "filter": {
+            "type": "string",
+            "minLength": 1
+          },
+          "policyIds": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 6,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/definitions/policyId"
+            }
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceLibraryTemplates",
+        "sourceLibraryDomains",
+        "crossCuttingBaselinePolicies",
+        "industryPolicies",
+        "industryFamilies",
+        "curatedPolicies"
+      ],
+      "properties": {
+        "sourceLibraryTemplates": {
+          "const": 577
+        },
+        "sourceLibraryDomains": {
+          "const": 24
+        },
+        "crossCuttingBaselinePolicies": {
+          "const": 6
+        },
+        "industryPolicies": {
+          "const": 79
+        },
+        "industryFamilies": {
+          "const": 20
+        },
+        "curatedPolicies": {
+          "const": 85
+        }
+      }
+    }
+  },
+  "definitions": {
+    "policyId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "sixPolicies": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/policyId"
+      }
+    }
+  }
+}

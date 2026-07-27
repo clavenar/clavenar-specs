@@ -1,0 +1,289 @@
+{
+  "contractId": "clavenar.curated-policy-release/v1",
+  "contractVersion": "1.0.0",
+  "release": "1.233.0",
+  "sourceLibrary": {
+    "templates": 577,
+    "domains": 24
+  },
+  "crossCuttingBaseline": {
+    "slug": "cross-cutting",
+    "policyIds": [
+      "agent_impersonation",
+      "off_hours_actions",
+      "pii_egress",
+      "prod_db_writes",
+      "prompt_injection",
+      "rate_limit_review"
+    ]
+  },
+  "industryFamilies": [
+    {
+      "slug": "healthcare",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "HIPAA HITRUST HITECH",
+      "filter": "healthcare phi pii egress hipaa hitrust hitech high mixed deny review",
+      "policyIds": [
+        "clinical_decision_override",
+        "consent_form_modify_post_signed",
+        "patient_records",
+        "phi_breach_notification",
+        "phi_egress",
+        "prescription_renewal_no_review"
+      ]
+    },
+    {
+      "slug": "finance",
+      "severity": "critical",
+      "tier": "mixed",
+      "frameworks": "PCI-DSS SOX OFAC",
+      "filter": "finance wire transfer ach vendor payment pci-dss sox ofac critical mixed deny review",
+      "policyIds": [
+        "account_freeze_lift",
+        "ach_batch_high_volume",
+        "money_moves",
+        "treasury_large_movement",
+        "vendor_payment_redirect"
+      ]
+    },
+    {
+      "slug": "payments-fintech",
+      "severity": "critical",
+      "tier": "deny",
+      "frameworks": "PCI-DSS BSA AML KYC",
+      "filter": "payments fintech card kyc aml payout chargeback pci-dss bsa aml kyc critical deny",
+      "policyIds": [
+        "card_data_storage",
+        "chargeback_dispute",
+        "kyc_bypass",
+        "payout_split_modify"
+      ]
+    },
+    {
+      "slug": "capital-markets",
+      "severity": "critical",
+      "tier": "deny",
+      "frameworks": "SEC FINRA MAR MiFID-II",
+      "filter": "capital markets trade surveillance sec finra mar mifid critical deny",
+      "policyIds": [
+        "client_position_disclosure",
+        "pre_trade_compliance_override",
+        "surveillance_alert_dismiss",
+        "trade_execution"
+      ]
+    },
+    {
+      "slug": "legal",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "FRCP privilege",
+      "filter": "legal e-discovery privileged litigation frcp attorney client privilege high mixed deny review",
+      "policyIds": [
+        "attorney_communication_log_delete",
+        "contract_redline_external",
+        "court_filing_unauthorized",
+        "ediscovery_holds",
+        "litigation_hold_release",
+        "privileged_documents"
+      ]
+    },
+    {
+      "slug": "coding",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "SOC2 supply-chain",
+      "filter": "coding devex package install repo credentials force push soc2 supply chain high mixed deny review",
+      "policyIds": [
+        "code_writes",
+        "commit_credential_in_diff",
+        "dependency_update_unpinned",
+        "disable_branch_protection",
+        "force_push_main",
+        "repo_scope"
+      ]
+    },
+    {
+      "slug": "devops",
+      "severity": "critical",
+      "tier": "mixed",
+      "frameworks": "SOC2 ISO-27001",
+      "filter": "devops sre terraform rds dns iam prod soc2 iso-27001 critical mixed deny review",
+      "policyIds": [
+        "delete_terraform_state",
+        "dns_apex_record_modify",
+        "iam_policy_wildcard",
+        "infra_writes",
+        "rds_snapshot_share_public",
+        "secret_rotation_window"
+      ]
+    },
+    {
+      "slug": "hr",
+      "severity": "high",
+      "tier": "review",
+      "frameworks": "GDPR CCPA employment",
+      "filter": "hr employee data recruiter pii gdpr ccpa employment high review",
+      "policyIds": [
+        "employee_data",
+        "recruiter_pii"
+      ]
+    },
+    {
+      "slug": "manufacturing",
+      "severity": "critical",
+      "tier": "deny",
+      "frameworks": "IEC-62443 NIST-CSF",
+      "filter": "manufacturing ot plc safety iec-62443 nist-csf critical deny",
+      "policyIds": [
+        "ot_change_window",
+        "ot_safety_interlocks"
+      ]
+    },
+    {
+      "slug": "energy-utilities",
+      "severity": "critical",
+      "tier": "mixed",
+      "frameworks": "NERC-CIP FERC",
+      "filter": "energy utilities scada load shed blackout ami nerc-cip ferc critical mixed deny review",
+      "policyIds": [
+        "load_shed_command",
+        "meter_data_export",
+        "regulatory_filing_submit",
+        "scada_writes"
+      ]
+    },
+    {
+      "slug": "ml",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "NIST-AI-RMF",
+      "filter": "ai ml pipelines model deploy dataset egress training pii nist-ai-rmf high mixed deny review",
+      "policyIds": [
+        "dataset_egress",
+        "embedding_corpus_external",
+        "inference_endpoint_no_auth",
+        "model_card_publish_no_review",
+        "model_deploy_provenance",
+        "training_data_pii_egress"
+      ]
+    },
+    {
+      "slug": "ecommerce",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "PCI-DSS consumer",
+      "filter": "ecommerce refund price changes pci-dss consumer high mixed deny review",
+      "policyIds": [
+        "order_refund_limits",
+        "price_changes"
+      ]
+    },
+    {
+      "slug": "government",
+      "severity": "critical",
+      "tier": "mixed",
+      "frameworks": "FedRAMP ITAR NIST-CSF",
+      "filter": "government classified foia cui fedramp itar nist-csf critical mixed deny review",
+      "policyIds": [
+        "classified_access",
+        "clearance_grant_temp",
+        "clearance_revoke_blanket",
+        "cui_marking_change",
+        "foia_release",
+        "pii_to_foreign_address"
+      ]
+    },
+    {
+      "slug": "education",
+      "severity": "high",
+      "tier": "review",
+      "frameworks": "FERPA",
+      "filter": "education ferpa student record consent high review",
+      "policyIds": [
+        "ferpa_consent",
+        "student_records"
+      ]
+    },
+    {
+      "slug": "insurance",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "NAIC state-insurance",
+      "filter": "insurance claim underwriting phi naic high mixed deny review",
+      "policyIds": [
+        "claim_approval_thresholds",
+        "underwriting_phi"
+      ]
+    },
+    {
+      "slug": "support",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "SOC2 ATO",
+      "filter": "customer support account reset ato pii refund soc2 high mixed deny review",
+      "policyIds": [
+        "account_unlock_no_2fa",
+        "password_reset_no_verify",
+        "pii_lookup_no_ticket",
+        "refund_no_proof",
+        "support_handoff_external",
+        "support_velocity"
+      ]
+    },
+    {
+      "slug": "marketing",
+      "severity": "medium",
+      "tier": "review",
+      "frameworks": "GDPR CAN-SPAM",
+      "filter": "marketing comms brand publishing pii gdpr can-spam medium review",
+      "policyIds": [
+        "brand_publishing",
+        "marketing_pii_egress"
+      ]
+    },
+    {
+      "slug": "logistics",
+      "severity": "high",
+      "tier": "mixed",
+      "frameworks": "C-TPAT customs ITAR EAR",
+      "filter": "logistics supply chain shipment customs c-tpat itar ear high mixed deny review",
+      "policyIds": [
+        "customs_declarations",
+        "shipment_routing"
+      ]
+    },
+    {
+      "slug": "telecom",
+      "severity": "critical",
+      "tier": "mixed",
+      "frameworks": "TCPA CPNI FCC E911",
+      "filter": "telecom carrier sim swap cdr tcpa cpni fcc e911 critical mixed deny review",
+      "policyIds": [
+        "cdr_egress",
+        "sim_port_controls"
+      ]
+    },
+    {
+      "slug": "cybersecurity-ops",
+      "severity": "critical",
+      "tier": "mixed",
+      "frameworks": "SOC2 ISO-27001 NIST-CSF",
+      "filter": "cybersecurity ops siem detection forensic incident red team soc2 iso-27001 nist-csf critical mixed deny review",
+      "policyIds": [
+        "forensic_evidence_delete",
+        "incident_close_unverified",
+        "red_team_target_prod",
+        "siem_alert_mute"
+      ]
+    }
+  ],
+  "totals": {
+    "sourceLibraryTemplates": 577,
+    "sourceLibraryDomains": 24,
+    "crossCuttingBaselinePolicies": 6,
+    "industryPolicies": 79,
+    "industryFamilies": 20,
+    "curatedPolicies": 85
+  }
+}

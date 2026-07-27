@@ -2300,20 +2300,24 @@ docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack dow
 
 **Concept.** Curated red-team catalog. Each scenario fires a specific attack at a live proxy and asserts the predicted verdict. The list grows as the threat model expands; removing a scenario requires explaining why the attack is no longer relevant.
 
-**Implementation.** Rust CLI at `repos/clavenar-chaos-monkey/`. Current scenarios:
+**Implementation.** Rust CLI at `repos/clavenar-chaos-monkey/`. The exact
+[`clavenar.attack-release/v1`](contracts/attack-release-v1.fixture.json)
+manifest records 86 proxy-facing scenarios across 12 runtime categories and
+seven direct Identity onboarding scenarios: 93 listed scenarios total.
+`--release-manifest` emits those exact versioned bytes, while `--list` derives
+its entries from the runtime catalogs. An owner test requires the runtime
+category/ID projection to equal the manifest, so additions, removals, moves,
+duplicates, and independently edited numeric claims fail before release.
 
-- Layer 2/3: `denylist`, `injection`, `velocity_breaker` (must run last), `business_hours`, `control`
-- HIL: `hil_yellow_denied`, `hil_yellow_expired`
-- Identity: `unattested_binary`, `stolen_svid_replay`, `expired_grant`, `cross_tenant_unfederated`
-- WAO: `unregistered_agent_enforce`, `scope_outside_envelope`, `suspended_agent_grant`, `decommissioned_name_reuse`, `envelope_widen_unauthorized`, `owner_team_spoof`, `stale_oidc_token`, `migration_replay`
-
-Identity scenarios accept either a wired (proxy + identity) or unwired (proxy only) deploy; deny shape varies (`a2a_redeem_failed:<inner>` vs `a2a_unavailable`), keyword match handles both.
+The direct Identity scenarios require the Identity URL and matching
+credentials when fired. They are always included in `--list` and the release
+manifest so an unwired run cannot silently redefine the shipped catalog.
 
 **Verify.**
 
 ```bash
 ./repos/clavenar-chaos-monkey/target/release/clavenar-chaos-monkey \
-  --proxy https://localhost:8443 --scenario stolen_svid_replay
+  --proxy-url https://localhost:8443/mcp --only stolen_svid_replay
 # Asserts predicted verdict, exits 0 on match
 ```
 

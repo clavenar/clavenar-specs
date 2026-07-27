@@ -2770,7 +2770,13 @@ private.
 
 ### 9. Implementation questions resolved during build
 
-- ~~Specific attack scenario payloads~~ — live in `clavenar-chaos-catalog/src/lib.rs`; 13 scenarios cover injection, theft/replay, policy escape, velocity, HIL state, denylist enforcement.
+- ~~Specific attack scenario payloads~~ — the proxy-facing data lives in
+  `clavenar-chaos-catalog/src/lib.rs` and the direct onboarding cases live in
+  `clavenar-chaos-monkey/src/identity_attack.rs`. The versioned
+  [`clavenar.attack-release/v1`](contracts/attack-release-v1.fixture.json)
+  manifest enumerates all 86 proxy scenarios across 12 categories plus seven
+  direct Identity scenarios (93 listed scenarios total); owner tests reject
+  any runtime/manifest drift.
 - ~~Animation copy and narrative beats per scenario~~ — finalized in the clavenar-website tour.
 - ~~Token-expiry-mid-session UX~~ — 401 surfaces as a banner; visitor returns to `clavenar.…/#contact` for a fresh token.
 - ~~CSS / brand polish on the demo console vs. operator console default~~ — single console build serves both; demo-session cookie is the only state difference.
@@ -3798,6 +3804,18 @@ Discoverability is via the `/policies` header button rather than a dedicated `ba
 ### 11. Content baseline
 
 Current size: **577 templates** across **24 industry domains** — 24 per domain, plus a dedicated EU AI Act Article 5 prohibited-practices pack (`eu_ai_act_article_5.rego`) in `ai-governance` that hard-denies the five outright-prohibited practices (social scoring, subliminal manipulation, real-time remote biometric ID in public spaces, workplace/education emotion inference, untargeted facial-image scraping). Files live in per-domain sub-buckets at `policies/templates/<domain>/<name>.rego`; the engine's `scan_templates_dir` walks recursively. Template names remain globally unique so the loader keeps the flat namespace and the path-traversal guard in `read_template()` stays as-is.
+
+The complete 577-template source library is distinct from the public curated
+release. The versioned
+[`clavenar.curated-policy-release/v1`](contracts/curated-policy-release-v1.fixture.json)
+manifest selects exactly 85 templates: a six-policy cross-cutting baseline and
+79 policies distributed across the 20 public industry families. Every selected
+ID resolves to one source template whose frontmatter domain matches its
+manifest group. Website cards and aggregate counts are rendered from this
+manifest; the visible industry-card sum is 79, and only becomes the 85-policy
+curated total when the separately labeled six-policy baseline is included.
+The 577/24 source-library count must never be presented as the curated release
+or currently active deployment.
 
 - **24 industry domains** (24 templates each): healthcare, finance, legal, coding, hr, devops, manufacturing, ml, ecommerce, government, education, insurance, support, marketing, logistics, telecom, payments-fintech, energy-utilities, capital-markets, cybersecurity-ops, ai-governance, biotech-pharma, public-sector-municipal, cross-cutting.
 - The cross-cutting bucket carries the framework-spanning patterns (governance + attestation + the generic shapes: pii_egress, prod_db_writes, money_moves, agent_impersonation, prompt_injection, off_hours_actions, rate_limit_review, mfa_disable, data_export_to_personal_email, …) rather than a single industry vertical.
