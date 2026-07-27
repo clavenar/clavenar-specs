@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "componentPublications": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "enum": [
+              "anonymous",
+              "authenticated-registry-and-anonymous-release"
+            ]
+          },
+          "id": {
+            "enum": [
+              "npm-sdk",
+              "python-sdk",
+              "maven-sdk",
+              "nuget-sdk",
+              "go-sdk",
+              "rust-sdk",
+              "lite",
+              "cli",
+              "helm"
+            ]
+          },
+          "manifest": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "registry": {
+            "minLength": 8,
+            "type": "string"
+          },
+          "repository": {
+            "pattern": "^clavenar-[a-z0-9-]+$",
+            "type": "string"
+          },
+          "tag": {
+            "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access",
+          "id",
+          "manifest",
+          "registry",
+          "repository",
+          "tag",
+          "version"
+        ],
+        "type": "object"
+      },
+      "maxItems": 9,
+      "minItems": 9,
+      "type": "array"
+    },
+    "contract": {
+      "const": "clavenar.protected-distribution/v1"
+    },
+    "goModuleTags": {
+      "items": {
+        "pattern": "^(?:[a-z0-9-]+/)*v[0-9]+\\.[0-9]+\\.[0-9]+$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "imagePublication": {
+      "additionalProperties": false,
+      "properties": {
+        "access": {
+          "const": "anonymous"
+        },
+        "repositories": {
+          "items": {
+            "pattern": "^clavenar-[a-z0-9-]+$",
+            "type": "string"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "subjectCount": {
+          "const": 11
+        },
+        "tagPolicy": {
+          "const": "digest-only"
+        }
+      },
+      "required": [
+        "access",
+        "repositories",
+        "subjectCount",
+        "tagPolicy"
+      ],
+      "type": "object"
+    },
+    "policyVersion": {
+      "const": "1.0.0"
+    },
+    "publicationEvent": {
+      "const": "clavenar-protected-publication"
+    },
+    "requiredActor": {
+      "const": "vanteguardlabs"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "stackRelease": {
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "componentPublications",
+    "contract",
+    "goModuleTags",
+    "imagePublication",
+    "policyVersion",
+    "publicationEvent",
+    "requiredActor",
+    "schemaVersion",
+    "stackRelease"
+  ],
+  "title": "Clavenar protected distribution contract",
+  "type": "object"
+}

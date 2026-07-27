@@ -132,7 +132,7 @@
       "repository": "clavenar-ctl",
       "sourcePath": "README.md",
       "sourceMarkers": [
-        "cargo install --locked --path .",
+        "clavenarctl-${V}-x86_64-linux-musl",
         "clavenarctl doctor"
       ],
       "runner": "cargo-cli",

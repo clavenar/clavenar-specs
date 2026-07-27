@@ -1,0 +1,114 @@
+{
+  "componentPublications": [
+    {
+      "access": "anonymous",
+      "id": "npm-sdk",
+      "manifest": "package.json",
+      "registry": "https://registry.npmjs.org",
+      "repository": "clavenar-typescript-sdk",
+      "tag": "v1.6.0",
+      "version": "1.6.0"
+    },
+    {
+      "access": "anonymous",
+      "id": "python-sdk",
+      "manifest": "pyproject.toml",
+      "registry": "https://pypi.org",
+      "repository": "clavenar-python-sdk",
+      "tag": "v1.5.0",
+      "version": "1.5.0"
+    },
+    {
+      "access": "authenticated-registry-and-anonymous-release",
+      "id": "maven-sdk",
+      "manifest": "pom.xml",
+      "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
+      "repository": "clavenar-java-sdk",
+      "tag": "v1.5.0",
+      "version": "1.5.0"
+    },
+    {
+      "access": "authenticated-registry-and-anonymous-release",
+      "id": "nuget-sdk",
+      "manifest": "src/Clavenar.AgentSdk/Clavenar.AgentSdk.csproj",
+      "registry": "https://nuget.pkg.github.com/clavenar/index.json",
+      "repository": "clavenar-dotnet-sdk",
+      "tag": "v1.6.0",
+      "version": "1.6.0"
+    },
+    {
+      "access": "anonymous",
+      "id": "go-sdk",
+      "manifest": "VERSION",
+      "registry": "https://proxy.golang.org",
+      "repository": "clavenar-go-sdk",
+      "tag": "v1.0.0",
+      "version": "1.0.0"
+    },
+    {
+      "access": "anonymous",
+      "id": "rust-sdk",
+      "manifest": "Cargo.toml",
+      "registry": "https://github.com/clavenar/clavenar-sdk/releases",
+      "repository": "clavenar-sdk",
+      "tag": "v0.4.0",
+      "version": "0.4.0"
+    },
+    {
+      "access": "anonymous",
+      "id": "lite",
+      "manifest": "Cargo.toml",
+      "registry": "https://ghcr.io/clavenar/clavenar-lite",
+      "repository": "clavenar-lite",
+      "tag": "v0.12.0",
+      "version": "0.12.0"
+    },
+    {
+      "access": "anonymous",
+      "id": "cli",
+      "manifest": "Cargo.toml",
+      "registry": "https://github.com/clavenar/clavenar-ctl/releases",
+      "repository": "clavenar-ctl",
+      "tag": "v0.3.0",
+      "version": "0.3.0"
+    },
+    {
+      "access": "anonymous",
+      "id": "helm",
+      "manifest": "charts/clavenar/Chart.yaml",
+      "registry": "oci://ghcr.io/clavenar/charts/clavenar",
+      "repository": "clavenar-charts",
+      "tag": "v0.34.0",
+      "version": "0.34.0"
+    }
+  ],
+  "contract": "clavenar.protected-distribution/v1",
+  "goModuleTags": [
+    "v1.0.0",
+    "adapters/anthropic/v1.0.0",
+    "adapters/openai/v1.0.0",
+    "examples/v1.0.0"
+  ],
+  "imagePublication": {
+    "access": "anonymous",
+    "repositories": [
+      "clavenar-brain",
+      "clavenar-chaos-monkey",
+      "clavenar-console",
+      "clavenar-deep-review",
+      "clavenar-hil",
+      "clavenar-identity",
+      "clavenar-ledger",
+      "clavenar-policy-engine",
+      "clavenar-proxy",
+      "clavenar-simulator"
+    ],
+    "subjectCount": 11,
+    "tagPolicy": "digest-only"
+  },
+  "policyVersion": "1.0.0",
+  "publicationEvent": "clavenar-protected-publication",
+  "requiredActor": "vanteguardlabs",
+  "schemaVersion": 1,
+  "stackRelease": "1.240.0"
+}
