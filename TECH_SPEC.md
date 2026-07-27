@@ -2118,6 +2118,22 @@ The `/hil` queue is an operator workbench, not just a list. Shipped additive on 
   [`contracts/execution-ceilings-v1.schema.json`](contracts/execution-ceilings-v1.schema.json)
   with its canonical
   [fixture](contracts/execution-ceilings-v1.fixture.json).
+- **Pinned outbound resolution (WP-13.5)** — Exec fetches and Lite callbacks
+  resolve the complete DNS answer set before every connection. An empty,
+  oversized, or mixed public/non-public set rejects as a unit; valid answers
+  are deduplicated, sorted by address family and network bytes, and the first
+  address is pinned into the connection while the normalized hostname remains
+  authoritative for HTTP Host, TLS SNI, and certificate verification.
+  Redirects are followed only by an explicit five-hop loop. Every hop is
+  normalized, allowlisted, resolved, validated, and independently pinned;
+  unsafe locations, HTTPS downgrade, loops, and the hop limit fail closed.
+  Cross-origin sensitive headers are dropped, response streams are bounded,
+  and one resolution is never reused beyond its hop. Evaluation-only Exec
+  production exclusion and Lite's empty-callback-allowlist denial remain
+  unchanged. The strict contract is
+  [`contracts/outbound-resolution-pinning-v1.schema.json`](contracts/outbound-resolution-pinning-v1.schema.json)
+  with its canonical
+  [fixture](contracts/outbound-resolution-pinning-v1.fixture.json).
 - **Cross-language governed SDK parity (WP-06.8)** — TypeScript, Python, Go, Java, and .NET inspection transports explicitly select `clavenar.decision/v1`, allocate a canonical UUID before their first network attempt, reuse it on safe decision retries, and submit a complete ordered provider turn through `clavenar.atomic-tool-call-batch/v1`. Their governed-execution surfaces require a registered executor, durable pre-effect intent, actual-result/effect persistence, and a terminal receipt; the selected `/mcp` request is side-effect-free and never falls back to legacy server execution. [`contracts/sdk-cross-language-v1.fixture.json`](contracts/sdk-cross-language-v1.fixture.json) is the byte-identical protocol, durable-store, receipt, executor, and provider-result corpus mirrored and exercised by every language package; its receipt fields remain anchored to the strict execution-receipt fixture. Proxy/Lite server-execution durability, execution-route retry removal, and legacy migration enforcement remain WP-06.9 through WP-06.11.
 - **Durable server execution (WP-06.9)** — the paired `x-clavenar-server-execution-contract: clavenar.server-execution/v1` and canonical `x-clavenar-idempotency-id` headers opt into an execution contract distinct from both side-effect-free decisions and unselected legacy `/mcp`. Proxy binds the ID to the verified SPIFFE caller, tenant, current credential, route, method/tool, submitted request, and final post-gating payload; Lite binds it to the authenticated agent and the same request dimensions. Each service atomically commits `execution.intent` plus an in-flight marker before its first upstream attempt. A received response is buffered and its exact status, body, digest, stable terminal receipt, and forensic outbox obligation commit atomically before release. An exact completed retry returns those retained bytes without another upstream call; any changed binding conflicts; an interrupted in-flight attempt returns `server_execution_uncertain` and cannot execute automatically again. Missing durability fails closed. Complete, partial, unknown, and mixed selectors fail before policy, audit, or upstream effects. The strict receipt schema and shared conformance vector are [`contracts/server-execution-v1.schema.json`](contracts/server-execution-v1.schema.json) and [`contracts/server-execution-v1.fixture.json`](contracts/server-execution-v1.fixture.json). Legacy removal and compatibility enforcement remain WP-06.10 and WP-06.11.
 - **Retry separation (WP-06.10)** — retry eligibility is a property of the selected operation, not a generic HTTP convenience. Only an explicit and exclusive `x-clavenar-decision-contract: clavenar.decision/v1` request may enter an automatic transport retry loop, and every attempt reuses the canonical `x-clavenar-idempotency-id` allocated before the first network access with byte-equivalent request semantics. Registered SDK executors and Proxy/Lite upstream calls sit outside all transport retry loops and run at most once after durable intent. Pending resolution retries only bounded `GET /pending/{correlation_id}` lookups; it never resubmits the decision or executes a tool. Completed server execution is a caller-driven durable result lookup, while retained in-flight state remains non-executable uncertainty. Receipt-outbox retries deliver retained evidence only. Legacy unselected `/mcp` and invalid, partial, mixed, or unknown selectors receive no automatic retry. [`contracts/retry-separation-v1.schema.json`](contracts/retry-separation-v1.schema.json) validates the byte-identical [`contracts/retry-separation-v1.fixture.json`](contracts/retry-separation-v1.fixture.json) mirrored by every SDK, Proxy, Lite, and assembled conformance suite. Versioned legacy migration enforcement remains WP-06.11.
@@ -7817,5 +7833,9 @@ per-agent directory file descriptor, rather than a canonicalized pathname,
 the authority for every Exec file operation. It also defines normalized
 origin and segment-boundary matching for Exec fetch and Lite callback targets.
 The v1 boundary rejects credentials, fragments, local-use names, and non-public
-IP literals and follows no redirects. WP-13.5 retains every-hop DNS/redirect
-validation and validated-address pinning.
+IP literals. The additive
+[`clavenar.outbound-resolution-pinning/v1`](contracts/outbound-resolution-pinning-v1.schema.json)
+[fixture](contracts/outbound-resolution-pinning-v1.fixture.json) resolves and
+validates the complete answer set, pins one deterministic public address while
+retaining hostname identity, and applies that sequence independently to every
+bounded manual redirect hop.

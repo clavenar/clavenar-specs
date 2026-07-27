@@ -3155,11 +3155,28 @@ requires file tools to operate beneath an already-opened per-agent directory
 without following intermediate, final, or magic symlinks. Fetch and callback
 allowlists compare parsed and normalized HTTP(S) scheme, IDNA host, effective
 port, and a path-segment boundary. Credentials, fragments, ambiguous sibling
-domains, local-use names, and non-public IP literals fail closed. Redirects
-remain disabled until WP-13.5 adds per-hop DNS validation and address pinning.
+domains, local-use names, and non-public IP literals fail closed.
 
 ```bash
 python3 -m pytest tests/test_rooted_path_target_validation_contract.py
 python3 repos/clavenar-e2e/scripts/check_rooted_path_target_validation.py
 python3 -m pytest repos/clavenar-charts/tests/test_rooted_path_target_validation.py
+```
+
+### Pinned DNS answers and bounded redirects
+
+[`clavenar.outbound-resolution-pinning/v1`](contracts/outbound-resolution-pinning-v1.fixture.json)
+requires Exec fetches and Lite callbacks to validate every answer from a
+bounded DNS lookup, reject mixed public/non-public sets, select one answer
+deterministically, and pin it into the connection without replacing the
+normalized hostname used for Host, SNI, and certificate verification.
+Redirects run through a manual five-hop loop; each target is normalized,
+allowlisted, freshly resolved, validated, and pinned before connecting.
+Downgrades, loops, unsafe locations, excessive bodies, and hop overflow fail
+closed.
+
+```bash
+python3 -m pytest tests/test_outbound_resolution_pinning_contract.py
+python3 repos/clavenar-e2e/scripts/check_outbound_resolution_pinning.py
+python3 -m pytest repos/clavenar-charts/tests/test_outbound_resolution_pinning.py
 ```
