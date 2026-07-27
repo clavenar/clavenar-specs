@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/route-schema-release-v1.schema.json",
+  "title": "Clavenar route and schema release inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "routeAuthority",
+    "totals",
+    "routes",
+    "contracts"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.route-schema-release/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.234.0"
+    },
+    "routeAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "endpointCapabilityMatrixSha256",
+        "listenerMatrixSha256",
+        "workloadCapabilityBundleSha256"
+      ],
+      "properties": {
+        "contractVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endpointCapabilityMatrixSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "listenerMatrixSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "workloadCapabilityBundleSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "routes",
+        "services",
+        "contracts",
+        "schemas",
+        "typeBindings"
+      ],
+      "properties": {
+        "routes": {
+          "const": 139
+        },
+        "services": {
+          "const": 4
+        },
+        "contracts": {
+          "const": 6
+        },
+        "schemas": {
+          "const": 12
+        },
+        "typeBindings": {
+          "const": 13
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "minItems": 139,
+      "maxItems": 139,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "service",
+          "method",
+          "pathTemplate",
+          "capability",
+          "family",
+          "allowedCallerIds"
+        ],
+        "properties": {
+          "service": {
+            "enum": [
+              "hil",
+              "identity",
+              "ledger",
+              "policy-engine"
+            ]
+          },
+          "method": {
+            "enum": [
+              "DELETE",
+              "GET",
+              "PATCH",
+              "POST",
+              "PUT"
+            ]
+          },
+          "pathTemplate": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "capability": {
+            "type": "string",
+            "minLength": 1
+          },
+          "family": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allowedCallerIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "ownerRepository",
+          "routes",
+          "sourceBindings",
+          "schemas"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ownerRepository": {
+            "type": "string",
+            "pattern": "^clavenar-[a-z0-9-]+$"
+          },
+          "routes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^(DELETE|GET|PATCH|POST|PUT) /"
+            }
+          },
+          "sourceBindings": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "path",
+                "kind",
+                "symbol",
+                "itemSha256"
+              ],
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "pattern": "^clavenar-[a-z0-9-]+$"
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "rust-item",
+                    "json-pointer"
+                  ]
+                },
+                "symbol": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "itemSha256": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          },
+          "schemas": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "direction",
+                "jsonSchema",
+                "example",
+                "schemaSha256",
+                "exampleSha256"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "direction": {
+                  "enum": [
+                    "request",
+                    "response",
+                    "configuration",
+                    "result"
+                  ]
+                },
+                "jsonSchema": {
+                  "type": "object"
+                },
+                "example": {},
+                "schemaSha256": {
+                  "$ref": "#/$defs/sha256"
+                },
+                "exampleSha256": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

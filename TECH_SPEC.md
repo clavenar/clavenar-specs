@@ -17,6 +17,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
 - [Compliance derivation boundaries](#compliance-derivation-boundaries) — configured authorities, bounded key freshness, explicit degraded modes, and status limitations
 - [Retention claim boundaries](#retention-claim-boundaries) — configured duration, exact technical controls, recovery-point scope, and fixed-duration promotion evidence
+- [Route and schema release inventory](#route-and-schema-release-inventory) — generated route authority, source-bound types, and executable examples
 - [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
@@ -8032,6 +8033,33 @@ immutable-lifecycle statuses remain `not-approved`.
 
 The strict schema is
 [`contracts/retention-claim-boundaries-v1.schema.json`](contracts/retention-claim-boundaries-v1.schema.json).
+
+## Route and schema release inventory
+
+**Module status:** **shipped in v1.234.0.**
+
+[`clavenar.route-schema-release/v1`](contracts/route-schema-release-v1.fixture.json)
+is the versioned documentation authority for the governed service surface. Its
+139 application routes are projected byte-for-byte from the generated
+workload-capability bundle: 29 HIL, 49 Identity, 36 Ledger, and 25 Policy
+Engine routes. Every record binds the service, method, path template,
+capability, family, and exact allowed caller IDs. Public and diagnostics
+branches that are deliberately outside the generated application middleware
+remain outside that total.
+
+The same inventory carries twelve JSON Schemas and validated examples across
+six integration contracts: Policy evaluation, HIL decisions, Ledger
+append/verification, Console SAML sign-in, staged PostgreSQL Ledger values,
+and the Rust SDK HIL decision call. Thirteen source bindings hash the exact
+owning Rust item or Helm JSON-pointer subtree. Generation fails on route,
+listener, capability-bundle, type, schema, example, digest, or mirror drift.
+
+The curated definition is
+[`contracts/route-schema-release-v1.definition.json`](contracts/route-schema-release-v1.definition.json);
+the strict release schema is
+[`contracts/route-schema-release-v1.schema.json`](contracts/route-schema-release-v1.schema.json).
+Readable endpoint and example guidance is in
+[`docs/ROUTE_SCHEMA_INVENTORY.md`](docs/ROUTE_SCHEMA_INVENTORY.md).
 ### Rooted file and outbound target boundary
 
 The exact

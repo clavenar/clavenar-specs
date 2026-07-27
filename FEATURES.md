@@ -3267,3 +3267,19 @@ necessity, threat review, Docs/Security approvals, and expiry.
 python3 -m pytest tests/test_public_operational_information_contract.py
 python3 repos/clavenar-e2e/scripts/check_public_operational_information.py
 ```
+
+### Generated route and schema release inventory
+
+[`clavenar.route-schema-release/v1`](contracts/route-schema-release-v1.fixture.json)
+projects the exact 139 generated-enforced application routes and twelve
+machine-validated schemas/examples into one release artifact. Thirteen
+source-item digests bind the Policy, HIL, Ledger, Console SAML, Helm Postgres,
+and Rust SDK documentation to the owning code. The generator rejects
+duplicate/missing routes, stale listener or capability inputs, renamed or
+changed source items, invalid examples, and non-identical public/deployment
+mirrors.
+
+```bash
+python3 -m pytest tests/test_route_schema_release_contract.py
+python3 repos/clavenar-e2e/scripts/generate_route_schema_release.py --check
+```

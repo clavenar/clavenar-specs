@@ -1,0 +1,878 @@
+{
+  "contract": "clavenar.route-schema-release/v1",
+  "schemaVersion": 1,
+  "release": "1.234.0",
+  "contracts": [
+    {
+      "id": "policy-evaluate",
+      "title": "Policy evaluation",
+      "ownerRepository": "clavenar-policy-engine",
+      "routes": [
+        "POST /evaluate"
+      ],
+      "sourceBindings": [
+        {
+          "repository": "clavenar-policy-engine",
+          "path": "src/wire.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct PolicyInput"
+        },
+        {
+          "repository": "clavenar-policy-engine",
+          "path": "src/wire.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct PolicyDecision"
+        }
+      ],
+      "schemas": [
+        {
+          "id": "policy-evaluate-request",
+          "direction": "request",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "tool_type",
+              "agent_history",
+              "intent_score"
+            ],
+            "properties": {
+              "tool_type": {
+                "type": "string"
+              },
+              "agent_history": {
+                "type": "object",
+                "required": [
+                  "last_tool",
+                  "recent_sequence"
+                ]
+              },
+              "intent_score": {
+                "type": "number"
+              },
+              "agent_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "method": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "correlation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "agent_kind": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "tool_type": "database.write",
+            "agent_history": {
+              "last_tool": "database.read",
+              "recent_sequence": []
+            },
+            "intent_score": 0.82,
+            "current_time": "2026-07-27T12:00:00Z",
+            "agent_id": "agent-finance-01",
+            "method": "tools/call",
+            "recent_request_count": 3,
+            "velocity_degraded": false,
+            "force_hil": false,
+            "request_cost_micros": 1250,
+            "cumulative_spend_micros": 25000,
+            "budget_micros": 50000000,
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "arguments": {
+              "target_env": "prod"
+            },
+            "agent_kind": "mcp"
+          }
+        },
+        {
+          "id": "policy-evaluate-response",
+          "direction": "response",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "allow",
+              "reasons",
+              "review_reasons"
+            ],
+            "properties": {
+              "allow": {
+                "type": "boolean"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "review_reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "retention_class": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "approval_tier": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "example": {
+            "allow": false,
+            "reasons": [],
+            "review_reasons": [
+              "production database write requires human approval"
+            ],
+            "retention_class": "extended",
+            "approval_tier": "strict"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hil-decision",
+      "title": "Human decision",
+      "ownerRepository": "clavenar-hil",
+      "routes": [
+        "POST /decide/{id}"
+      ],
+      "sourceBindings": [
+        {
+          "repository": "clavenar-hil",
+          "path": "src/types.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct Decide"
+        },
+        {
+          "repository": "clavenar-hil",
+          "path": "src/types.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct PendingRequest"
+        }
+      ],
+      "schemas": [
+        {
+          "id": "hil-decision-request",
+          "direction": "request",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "decision"
+            ],
+            "properties": {
+              "decision": {
+                "enum": [
+                  "approve",
+                  "deny",
+                  "modify"
+                ]
+              },
+              "decided_by": {
+                "type": "string"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "modification_diff": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "modified_payload": {
+                "type": [
+                  "object",
+                  "array",
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "approver_assertion": {},
+              "decided_via": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "tenant": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "example": {
+            "decision": "approve",
+            "reason": "Customer support ticket verified",
+            "decided_via": "console"
+          }
+        },
+        {
+          "id": "hil-decision-response",
+          "direction": "response",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "id",
+              "correlation_id",
+              "agent_id",
+              "method",
+              "request_payload",
+              "risk_summary",
+              "created_at",
+              "ttl_seconds",
+              "status",
+              "decided_at",
+              "decided_by",
+              "decision_reason",
+              "state_namespace",
+              "retention"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "correlation_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "approved",
+                  "denied",
+                  "expired"
+                ]
+              },
+              "ttl_seconds": {
+                "type": "integer"
+              },
+              "state_namespace": {
+                "enum": [
+                  "operator",
+                  "demo"
+                ]
+              },
+              "retention": {
+                "type": "object"
+              }
+            }
+          },
+          "example": {
+            "id": "8bf35b7f-e50c-4cc3-a612-6e1a0e8aba19",
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "agent_id": "agent-finance-01",
+            "method": "refund.issue",
+            "request_payload": {
+              "params": {
+                "arguments": {
+                  "amount": 7500
+                }
+              }
+            },
+            "risk_summary": "money movement over the approval threshold",
+            "created_at": "2026-07-27T12:00:00Z",
+            "ttl_seconds": 600,
+            "status": "approved",
+            "decided_at": "2026-07-27T12:01:00Z",
+            "decided_by": "finance-oncall@example.com",
+            "decision_reason": "Customer support ticket verified",
+            "decided_via": "console",
+            "approver_provenance": "saml",
+            "state_namespace": "operator",
+            "retention": {
+              "retention_policy": "clavenar.hil-retention/v1",
+              "retention_purpose": "terminal-review-record",
+              "retention_tier": "standard",
+              "payload_protection": "xchacha20poly1305",
+              "payload_key_id": "active",
+              "protected_at": "2026-07-27T12:01:00Z",
+              "payload_retention_expires_at": "2026-08-26T12:01:00Z",
+              "metadata_retention_expires_at": "2027-07-27T12:01:00Z",
+              "payload_availability": "available",
+              "minimization_profile": "hil-request-v1",
+              "minimized_payload": {
+                "method": "refund.issue"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "ledger-audit",
+      "title": "Ledger append and verification",
+      "ownerRepository": "clavenar-ledger",
+      "routes": [
+        "POST /log",
+        "GET /verify",
+        "GET /audit/correlation/{correlation_id}"
+      ],
+      "sourceBindings": [
+        {
+          "repository": "clavenar-ledger",
+          "path": "src/types.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct LogRequest"
+        },
+        {
+          "repository": "clavenar-ledger",
+          "path": "src/types.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct VerifyResult"
+        },
+        {
+          "repository": "clavenar-ledger",
+          "path": "src/types.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct LedgerEntry"
+        }
+      ],
+      "schemas": [
+        {
+          "id": "ledger-log-request",
+          "direction": "request",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "agent_id",
+              "method",
+              "intent_category",
+              "authorized",
+              "reasoning",
+              "policy_decision",
+              "state_namespace"
+            ],
+            "properties": {
+              "agent_id": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "intent_category": {
+                "type": "string"
+              },
+              "authorized": {
+                "type": "boolean"
+              },
+              "reasoning": {
+                "type": "string"
+              },
+              "policy_decision": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "correlation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "state_namespace": {
+                "enum": [
+                  "operator",
+                  "demo"
+                ]
+              }
+            }
+          },
+          "example": {
+            "agent_id": "agent-finance-01",
+            "method": "refund.issue",
+            "intent_category": "money_movement",
+            "authorized": true,
+            "reasoning": "approved by required human quorum",
+            "policy_decision": {
+              "allow": false,
+              "review_reasons": [
+                "approval required"
+              ]
+            },
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "event_kind": "hil.approved",
+            "state_namespace": "operator"
+          }
+        },
+        {
+          "id": "ledger-verify-response",
+          "direction": "response",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "valid",
+              "entries_checked",
+              "first_invalid_seq"
+            ],
+            "properties": {
+              "valid": {
+                "type": "boolean"
+              },
+              "entries_checked": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "first_invalid_seq": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "commitment": {
+                "type": "object",
+                "required": [
+                  "contract",
+                  "head_hash",
+                  "length"
+                ]
+              },
+              "anchors": {
+                "type": "array"
+              }
+            }
+          },
+          "example": {
+            "valid": true,
+            "entries_checked": 85200,
+            "first_invalid_seq": null,
+            "commitment": {
+              "contract": "clavenar.verified-chain/v1",
+              "head_hash": "a5d3e8ef0a5d65d47cd3e787f0760f2217daa04151401539dbd58a5d4439b926",
+              "length": 85200,
+              "tail_chain_version": 6
+            },
+            "anchors": [],
+            "anchor_mismatch": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "console-saml",
+      "title": "Console SAML sign-in",
+      "ownerRepository": "clavenar-console",
+      "routes": [
+        "GET /auth/saml/login",
+        "POST /auth/saml/acs"
+      ],
+      "sourceBindings": [
+        {
+          "repository": "clavenar-console",
+          "path": "src/saml.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct SamlConfig"
+        },
+        {
+          "repository": "clavenar-console",
+          "path": "src/saml.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct SamlClaims"
+        }
+      ],
+      "schemas": [
+        {
+          "id": "console-saml-configuration",
+          "direction": "configuration",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "CLAVENAR_CONSOLE_AUTH",
+              "CLAVENAR_CONSOLE_SAML_ENTITY_ID",
+              "CLAVENAR_CONSOLE_SAML_ACS_URL",
+              "CLAVENAR_CONSOLE_SAML_IDP_METADATA_URL",
+              "CLAVENAR_CONSOLE_SAML_GROUP_ATTRIBUTES",
+              "CLAVENAR_CONSOLE_SAML_TENANT_ATTRIBUTE",
+              "CLAVENAR_CONSOLE_SAML_MFA_ATTRIBUTE"
+            ],
+            "properties": {
+              "CLAVENAR_CONSOLE_AUTH": {
+                "const": "saml"
+              },
+              "CLAVENAR_CONSOLE_SAML_ENTITY_ID": {
+                "type": "string",
+                "format": "uri"
+              },
+              "CLAVENAR_CONSOLE_SAML_ACS_URL": {
+                "type": "string",
+                "format": "uri"
+              },
+              "CLAVENAR_CONSOLE_SAML_IDP_METADATA_URL": {
+                "type": "string",
+                "format": "uri"
+              },
+              "CLAVENAR_CONSOLE_SAML_GROUP_ATTRIBUTES": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_TENANT_ATTRIBUTE": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_MFA_ATTRIBUTE": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_FEDERATED_TENANT_MAP": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_FEDERATED_APPROVER_GROUPS": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_FEDERATED_MFA_VALUES": {
+                "type": "string"
+              }
+            }
+          },
+          "example": {
+            "CLAVENAR_CONSOLE_AUTH": "saml",
+            "CLAVENAR_CONSOLE_SAML_ENTITY_ID": "https://console.example.com",
+            "CLAVENAR_CONSOLE_SAML_ACS_URL": "https://console.example.com/auth/saml/acs",
+            "CLAVENAR_CONSOLE_SAML_IDP_METADATA_URL": "https://idp.example.com/metadata",
+            "CLAVENAR_CONSOLE_SAML_GROUP_ATTRIBUTES": "Group,groups",
+            "CLAVENAR_CONSOLE_SAML_TENANT_ATTRIBUTE": "org_id",
+            "CLAVENAR_CONSOLE_SAML_MFA_ATTRIBUTE": "amr",
+            "CLAVENAR_CONSOLE_FEDERATED_TENANT_MAP": "external-finance=finance",
+            "CLAVENAR_CONSOLE_FEDERATED_APPROVER_GROUPS": "clavenar-approver",
+            "CLAVENAR_CONSOLE_FEDERATED_MFA_VALUES": "otp,webauthn"
+          }
+        },
+        {
+          "id": "console-saml-acs-request",
+          "direction": "request",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "SAMLResponse",
+              "RelayState"
+            ],
+            "properties": {
+              "SAMLResponse": {
+                "type": "string",
+                "minLength": 1
+              },
+              "RelayState": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "example": {
+            "SAMLResponse": "base64-signed-assertion",
+            "RelayState": "opaque-csrf-state"
+          }
+        }
+      ]
+    },
+    {
+      "id": "postgres-ledger",
+      "title": "Staged PostgreSQL Ledger configuration",
+      "ownerRepository": "clavenar-charts",
+      "routes": [
+        "GET /verify"
+      ],
+      "sourceBindings": [
+        {
+          "repository": "clavenar-ledger",
+          "path": "src/storage/postgres.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct PostgresLedgerStore"
+        },
+        {
+          "repository": "clavenar-charts",
+          "path": "charts/clavenar/values.schema.json",
+          "kind": "json-pointer",
+          "symbol": "/properties/services/properties/ledger/properties/postgres"
+        }
+      ],
+      "schemas": [
+        {
+          "id": "postgres-ledger-values",
+          "direction": "configuration",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "services",
+              "persistence"
+            ],
+            "properties": {
+              "services": {
+                "type": "object",
+                "required": [
+                  "ledger"
+                ],
+                "properties": {
+                  "ledger": {
+                    "type": "object",
+                    "required": [
+                      "replicas",
+                      "postgres"
+                    ],
+                    "properties": {
+                      "replicas": {
+                        "const": 1
+                      },
+                      "postgres": {
+                        "type": "object",
+                        "required": [
+                          "enabled",
+                          "dsnSecretName",
+                          "dsnSecretKey",
+                          "tlsCaSecretName",
+                          "tlsCaSecretKey",
+                          "rotationId"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "persistence": {
+                "type": "object",
+                "required": [
+                  "ledger"
+                ],
+                "properties": {
+                  "ledger": {
+                    "type": "object",
+                    "required": [
+                      "enabled"
+                    ],
+                    "properties": {
+                      "enabled": {
+                        "const": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "example": {
+            "services": {
+              "ledger": {
+                "replicas": 1,
+                "postgres": {
+                  "enabled": true,
+                  "dsnSecretName": "clavenar-ledger-pg",
+                  "dsnSecretKey": "url",
+                  "tlsCaSecretName": "clavenar-ledger-pg-ca",
+                  "tlsCaSecretKey": "ca.crt",
+                  "rotationId": "initial"
+                }
+              }
+            },
+            "persistence": {
+              "ledger": {
+                "enabled": false
+              }
+            }
+          }
+        },
+        {
+          "id": "postgres-ledger-verification",
+          "direction": "result",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ledgerReplicas",
+              "sqlitePvcMounted",
+              "postgresTlsVerified",
+              "chainValid"
+            ],
+            "properties": {
+              "ledgerReplicas": {
+                "const": 1
+              },
+              "sqlitePvcMounted": {
+                "const": false
+              },
+              "postgresTlsVerified": {
+                "const": true
+              },
+              "chainValid": {
+                "const": true
+              }
+            }
+          },
+          "example": {
+            "ledgerReplicas": 1,
+            "sqlitePvcMounted": false,
+            "postgresTlsVerified": true,
+            "chainValid": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "rust-sdk-hil",
+      "title": "Rust SDK HIL decision",
+      "ownerRepository": "clavenar-sdk",
+      "routes": [
+        "POST /decide/{id}"
+      ],
+      "sourceBindings": [
+        {
+          "repository": "clavenar-sdk",
+          "path": "src/hil.rs",
+          "kind": "rust-item",
+          "symbol": "pub struct DecideRequest"
+        },
+        {
+          "repository": "clavenar-sdk",
+          "path": "src/hil.rs",
+          "kind": "rust-item",
+          "symbol": "pub async fn decide"
+        }
+      ],
+      "schemas": [
+        {
+          "id": "rust-sdk-hil-call",
+          "direction": "request",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pending_id",
+              "decision",
+              "decided_by",
+              "reason",
+              "credential",
+              "decided_via"
+            ],
+            "properties": {
+              "pending_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "decision": {
+                "enum": [
+                  "approve",
+                  "deny",
+                  "modify"
+                ]
+              },
+              "decided_by": {
+                "type": "string"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "credential": {
+                "enum": [
+                  "session-cookie",
+                  "console-bearer",
+                  "demo-session",
+                  "auth-disabled"
+                ]
+              },
+              "decided_via": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "example": {
+            "pending_id": "8bf35b7f-e50c-4cc3-a612-6e1a0e8aba19",
+            "decision": "approve",
+            "decided_by": "finance-oncall@example.com",
+            "reason": "Customer support ticket verified",
+            "credential": "console-bearer",
+            "decided_via": "console"
+          }
+        },
+        {
+          "id": "rust-sdk-hil-result",
+          "direction": "response",
+          "jsonSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "id",
+              "correlation_id",
+              "status",
+              "decided_by",
+              "decision_reason"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "correlation_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "approved",
+                  "denied",
+                  "expired"
+                ]
+              },
+              "decided_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "decision_reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "example": {
+            "id": "8bf35b7f-e50c-4cc3-a612-6e1a0e8aba19",
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "status": "approved",
+            "decided_by": "finance-oncall@example.com",
+            "decision_reason": "Customer support ticket verified"
+          }
+        }
+      ]
+    }
+  ]
+}

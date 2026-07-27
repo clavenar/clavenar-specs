@@ -1,0 +1,2398 @@
+{
+  "contract": "clavenar.route-schema-release/v1",
+  "contracts": [
+    {
+      "id": "policy-evaluate",
+      "ownerRepository": "clavenar-policy-engine",
+      "routes": [
+        "POST /evaluate"
+      ],
+      "schemas": [
+        {
+          "direction": "request",
+          "example": {
+            "agent_history": {
+              "last_tool": "database.read",
+              "recent_sequence": []
+            },
+            "agent_id": "agent-finance-01",
+            "agent_kind": "mcp",
+            "arguments": {
+              "target_env": "prod"
+            },
+            "budget_micros": 50000000,
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "cumulative_spend_micros": 25000,
+            "current_time": "2026-07-27T12:00:00Z",
+            "force_hil": false,
+            "intent_score": 0.82,
+            "method": "tools/call",
+            "recent_request_count": 3,
+            "request_cost_micros": 1250,
+            "tool_type": "database.write",
+            "velocity_degraded": false
+          },
+          "exampleSha256": "sha256:f241169b150723d44ddff8647ed7b0f6a501693e9ef05ba13c8d9913bcf3e9bc",
+          "id": "policy-evaluate-request",
+          "jsonSchema": {
+            "additionalProperties": true,
+            "properties": {
+              "agent_history": {
+                "required": [
+                  "last_tool",
+                  "recent_sequence"
+                ],
+                "type": "object"
+              },
+              "agent_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "agent_kind": {
+                "type": "string"
+              },
+              "correlation_id": {
+                "format": "uuid",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "intent_score": {
+                "type": "number"
+              },
+              "method": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "tool_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tool_type",
+              "agent_history",
+              "intent_score"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:188042fb2580c67427c90aea9dc408f38fd9b9ceeee1b307f1bd549fa5495a51"
+        },
+        {
+          "direction": "response",
+          "example": {
+            "allow": false,
+            "approval_tier": "strict",
+            "reasons": [],
+            "retention_class": "extended",
+            "review_reasons": [
+              "production database write requires human approval"
+            ]
+          },
+          "exampleSha256": "sha256:4b1dced007726add5f6214d96a0128feb46351f833a199bb13a5b328137abaa6",
+          "id": "policy-evaluate-response",
+          "jsonSchema": {
+            "additionalProperties": true,
+            "properties": {
+              "allow": {
+                "type": "boolean"
+              },
+              "approval_tier": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reasons": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "retention_class": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "review_reasons": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "allow",
+              "reasons",
+              "review_reasons"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:c3f116cd0c6643466e668b8420a37281a9725854221d2136c75aef433cac43bb"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "itemSha256": "sha256:ba282b97228165e359be7e22223efcf225573ec2c9d57e8e98679678c324e081",
+          "kind": "rust-item",
+          "path": "src/wire.rs",
+          "repository": "clavenar-policy-engine",
+          "symbol": "pub struct PolicyInput"
+        },
+        {
+          "itemSha256": "sha256:edc314a9bf7c5ba556e85383de82f299ecea8eb2cef6cd825a9020a0e6f34c01",
+          "kind": "rust-item",
+          "path": "src/wire.rs",
+          "repository": "clavenar-policy-engine",
+          "symbol": "pub struct PolicyDecision"
+        }
+      ],
+      "title": "Policy evaluation"
+    },
+    {
+      "id": "hil-decision",
+      "ownerRepository": "clavenar-hil",
+      "routes": [
+        "POST /decide/{id}"
+      ],
+      "schemas": [
+        {
+          "direction": "request",
+          "example": {
+            "decided_via": "console",
+            "decision": "approve",
+            "reason": "Customer support ticket verified"
+          },
+          "exampleSha256": "sha256:9657f526c3bb73f429e2fdb57d23d2f2f91a31c527186c0cf1906273aea606df",
+          "id": "hil-decision-request",
+          "jsonSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "approver_assertion": {},
+              "decided_by": {
+                "type": "string"
+              },
+              "decided_via": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "decision": {
+                "enum": [
+                  "approve",
+                  "deny",
+                  "modify"
+                ]
+              },
+              "modification_diff": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "modified_payload": {
+                "type": [
+                  "object",
+                  "array",
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "tenant": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "decision"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:9b9da310ae9961ad677638af94dead386cf9fdbb97877b67260bc2aa1ac1e39d"
+        },
+        {
+          "direction": "response",
+          "example": {
+            "agent_id": "agent-finance-01",
+            "approver_provenance": "saml",
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "created_at": "2026-07-27T12:00:00Z",
+            "decided_at": "2026-07-27T12:01:00Z",
+            "decided_by": "finance-oncall@example.com",
+            "decided_via": "console",
+            "decision_reason": "Customer support ticket verified",
+            "id": "8bf35b7f-e50c-4cc3-a612-6e1a0e8aba19",
+            "method": "refund.issue",
+            "request_payload": {
+              "params": {
+                "arguments": {
+                  "amount": 7500
+                }
+              }
+            },
+            "retention": {
+              "metadata_retention_expires_at": "2027-07-27T12:01:00Z",
+              "minimization_profile": "hil-request-v1",
+              "minimized_payload": {
+                "method": "refund.issue"
+              },
+              "payload_availability": "available",
+              "payload_key_id": "active",
+              "payload_protection": "xchacha20poly1305",
+              "payload_retention_expires_at": "2026-08-26T12:01:00Z",
+              "protected_at": "2026-07-27T12:01:00Z",
+              "retention_policy": "clavenar.hil-retention/v1",
+              "retention_purpose": "terminal-review-record",
+              "retention_tier": "standard"
+            },
+            "risk_summary": "money movement over the approval threshold",
+            "state_namespace": "operator",
+            "status": "approved",
+            "ttl_seconds": 600
+          },
+          "exampleSha256": "sha256:cb8f364a91378d96a7e3de38f9464b1565562dd395e8fb4bfc8ebe9958807f63",
+          "id": "hil-decision-response",
+          "jsonSchema": {
+            "additionalProperties": true,
+            "properties": {
+              "correlation_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "retention": {
+                "type": "object"
+              },
+              "state_namespace": {
+                "enum": [
+                  "operator",
+                  "demo"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "approved",
+                  "denied",
+                  "expired"
+                ]
+              },
+              "ttl_seconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "correlation_id",
+              "agent_id",
+              "method",
+              "request_payload",
+              "risk_summary",
+              "created_at",
+              "ttl_seconds",
+              "status",
+              "decided_at",
+              "decided_by",
+              "decision_reason",
+              "state_namespace",
+              "retention"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:27bc58a8e0f37513b326deb0a62599801a82aa3c710d318c78b834c6961b7472"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "itemSha256": "sha256:92f7ce72b4ddf6f9cca46939c6d402ec622cfd47bfab27c519b81418ca41fc27",
+          "kind": "rust-item",
+          "path": "src/types.rs",
+          "repository": "clavenar-hil",
+          "symbol": "pub struct Decide"
+        },
+        {
+          "itemSha256": "sha256:b084fd40acbac1889b1be2e1d152845d419d7b1290c2421ec773967b0fe2d7a7",
+          "kind": "rust-item",
+          "path": "src/types.rs",
+          "repository": "clavenar-hil",
+          "symbol": "pub struct PendingRequest"
+        }
+      ],
+      "title": "Human decision"
+    },
+    {
+      "id": "ledger-audit",
+      "ownerRepository": "clavenar-ledger",
+      "routes": [
+        "POST /log",
+        "GET /verify",
+        "GET /audit/correlation/{correlation_id}"
+      ],
+      "schemas": [
+        {
+          "direction": "request",
+          "example": {
+            "agent_id": "agent-finance-01",
+            "authorized": true,
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "event_kind": "hil.approved",
+            "intent_category": "money_movement",
+            "method": "refund.issue",
+            "policy_decision": {
+              "allow": false,
+              "review_reasons": [
+                "approval required"
+              ]
+            },
+            "reasoning": "approved by required human quorum",
+            "state_namespace": "operator"
+          },
+          "exampleSha256": "sha256:5be001abea69641ded584a2abc0f5bf16e7eb707c8d110a8ca28a2a10ec3c68e",
+          "id": "ledger-log-request",
+          "jsonSchema": {
+            "additionalProperties": true,
+            "properties": {
+              "agent_id": {
+                "type": "string"
+              },
+              "authorized": {
+                "type": "boolean"
+              },
+              "correlation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "intent_category": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "policy_decision": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "reasoning": {
+                "type": "string"
+              },
+              "state_namespace": {
+                "enum": [
+                  "operator",
+                  "demo"
+                ]
+              }
+            },
+            "required": [
+              "agent_id",
+              "method",
+              "intent_category",
+              "authorized",
+              "reasoning",
+              "policy_decision",
+              "state_namespace"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:e2bb7212f321ce6b9d27c193f781356035be9f2b205a19683a216924a6201f22"
+        },
+        {
+          "direction": "response",
+          "example": {
+            "anchor_mismatch": null,
+            "anchors": [],
+            "commitment": {
+              "contract": "clavenar.verified-chain/v1",
+              "head_hash": "a5d3e8ef0a5d65d47cd3e787f0760f2217daa04151401539dbd58a5d4439b926",
+              "length": 85200,
+              "tail_chain_version": 6
+            },
+            "entries_checked": 85200,
+            "first_invalid_seq": null,
+            "valid": true
+          },
+          "exampleSha256": "sha256:bf249988eb9d42929ec496aea83790de083e42a1e756a9486f95e9e9e3ef645c",
+          "id": "ledger-verify-response",
+          "jsonSchema": {
+            "additionalProperties": true,
+            "properties": {
+              "anchors": {
+                "type": "array"
+              },
+              "commitment": {
+                "required": [
+                  "contract",
+                  "head_hash",
+                  "length"
+                ],
+                "type": "object"
+              },
+              "entries_checked": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "first_invalid_seq": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "valid",
+              "entries_checked",
+              "first_invalid_seq"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:b6cb803e2cfde4e6e0f2b44e502c64c46fcfc0ca8a92258a437f176832620f30"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "itemSha256": "sha256:0039578d84cfbec96f0d256103e14ba62368650ad067841ff7bf0f998ff0de9e",
+          "kind": "rust-item",
+          "path": "src/types.rs",
+          "repository": "clavenar-ledger",
+          "symbol": "pub struct LogRequest"
+        },
+        {
+          "itemSha256": "sha256:aa11d9c0585a8994478630cb5e4ac2fc7299891be37dbb77b8bf159c5a660054",
+          "kind": "rust-item",
+          "path": "src/types.rs",
+          "repository": "clavenar-ledger",
+          "symbol": "pub struct VerifyResult"
+        },
+        {
+          "itemSha256": "sha256:bf56e3035cc7dd170859c58a6e344d8777980c2702e6495d29b00a7e19c96269",
+          "kind": "rust-item",
+          "path": "src/types.rs",
+          "repository": "clavenar-ledger",
+          "symbol": "pub struct LedgerEntry"
+        }
+      ],
+      "title": "Ledger append and verification"
+    },
+    {
+      "id": "console-saml",
+      "ownerRepository": "clavenar-console",
+      "routes": [
+        "GET /auth/saml/login",
+        "POST /auth/saml/acs"
+      ],
+      "schemas": [
+        {
+          "direction": "configuration",
+          "example": {
+            "CLAVENAR_CONSOLE_AUTH": "saml",
+            "CLAVENAR_CONSOLE_FEDERATED_APPROVER_GROUPS": "clavenar-approver",
+            "CLAVENAR_CONSOLE_FEDERATED_MFA_VALUES": "otp,webauthn",
+            "CLAVENAR_CONSOLE_FEDERATED_TENANT_MAP": "external-finance=finance",
+            "CLAVENAR_CONSOLE_SAML_ACS_URL": "https://console.example.com/auth/saml/acs",
+            "CLAVENAR_CONSOLE_SAML_ENTITY_ID": "https://console.example.com",
+            "CLAVENAR_CONSOLE_SAML_GROUP_ATTRIBUTES": "Group,groups",
+            "CLAVENAR_CONSOLE_SAML_IDP_METADATA_URL": "https://idp.example.com/metadata",
+            "CLAVENAR_CONSOLE_SAML_MFA_ATTRIBUTE": "amr",
+            "CLAVENAR_CONSOLE_SAML_TENANT_ATTRIBUTE": "org_id"
+          },
+          "exampleSha256": "sha256:6a065edf9e7eac2f2591437a8cab5fb65bec30d533dce969f94e8536ef39ffe4",
+          "id": "console-saml-configuration",
+          "jsonSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "CLAVENAR_CONSOLE_AUTH": {
+                "const": "saml"
+              },
+              "CLAVENAR_CONSOLE_FEDERATED_APPROVER_GROUPS": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_FEDERATED_MFA_VALUES": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_FEDERATED_TENANT_MAP": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_ACS_URL": {
+                "format": "uri",
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_ENTITY_ID": {
+                "format": "uri",
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_GROUP_ATTRIBUTES": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_IDP_METADATA_URL": {
+                "format": "uri",
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_MFA_ATTRIBUTE": {
+                "type": "string"
+              },
+              "CLAVENAR_CONSOLE_SAML_TENANT_ATTRIBUTE": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "CLAVENAR_CONSOLE_AUTH",
+              "CLAVENAR_CONSOLE_SAML_ENTITY_ID",
+              "CLAVENAR_CONSOLE_SAML_ACS_URL",
+              "CLAVENAR_CONSOLE_SAML_IDP_METADATA_URL",
+              "CLAVENAR_CONSOLE_SAML_GROUP_ATTRIBUTES",
+              "CLAVENAR_CONSOLE_SAML_TENANT_ATTRIBUTE",
+              "CLAVENAR_CONSOLE_SAML_MFA_ATTRIBUTE"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:d0d4b27e804aed74432ce187c39b4c85292aa87e9d6d082928847e402febcfad"
+        },
+        {
+          "direction": "request",
+          "example": {
+            "RelayState": "opaque-csrf-state",
+            "SAMLResponse": "base64-signed-assertion"
+          },
+          "exampleSha256": "sha256:9cae17892d4919c4c4b12d3baa2687b8765139ba5b1df1b2eeaca4b48f14550b",
+          "id": "console-saml-acs-request",
+          "jsonSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "RelayState": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "SAMLResponse": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "SAMLResponse",
+              "RelayState"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:1dbea6df1fe2e2b989c9ba5aed4ab5e6a6fd94204cf590c07235b6399ed9eb97"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "itemSha256": "sha256:7e9d7504a1ec3add858ee9bf590c71c6195e16e601ca2652944da5bafcab4534",
+          "kind": "rust-item",
+          "path": "src/saml.rs",
+          "repository": "clavenar-console",
+          "symbol": "pub struct SamlConfig"
+        },
+        {
+          "itemSha256": "sha256:6ded67938e92705949e0e68c44da8343fb1c15a681540ce696b6dd4d57203df9",
+          "kind": "rust-item",
+          "path": "src/saml.rs",
+          "repository": "clavenar-console",
+          "symbol": "pub struct SamlClaims"
+        }
+      ],
+      "title": "Console SAML sign-in"
+    },
+    {
+      "id": "postgres-ledger",
+      "ownerRepository": "clavenar-charts",
+      "routes": [
+        "GET /verify"
+      ],
+      "schemas": [
+        {
+          "direction": "configuration",
+          "example": {
+            "persistence": {
+              "ledger": {
+                "enabled": false
+              }
+            },
+            "services": {
+              "ledger": {
+                "postgres": {
+                  "dsnSecretKey": "url",
+                  "dsnSecretName": "clavenar-ledger-pg",
+                  "enabled": true,
+                  "rotationId": "initial",
+                  "tlsCaSecretKey": "ca.crt",
+                  "tlsCaSecretName": "clavenar-ledger-pg-ca"
+                },
+                "replicas": 1
+              }
+            }
+          },
+          "exampleSha256": "sha256:a36a74a8ff216b9dc680bec4d1294645ef73c5512a907ce53c537c54787d8c3a",
+          "id": "postgres-ledger-values",
+          "jsonSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "persistence": {
+                "properties": {
+                  "ledger": {
+                    "properties": {
+                      "enabled": {
+                        "const": false
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "ledger"
+                ],
+                "type": "object"
+              },
+              "services": {
+                "properties": {
+                  "ledger": {
+                    "properties": {
+                      "postgres": {
+                        "required": [
+                          "enabled",
+                          "dsnSecretName",
+                          "dsnSecretKey",
+                          "tlsCaSecretName",
+                          "tlsCaSecretKey",
+                          "rotationId"
+                        ],
+                        "type": "object"
+                      },
+                      "replicas": {
+                        "const": 1
+                      }
+                    },
+                    "required": [
+                      "replicas",
+                      "postgres"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "ledger"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "services",
+              "persistence"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:9ae9e7ffafe450bbecab1531cf4f4f789187f3411a3b4c1dc831ca826140ce2e"
+        },
+        {
+          "direction": "result",
+          "example": {
+            "chainValid": true,
+            "ledgerReplicas": 1,
+            "postgresTlsVerified": true,
+            "sqlitePvcMounted": false
+          },
+          "exampleSha256": "sha256:0da52303b56e0e95e9882664511459023d2bd723c7e54e300fc24bb173d47031",
+          "id": "postgres-ledger-verification",
+          "jsonSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "chainValid": {
+                "const": true
+              },
+              "ledgerReplicas": {
+                "const": 1
+              },
+              "postgresTlsVerified": {
+                "const": true
+              },
+              "sqlitePvcMounted": {
+                "const": false
+              }
+            },
+            "required": [
+              "ledgerReplicas",
+              "sqlitePvcMounted",
+              "postgresTlsVerified",
+              "chainValid"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:f4798189fb0e08411a153b795864c261ed374ff685e1388ec6dfc223256df6ec"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "itemSha256": "sha256:375a071a2d6e0b378536c7265b6859bb95abeb3ea0be569e959f02e21bd219c6",
+          "kind": "rust-item",
+          "path": "src/storage/postgres.rs",
+          "repository": "clavenar-ledger",
+          "symbol": "pub struct PostgresLedgerStore"
+        },
+        {
+          "itemSha256": "sha256:2588921feb468e4ce2bc3f41cbd0ba3ec3db4a153127d80a6312cb4799dadf99",
+          "kind": "json-pointer",
+          "path": "charts/clavenar/values.schema.json",
+          "repository": "clavenar-charts",
+          "symbol": "/properties/services/properties/ledger/properties/postgres"
+        }
+      ],
+      "title": "Staged PostgreSQL Ledger configuration"
+    },
+    {
+      "id": "rust-sdk-hil",
+      "ownerRepository": "clavenar-sdk",
+      "routes": [
+        "POST /decide/{id}"
+      ],
+      "schemas": [
+        {
+          "direction": "request",
+          "example": {
+            "credential": "console-bearer",
+            "decided_by": "finance-oncall@example.com",
+            "decided_via": "console",
+            "decision": "approve",
+            "pending_id": "8bf35b7f-e50c-4cc3-a612-6e1a0e8aba19",
+            "reason": "Customer support ticket verified"
+          },
+          "exampleSha256": "sha256:aa7becd8334856d49d913928313118b63a5b6ab1c88fe69bef4279808900bb8b",
+          "id": "rust-sdk-hil-call",
+          "jsonSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "credential": {
+                "enum": [
+                  "session-cookie",
+                  "console-bearer",
+                  "demo-session",
+                  "auth-disabled"
+                ]
+              },
+              "decided_by": {
+                "type": "string"
+              },
+              "decided_via": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "decision": {
+                "enum": [
+                  "approve",
+                  "deny",
+                  "modify"
+                ]
+              },
+              "pending_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "pending_id",
+              "decision",
+              "decided_by",
+              "reason",
+              "credential",
+              "decided_via"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:24955f787f7661ceac0dd8cf124ef66ea0c4878ef2b32ec97cb3f7b4523e66d0"
+        },
+        {
+          "direction": "response",
+          "example": {
+            "correlation_id": "3ab2f91d-9e8d-4a8a-920f-67f587229e0d",
+            "decided_by": "finance-oncall@example.com",
+            "decision_reason": "Customer support ticket verified",
+            "id": "8bf35b7f-e50c-4cc3-a612-6e1a0e8aba19",
+            "status": "approved"
+          },
+          "exampleSha256": "sha256:d7babb9bde6f0e676de13e53ca9f49423de3c5ffda2c4f5ae9dcf0bc75655b8b",
+          "id": "rust-sdk-hil-result",
+          "jsonSchema": {
+            "additionalProperties": true,
+            "properties": {
+              "correlation_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "decided_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "decision_reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "approved",
+                  "denied",
+                  "expired"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "correlation_id",
+              "status",
+              "decided_by",
+              "decision_reason"
+            ],
+            "type": "object"
+          },
+          "schemaSha256": "sha256:c3eecdd5553d38ddf36586afd6033be07bde5812e843e9b8d96f67b9d923e9f4"
+        }
+      ],
+      "sourceBindings": [
+        {
+          "itemSha256": "sha256:f6e3009de03d52f93c58eab4ad978f4f11d7eb1653be36e2df0488fe2463a084",
+          "kind": "rust-item",
+          "path": "src/hil.rs",
+          "repository": "clavenar-sdk",
+          "symbol": "pub struct DecideRequest"
+        },
+        {
+          "itemSha256": "sha256:3747416d074fa825552165e3ea09ba62ff283d72b7a7028ea64907f90dc40fc3",
+          "kind": "rust-item",
+          "path": "src/hil.rs",
+          "repository": "clavenar-sdk",
+          "symbol": "pub async fn decide"
+        }
+      ],
+      "title": "Rust SDK HIL decision"
+    }
+  ],
+  "release": "1.234.0",
+  "routeAuthority": {
+    "contractVersion": "1.11.0",
+    "endpointCapabilityMatrixSha256": "sha256:13d311760f48623992818420c48197e85d5c8df75ed8c3e99c9fb9bf96923fe7",
+    "listenerMatrixSha256": "sha256:c5b96577544c5164955edaf26a59f4af1e8f68a70421ba47e08ce1119ec1defd",
+    "workloadCapabilityBundleSha256": "sha256:12f66640d432513277de75864e15ab820b1bffbe31544b957c0d571fc71e0be4"
+  },
+  "routes": [
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.identity.manage",
+      "family": "hil-identity-manage",
+      "method": "DELETE",
+      "pathTemplate": "/identities/{oidc_sub}/slack",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.identity.manage",
+      "family": "hil-identity-manage",
+      "method": "DELETE",
+      "pathTemplate": "/identities/{oidc_sub}/teams",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "hil.pending.read",
+      "family": "hil-pending-read",
+      "method": "GET",
+      "pathTemplate": "/approvals/stats",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.auth.ceremony",
+      "family": "hil-auth",
+      "method": "GET",
+      "pathTemplate": "/auth/me",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.identity.read",
+      "family": "hil-identity-read",
+      "method": "GET",
+      "pathTemplate": "/identities/{oidc_sub}",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.notification.read",
+      "family": "hil-notification-read",
+      "method": "GET",
+      "pathTemplate": "/notifications/config",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "hil.pending.read",
+      "family": "hil-pending-read",
+      "method": "GET",
+      "pathTemplate": "/pending",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "hil.pending.read",
+      "family": "hil-pending-read",
+      "method": "GET",
+      "pathTemplate": "/pending/by-correlation/{correlation_id}",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "hil.pending.read",
+      "family": "hil-pending-read",
+      "method": "GET",
+      "pathTemplate": "/pending/stream",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "hil.pending.read",
+      "family": "hil-pending-read",
+      "method": "GET",
+      "pathTemplate": "/pending/summaries",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "hil.pending.read",
+      "family": "hil-pending-read",
+      "method": "GET",
+      "pathTemplate": "/pending/{id}",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.decision-link.manage",
+      "family": "hil-decision-link",
+      "method": "GET",
+      "pathTemplate": "/pending/{id}/decision-link",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.pending.manage",
+      "family": "hil-pending-manage",
+      "method": "PATCH",
+      "pathTemplate": "/pending/{id}/incident",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.namespace.cleanup",
+      "family": "hil-demo-namespace-cleanup",
+      "method": "POST",
+      "pathTemplate": "/admin/namespaces/demo/cleanup",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.retention.manage",
+      "family": "hil-legal-hold",
+      "method": "POST",
+      "pathTemplate": "/admin/pending/{id}/legal-hold",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.tenant.lifecycle",
+      "family": "hil-tenant-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/admin/tenants/{tenant}/lifecycle",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.auth.ceremony",
+      "family": "hil-auth",
+      "method": "POST",
+      "pathTemplate": "/auth/login/finish",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.auth.ceremony",
+      "family": "hil-auth",
+      "method": "POST",
+      "pathTemplate": "/auth/login/start",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.auth.ceremony",
+      "family": "hil-auth",
+      "method": "POST",
+      "pathTemplate": "/auth/logout",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.auth.ceremony",
+      "family": "hil-auth",
+      "method": "POST",
+      "pathTemplate": "/auth/register/finish",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.auth.ceremony",
+      "family": "hil-auth",
+      "method": "POST",
+      "pathTemplate": "/auth/register/start",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-simulator"
+      ],
+      "capability": "hil.decision.execute",
+      "family": "hil-decision",
+      "method": "POST",
+      "pathTemplate": "/decide/{id}",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.decision-link.manage",
+      "family": "hil-decision-link",
+      "method": "POST",
+      "pathTemplate": "/decision-link/verify",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.identity.manage",
+      "family": "hil-identity-manage",
+      "method": "POST",
+      "pathTemplate": "/identities/upsert",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.notification.manage",
+      "family": "hil-notification-manage",
+      "method": "POST",
+      "pathTemplate": "/notifications/test",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "hil.pending.create",
+      "family": "hil-pending-create",
+      "method": "POST",
+      "pathTemplate": "/pending",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.pending.manage",
+      "family": "hil-pending-manage",
+      "method": "POST",
+      "pathTemplate": "/pending/{id}/assign",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.webhook.receive",
+      "family": "hil-webhooks",
+      "method": "POST",
+      "pathTemplate": "/webhook/slack",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "hil.webhook.receive",
+      "family": "hil-webhooks",
+      "method": "POST",
+      "pathTemplate": "/webhook/teams",
+      "service": "hil"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.decoy.manage",
+      "family": "identity-decoy-manage",
+      "method": "DELETE",
+      "pathTemplate": "/decoys/{name}",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.agent.read",
+      "family": "identity-agent-read",
+      "method": "GET",
+      "pathTemplate": "/agents",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.agent.read",
+      "family": "identity-agent-read",
+      "method": "GET",
+      "pathTemplate": "/agents/orphans",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.agent.read",
+      "family": "identity-agent-read",
+      "method": "GET",
+      "pathTemplate": "/agents/{id}",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.agent.read",
+      "family": "identity-agent-read",
+      "method": "GET",
+      "pathTemplate": "/agents/{id}/containment",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-identity",
+        "service-policy-engine",
+        "service-proxy"
+      ],
+      "capability": "identity.attestation.measurement.read",
+      "family": "identity-attestation-measurement-read",
+      "method": "GET",
+      "pathTemplate": "/attestation/measurements",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.decoy.read",
+      "family": "identity-decoy-read",
+      "method": "GET",
+      "pathTemplate": "/decoys",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.revocation.read",
+      "family": "identity-revocation-read",
+      "method": "GET",
+      "pathTemplate": "/grants",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-ledger"
+      ],
+      "capability": "identity.verification-keys.read",
+      "family": "identity-verification-keys-read",
+      "method": "GET",
+      "pathTemplate": "/ledger-verification-keys",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.revocation.read",
+      "family": "identity-revocation-read",
+      "method": "GET",
+      "pathTemplate": "/revocation/list",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.budget.read",
+      "family": "identity-budget-read",
+      "method": "GET",
+      "pathTemplate": "/tenants/{tenant}/budget",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.tenant.lifecycle",
+      "family": "identity-tenant-lifecycle",
+      "method": "GET",
+      "pathTemplate": "/tenants/{tenant}/lifecycle/{operation_id}",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.upstream.read",
+      "family": "identity-upstream-read",
+      "method": "GET",
+      "pathTemplate": "/upstreams",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "identity.upstream.read",
+      "family": "identity-upstream-read",
+      "method": "GET",
+      "pathTemplate": "/upstreams/{id}",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-proxy"
+      ],
+      "capability": "identity.actor-token.issue",
+      "family": "identity-actor-token-issue",
+      "method": "POST",
+      "pathTemplate": "/actor-token",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-proxy"
+      ],
+      "capability": "identity.actor-token.redeem",
+      "family": "identity-actor-token-redeem",
+      "method": "POST",
+      "pathTemplate": "/actor-token/redeem",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-simulator"
+      ],
+      "capability": "identity.agent.register",
+      "family": "identity-agent-register",
+      "method": "POST",
+      "pathTemplate": "/agents",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.manage",
+      "family": "identity-agent-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/attestation-kinds",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.manage",
+      "family": "identity-agent-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/certification",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "identity.agent.containment",
+      "family": "identity-agent-containment",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/containment/clear",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.lifecycle",
+      "family": "identity-agent-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/decommission",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.manage",
+      "family": "identity-agent-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/description",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.manage",
+      "family": "identity-agent-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/envelope/narrow",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.manage",
+      "family": "identity-agent-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/envelope/widen",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.manage",
+      "family": "identity-agent-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/owner-team",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.lifecycle",
+      "family": "identity-agent-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/suspend",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.manage",
+      "family": "identity-agent-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/svid-recovery",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.agent.lifecycle",
+      "family": "identity-agent-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/unsuspend",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.attestation.measurement.manage",
+      "family": "identity-attestation-measurement-manage",
+      "method": "POST",
+      "pathTemplate": "/attestation/measurements",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.attestation.measurement.manage",
+      "family": "identity-attestation-measurement-manage",
+      "method": "POST",
+      "pathTemplate": "/attestation/measurements/{id}/retire",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-proxy"
+      ],
+      "capability": "identity.attestation.runtime.read",
+      "family": "identity-attestation-runtime-read",
+      "method": "POST",
+      "pathTemplate": "/attestation/runtime",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "agent-workload",
+        "service-identity",
+        "service-proxy"
+      ],
+      "capability": "identity.attestation.verify",
+      "family": "identity-attestation-verify",
+      "method": "POST",
+      "pathTemplate": "/attestation/verify",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.decoy.manage",
+      "family": "identity-decoy-manage",
+      "method": "POST",
+      "pathTemplate": "/decoys",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "identity.grant.manage",
+      "family": "identity-grants",
+      "method": "POST",
+      "pathTemplate": "/grant",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.revocation.manage",
+      "family": "identity-revoke",
+      "method": "POST",
+      "pathTemplate": "/revoke",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-proxy"
+      ],
+      "capability": "identity.sign.action",
+      "family": "identity-sign-action",
+      "method": "POST",
+      "pathTemplate": "/sign",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-ledger"
+      ],
+      "capability": "identity.sign.blob",
+      "family": "identity-sign-blob",
+      "method": "POST",
+      "pathTemplate": "/sign/blob",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "agent-workload",
+        "service-simulator"
+      ],
+      "capability": "identity.svid.agent.issue",
+      "family": "identity-agent-svid",
+      "method": "POST",
+      "pathTemplate": "/svid",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.budget.manage",
+      "family": "identity-budget-manage",
+      "method": "POST",
+      "pathTemplate": "/tenants/{tenant}/budget",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.tenant.lifecycle",
+      "family": "identity-tenant-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/tenants/{tenant}/lifecycle",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.tenant.lifecycle",
+      "family": "identity-tenant-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/tenants/{tenant}/lifecycle/{operation_id}/steps/{step_id}/claim",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.tenant.lifecycle",
+      "family": "identity-tenant-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/tenants/{tenant}/lifecycle/{operation_id}/steps/{step_id}/complete",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.tenant.lifecycle",
+      "family": "identity-tenant-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/tenants/{tenant}/lifecycle/{operation_id}/steps/{step_id}/retry",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.tenant.offboard",
+      "family": "identity-tenant-offboard",
+      "method": "POST",
+      "pathTemplate": "/tenants/{tenant}/offboard",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-proxy"
+      ],
+      "capability": "identity.tool-definition.pin",
+      "family": "identity-tool-pin",
+      "method": "POST",
+      "pathTemplate": "/tool-definitions/pin",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-simulator"
+      ],
+      "capability": "identity.upstream.register",
+      "family": "identity-upstream-register",
+      "method": "POST",
+      "pathTemplate": "/upstreams",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.upstream.manage",
+      "family": "identity-upstream-manage",
+      "method": "POST",
+      "pathTemplate": "/upstreams/{id}/retire",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-brain",
+        "service-console",
+        "service-hil",
+        "service-identity",
+        "service-ledger",
+        "service-policy-engine",
+        "service-proxy",
+        "service-simulator"
+      ],
+      "capability": "identity.svid.workload.issue",
+      "family": "identity-workload-svid",
+      "method": "POST",
+      "pathTemplate": "/workload-svid",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "identity.svid.workload.recover",
+      "family": "identity-workload-svid-recovery",
+      "method": "POST",
+      "pathTemplate": "/workloads/{service}/svid-recovery",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.silence.manage",
+      "family": "ledger-silence-manage",
+      "method": "DELETE",
+      "pathTemplate": "/silence-allowlist/{agent_id}",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/agents",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.analysis.read",
+      "family": "ledger-analysis-read",
+      "method": "GET",
+      "pathTemplate": "/analysis/agent-behavioral-baseline",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.analysis.read",
+      "family": "ledger-analysis-read",
+      "method": "GET",
+      "pathTemplate": "/analysis/agent-envelope-recommendations",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.analysis.read",
+      "family": "ledger-analysis-read",
+      "method": "GET",
+      "pathTemplate": "/analysis/fleet-behavioral-diff",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.analysis.read",
+      "family": "ledger-analysis-read",
+      "method": "GET",
+      "pathTemplate": "/analysis/model-upgrade-canary",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.analysis.read",
+      "family": "ledger-analysis-read",
+      "method": "GET",
+      "pathTemplate": "/analysis/silent-agents",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/audit/agent/{tenant}/{agent_id}/lifecycle",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/audit/correlation/{correlation_id}",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/audit/entry/{entry_id}/masked-params",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/audit/hunt",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/audit/replay/corpus",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/audit/{agent_id}",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.audit.read",
+      "family": "ledger-audit-read",
+      "method": "GET",
+      "pathTemplate": "/audit/{agent_id}/count",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.case.read",
+      "family": "ledger-case-read",
+      "method": "GET",
+      "pathTemplate": "/cases",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.case.read",
+      "family": "ledger-case-read",
+      "method": "GET",
+      "pathTemplate": "/cases/{id}",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.export.read",
+      "family": "ledger-export-read",
+      "method": "GET",
+      "pathTemplate": "/exports",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.active-agent.read",
+      "family": "ledger-active-agent-read",
+      "method": "GET",
+      "pathTemplate": "/finops/active-agents",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.active-agent.read",
+      "family": "ledger-active-agent-read",
+      "method": "GET",
+      "pathTemplate": "/finops/active-agents/export",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.spend.read",
+      "family": "ledger-spend-read",
+      "method": "GET",
+      "pathTemplate": "/finops/spend",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.silence.read",
+      "family": "ledger-silence-read",
+      "method": "GET",
+      "pathTemplate": "/silence-allowlist",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.audit.stream",
+      "family": "ledger-audit-stream",
+      "method": "GET",
+      "pathTemplate": "/stream/audit",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.namespace.cleanup",
+      "family": "ledger-demo-namespace-cleanup",
+      "method": "POST",
+      "pathTemplate": "/admin/namespaces/demo/cleanup",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.tenant.lifecycle",
+      "family": "ledger-tenant-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/admin/tenants/{tenant}/lifecycle",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.tombstone.execute",
+      "family": "ledger-tombstone",
+      "method": "POST",
+      "pathTemplate": "/admin/tenants/{tenant}/tombstone",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.case.manage",
+      "family": "ledger-case-manage",
+      "method": "POST",
+      "pathTemplate": "/cases",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.case.manage",
+      "family": "ledger-case-manage",
+      "method": "POST",
+      "pathTemplate": "/cases/{id}/attach",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.case.manage",
+      "family": "ledger-case-manage",
+      "method": "POST",
+      "pathTemplate": "/cases/{id}/classify",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.case.manage",
+      "family": "ledger-case-manage",
+      "method": "POST",
+      "pathTemplate": "/cases/{id}/status",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-deep-review"
+      ],
+      "capability": "ledger.case.manage",
+      "family": "ledger-case-manage",
+      "method": "POST",
+      "pathTemplate": "/cases/{id}/timeline",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.compliance.evidence",
+      "family": "ledger-compliance-evidence",
+      "method": "POST",
+      "pathTemplate": "/compliance/evidence",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.export.create",
+      "family": "ledger-export-create",
+      "method": "POST",
+      "pathTemplate": "/export",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.export.regulatory",
+      "family": "ledger-regulatory-export",
+      "method": "POST",
+      "pathTemplate": "/export/regulatory",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.active-agent.adjust",
+      "family": "ledger-active-agent-adjust",
+      "method": "POST",
+      "pathTemplate": "/finops/active-agents/adjustments",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-deep-review",
+        "service-proxy"
+      ],
+      "capability": "ledger.append",
+      "family": "ledger-append",
+      "method": "POST",
+      "pathTemplate": "/log",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "ledger.silence.manage",
+      "family": "ledger-silence-manage",
+      "method": "POST",
+      "pathTemplate": "/silence-allowlist",
+      "service": "ledger"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "policy.tenant.lifecycle",
+      "family": "policy-tenant-lifecycle",
+      "method": "DELETE",
+      "pathTemplate": "/policies/tenant/{prefix}",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "DELETE",
+      "pathTemplate": "/policies/{name}",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.read",
+      "family": "policy-read",
+      "method": "GET",
+      "pathTemplate": "/policies",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.read",
+      "family": "policy-read",
+      "method": "GET",
+      "pathTemplate": "/policies/templates",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.read",
+      "family": "policy-read",
+      "method": "GET",
+      "pathTemplate": "/policies/templates/{name}",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.read",
+      "family": "policy-read",
+      "method": "GET",
+      "pathTemplate": "/policies/{name}",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.read",
+      "family": "policy-read",
+      "method": "GET",
+      "pathTemplate": "/policies/{name}/diff",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.read",
+      "family": "policy-read",
+      "method": "GET",
+      "pathTemplate": "/policies/{name}/versions",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.read",
+      "family": "policy-read",
+      "method": "GET",
+      "pathTemplate": "/policies/{name}/versions/{version}",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.tenant.saga",
+      "family": "policy-tenant-saga",
+      "method": "POST",
+      "pathTemplate": "/admin/tenants/{tenant}/lifecycle",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "policy.evaluate",
+      "family": "policy-evaluate",
+      "method": "POST",
+      "pathTemplate": "/evaluate",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "policy.evaluate",
+      "family": "policy-evaluate",
+      "method": "POST",
+      "pathTemplate": "/evaluate-egress",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies/categories/{domain}/activate",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies/categories/{domain}/deactivate",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.batch.evaluate",
+      "family": "policy-batch-evaluate",
+      "method": "POST",
+      "pathTemplate": "/policies/evaluate-batch",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.mine",
+      "family": "policy-mine",
+      "method": "POST",
+      "pathTemplate": "/policies/mine",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies/templates/{name}/install",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies/templates/{name}/lab",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console",
+        "service-proxy"
+      ],
+      "capability": "policy.tenant.lifecycle",
+      "family": "policy-tenant-lifecycle",
+      "method": "POST",
+      "pathTemplate": "/policies/tenant/{prefix}/provision",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.validate",
+      "family": "policy-validate",
+      "method": "POST",
+      "pathTemplate": "/policies/validate",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies/{name}/activate",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies/{name}/deactivate",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "POST",
+      "pathTemplate": "/policies/{name}/rollback/{version}",
+      "service": "policy-engine"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
+      "capability": "policy.manage",
+      "family": "policy-manage",
+      "method": "PUT",
+      "pathTemplate": "/policies/{name}",
+      "service": "policy-engine"
+    }
+  ],
+  "schemaVersion": 1,
+  "totals": {
+    "contracts": 6,
+    "routes": 139,
+    "schemas": 12,
+    "services": 4,
+    "typeBindings": 13
+  }
+}
