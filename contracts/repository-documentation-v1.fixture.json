@@ -1,0 +1,219 @@
+{
+  "contract": "clavenar.repository-documentation/v1",
+  "schemaVersion": 1,
+  "release": "1.236.0",
+  "repositories": [
+    {"name": "clavenar-brain", "visibility": "public", "markdownFiles": 23},
+    {"name": "clavenar-chaos-catalog", "visibility": "public", "markdownFiles": 3},
+    {"name": "clavenar-chaos-monkey", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-charts", "visibility": "public", "markdownFiles": 7},
+    {"name": "clavenar-console", "visibility": "public", "markdownFiles": 7},
+    {"name": "clavenar-ctl", "visibility": "public", "markdownFiles": 12},
+    {"name": "clavenar-deep-review", "visibility": "public", "markdownFiles": 8},
+    {"name": "clavenar-demo-mint", "visibility": "public", "markdownFiles": 5},
+    {"name": "clavenar-dotnet-sdk", "visibility": "public", "markdownFiles": 9},
+    {"name": "clavenar-e2e", "visibility": "public", "markdownFiles": 14},
+    {"name": "clavenar-exec", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-go-sdk", "visibility": "public", "markdownFiles": 13},
+    {"name": "clavenar-hil", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-identity", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-internal-specs", "visibility": "restricted", "markdownFiles": 25},
+    {"name": "clavenar-java-sdk", "visibility": "public", "markdownFiles": 9},
+    {"name": "clavenar-ledger", "visibility": "public", "markdownFiles": 5},
+    {"name": "clavenar-lite", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-policy-engine", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-proxy", "visibility": "public", "markdownFiles": 9},
+    {"name": "clavenar-python-sdk", "visibility": "public", "markdownFiles": 7},
+    {"name": "clavenar-sandbox", "visibility": "public", "markdownFiles": 5},
+    {"name": "clavenar-sdk", "visibility": "public", "markdownFiles": 7},
+    {"name": "clavenar-shadow-scanner", "visibility": "public", "markdownFiles": 7},
+    {"name": "clavenar-shared", "visibility": "public", "markdownFiles": 3},
+    {"name": "clavenar-simulator", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-specs", "visibility": "public", "markdownFiles": 11},
+    {"name": "clavenar-typescript-sdk", "visibility": "public", "markdownFiles": 15},
+    {"name": "clavenar-website", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-workload-identity", "visibility": "public", "markdownFiles": 5}
+  ],
+  "workspaceInputs": [
+    {
+      "id": "workspace-operator-guide",
+      "path": "CLAUDE.md",
+      "releaseGraph": false,
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "workspace-line-counter",
+      "path": "count_lines.py",
+      "releaseGraph": false,
+      "requiredWhenPresent": true
+    }
+  ],
+  "checks": [
+    "tracked-markdown",
+    "local-targets",
+    "local-fragments",
+    "retired-workspace-paths",
+    "governed-commands",
+    "generated-repository-counts",
+    "generated-service-tables",
+    "roadmap-references",
+    "source-live-claims"
+  ],
+  "claimStates": [
+    "source-shipped",
+    "release-verified",
+    "deployed-verified",
+    "external-verified"
+  ],
+  "corrections": [
+    {
+      "id": "portable-workspace-roots",
+      "paths": ["@workspace/CLAUDE.md", "@workspace/count_lines.py"],
+      "requiredMarkers": [
+        "Native AWS/GCP/Azure Terraform modules are roadmap-only",
+        "Path(__file__).resolve().parent / \"repos\""
+      ],
+      "forbiddenMarkers": ["/home/debian/claude/repos"],
+      "requiredWhenPresent": false
+    },
+    {
+      "id": "private-outreach-inputs",
+      "paths": [
+        "clavenar-e2e/OUTREACH_KICKOFF.md",
+        "clavenar-e2e/PARTNER_ONBOARDING.md"
+      ],
+      "requiredMarkers": [
+        "outside the product release graph",
+        "founder-maintained prospect register"
+      ],
+      "forbiddenMarkers": [
+        "../../outreach/templates.md",
+        "../../prospects.md",
+        "/home/debian/claude"
+      ],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "policy-template-targets",
+      "paths": ["clavenar-policy-engine/policies/templates/README.md"],
+      "requiredMarkers": [
+        "./cross-cutting/pii_egress.rego",
+        "./finance/money_moves.rego",
+        "./support/support_velocity.rego",
+        "cp templates/<domain>/<name>.rego ./<name>.rego"
+      ],
+      "forbiddenMarkers": ["(./pii_egress.rego)"],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "governed-service-count",
+      "paths": [
+        "clavenar-charts/lab/README.md",
+        "clavenar-e2e/README.md",
+        "clavenar-charts/charts/clavenar/Chart.yaml"
+      ],
+      "requiredMarkers": [
+        "all nine governed services",
+        "nine-service stack",
+        "assurance"
+      ],
+      "forbiddenMarkers": ["all eight services"],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "optional-bundled-dependencies",
+      "paths": [
+        "clavenar-charts/README.md",
+        "clavenar-charts/charts/clavenar/Chart.yaml"
+      ],
+      "requiredMarkers": [
+        "NATS and Vault are not bundled by default",
+        "condition: nats.bundled.enabled",
+        "condition: vault.bundled.enabled"
+      ],
+      "forbiddenMarkers": [],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "lite-human-review",
+      "paths": ["clavenar-lite/README.md"],
+      "requiredMarkers": [
+        "**Human review**",
+        "Park Yellow-tier calls",
+        "does not resume the approved call"
+      ],
+      "forbiddenMarkers": ["Lite omits HIL"],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "source-live-evidence-states",
+      "paths": ["clavenar-specs/README.md"],
+      "requiredMarkers": [
+        "source-shipped",
+        "release-verified",
+        "deployed-verified",
+        "external-verified"
+      ],
+      "forbiddenMarkers": [],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "deep-review-follow-up-reference",
+      "paths": ["clavenar-deep-review/README.md"],
+      "requiredMarkers": [
+        "repository issues",
+        "release roadmap"
+      ],
+      "forbiddenMarkers": ["../../roadmap.md"],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "strategy-playbook-references",
+      "paths": ["clavenar-internal-specs/STRATEGY.md"],
+      "requiredMarkers": [
+        "../clavenar-e2e/OUTREACH_KICKOFF.md",
+        "../clavenar-e2e/PARTNER_ONBOARDING.md",
+        "workspace-local 40-row prospect register"
+      ],
+      "forbiddenMarkers": [
+        "The prospect list, cold-send templates, and\n  wave 1 do not yet exist"
+      ],
+      "requiredWhenPresent": true
+    },
+    {
+      "id": "portable-demo-operations",
+      "paths": [
+        "clavenar-e2e/MANUAL_TESTS.md",
+        "clavenar-website/README.md"
+      ],
+      "requiredMarkers": [
+        "CLAVENAR_REPOS_ROOT",
+        "CLAVENAR_E2E_ROOT=/opt/clavenar/repos/clavenar-e2e"
+      ],
+      "forbiddenMarkers": ["/home/debian/claude/repos"],
+      "requiredWhenPresent": true
+    }
+  ],
+  "serviceInventory": [
+    "proxy",
+    "brain",
+    "policy-engine",
+    "ledger",
+    "hil",
+    "identity",
+    "deep-review",
+    "assurance",
+    "console"
+  ],
+  "totals": {
+    "repositories": 30,
+    "publicRepositories": 29,
+    "restrictedRepositories": 1,
+    "markdownFiles": 257,
+    "workspaceInputs": 2,
+    "checks": 9,
+    "claimStates": 4,
+    "corrections": 10,
+    "governedServices": 9
+  }
+}

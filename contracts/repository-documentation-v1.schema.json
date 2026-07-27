@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/repository-documentation-v1.schema.json",
+  "title": "Clavenar repository documentation release inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "repositories",
+    "workspaceInputs",
+    "checks",
+    "claimStates",
+    "corrections",
+    "serviceInventory",
+    "totals"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.repository-documentation/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.236.0"
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "visibility", "markdownFiles"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^clavenar-[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "visibility": {
+            "enum": ["public", "restricted"]
+          },
+          "markdownFiles": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "workspaceInputs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "releaseGraph", "requiredWhenPresent"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "releaseGraph": {
+            "const": false
+          },
+          "requiredWhenPresent": {
+            "const": true
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "tracked-markdown",
+          "local-targets",
+          "local-fragments",
+          "retired-workspace-paths",
+          "governed-commands",
+          "generated-repository-counts",
+          "generated-service-tables",
+          "roadmap-references",
+          "source-live-claims"
+        ]
+      }
+    },
+    "claimStates": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "source-shipped"},
+        {"const": "release-verified"},
+        {"const": "deployed-verified"},
+        {"const": "external-verified"}
+      ],
+      "items": false
+    },
+    "corrections": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "paths",
+          "requiredMarkers",
+          "forbiddenMarkers",
+          "requiredWhenPresent"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "paths": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "requiredMarkers": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "forbiddenMarkers": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "requiredWhenPresent": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "serviceInventory": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "proxy",
+          "brain",
+          "policy-engine",
+          "ledger",
+          "hil",
+          "identity",
+          "deep-review",
+          "assurance",
+          "console"
+        ]
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositories",
+        "publicRepositories",
+        "restrictedRepositories",
+        "markdownFiles",
+        "workspaceInputs",
+        "checks",
+        "claimStates",
+        "corrections",
+        "governedServices"
+      ],
+      "properties": {
+        "repositories": {"const": 30},
+        "publicRepositories": {"const": 29},
+        "restrictedRepositories": {"const": 1},
+        "markdownFiles": {"const": 257},
+        "workspaceInputs": {"const": 2},
+        "checks": {"const": 9},
+        "claimStates": {"const": 4},
+        "corrections": {"const": 10},
+        "governedServices": {"const": 9}
+      }
+    }
+  }
+}

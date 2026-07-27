@@ -19,6 +19,7 @@ guardrail that lets an enterprise run autonomous agents at full speed.
 | [`FEATURES.md`](FEATURES.md) | Per-feature claims with copy-paste verification commands. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | C4 context + container view, deployment topology, demo-prefix flow, trust chain. |
 | [`docs/CRYPTOGRAPHIC_VERIFICATION.md`](docs/CRYPTOGRAPHIC_VERIFICATION.md) | Historical signing-key, RFC 3161 trust, aggregate verification, and compliance derivation contract. |
+| [`contracts/repository-documentation-v1.fixture.json`](contracts/repository-documentation-v1.fixture.json) | Exact 30-repository documentation inventory, drift checks, and evidence-state vocabulary. |
 
 ### Glossary
 
@@ -869,6 +870,19 @@ four-layer substrate.
 ## 16. Implementation status
 
 This document is the narrative. The shipped runtime lives in sibling repos.
+Documentation uses four non-interchangeable evidence states:
+
+- **source-shipped** — the implementation and release input are present in the
+  governed source graph; this does not assert any live environment uses them;
+- **release-verified** — the protected immutable release receipt passed for the
+  named version and digest;
+- **deployed-verified** — a dated, environment-specific deployment receipt
+  proves that exact release is running there; and
+- **external-verified** — a dated registry, endpoint, or other external check
+  supports only the adjacent statement.
+
+Unqualified source text never upgrades `source-shipped` into
+`deployed-verified` or `external-verified`.
 
 | Layer | Repo                   | Port  | Role                                                                                                                          |
 |-------|------------------------|-------|-------------------------------------------------------------------------------------------------------------------------------|
