@@ -20,6 +20,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Route and schema release inventory](#route-and-schema-release-inventory) — generated route authority, source-bound types, and executable examples
 - [Executable documentation release inventory](#executable-documentation-release-inventory) — two-phase clean execution of install, quickstart, website, and Helm paths
 - [External install verification](#external-install-verification) — public registries, release assets, immutable images, and a fresh-cluster Helm install
+- [Pilot privacy and intake](#pilot-privacy-and-intake) — minimized enum-only qualification, bounded deletion, and reviewed processor inventory
 - [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
@@ -80,7 +81,8 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6d | [Public operational information boundary](#public-operational-information-boundary) | shipped | v1.232.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | shipped | v1.234.0 | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
 | 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | release acceptance in progress | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
-| 6g | [External install verification](#external-install-verification) | release acceptance in progress | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
+| 6g | [External install verification](#external-install-verification) | shipped | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
+| 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | release acceptance in progress | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8090,7 +8092,7 @@ The strict schema is
 
 ## External install verification
 
-**Module status:** **release acceptance in progress for v1.241.5.**
+**Module status:** **shipped in v1.241.5.**
 
 [`clavenar.external-install/v1`](contracts/external-install-v1.fixture.json)
 is the complete advertised public-install authority. It binds eight SDK,
@@ -8114,6 +8116,39 @@ registry authentication, public access, package import, release asset,
 checksum, chart content, workload readiness, or image digest fails publication.
 The strict schema is
 [`contracts/external-install-v1.schema.json`](contracts/external-install-v1.schema.json).
+
+## Pilot privacy and intake
+
+**Module status:** **release acceptance in progress for v1.242.0.**
+
+[`clavenar.pilot-privacy-intake/v1`](contracts/pilot-privacy-intake-v1.fixture.json)
+is the public qualification-data authority for the homepage pilot form and the
+design-partner form. The two forms deliver only a business email plus
+allowlisted, non-sensitive enum selections. Unknown and cross-form fields
+fail validation. Credentials, secrets, private keys, personal or regulated
+data, production-system detail, incident or vulnerability detail, and
+unbounded free text are outside the public intake path.
+
+`botcheck` and `cf-turnstile-response` remain transient security controls and
+never enter the delivered message. The same-origin verifier retains no intake
+record, bounds its rate-limit state to 60 seconds and its one-way Turnstile
+token hash to 300 seconds, and releases the fixed browser handoff only for
+`web3forms-browser-v2`.
+
+General-intake mailbox copies have a 90-day inactive limit and a 180-day
+absolute limit. A written-pilot conversion removes the general-intake copy
+within 30 days, after which the separate agreement governs any necessary
+replacement business record. A verified deletion request is acknowledged
+within seven days and completed within 30 days. A documented legal duty or
+active dispute suspends deletion only for the affected record, which is
+deleted within 30 days after that condition ends.
+
+The contract also inventories Cloudflare Turnstile, Google Gmail, Web3Forms,
+and the disabled Plausible integration with purpose, data, retention,
+deletion, provider terms, a 90-day review cadence, and a next-review date.
+Re-enabling analytics requires a reviewed bounded lifecycle before
+publication. The strict schema is
+[`contracts/pilot-privacy-intake-v1.schema.json`](contracts/pilot-privacy-intake-v1.schema.json).
 ### Rooted file and outbound target boundary
 
 The exact

@@ -1,0 +1,161 @@
+{
+  "contract": "clavenar.pilot-privacy-intake/v1",
+  "schemaVersion": 1,
+  "release": "1.242.0",
+  "policyVersion": "1.0.0",
+  "effectiveDate": "2026-07-28",
+  "controller": {
+    "legalName": "Vanteguard Labs LLC",
+    "privacyContact": "contact@clavenar.com"
+  },
+  "intake": {
+    "deliveryVersion": "web3forms-browser-v2",
+    "forms": [
+      {
+        "kind": "pilot",
+        "deliveredFields": [
+          "kind",
+          "email",
+          "evaluation_stage"
+        ],
+        "enums": {
+          "evaluation_stage": [
+            "researching",
+            "evaluating",
+            "planning-pilot",
+            "unsure"
+          ]
+        }
+      },
+      {
+        "kind": "design_partner",
+        "deliveredFields": [
+          "kind",
+          "email",
+          "interest",
+          "contact_timing"
+        ],
+        "enums": {
+          "contact_timing": [
+            "within-30-days",
+            "this-quarter",
+            "later",
+            "unsure"
+          ],
+          "interest": [
+            "approval-workflows",
+            "policy-enforcement",
+            "audit-evidence",
+            "evaluation-planning"
+          ]
+        }
+      }
+    ],
+    "transientControlFields": [
+      "botcheck",
+      "cf-turnstile-response"
+    ],
+    "prohibitedContent": [
+      "credentials",
+      "secrets-or-private-keys",
+      "personal-or-regulated-data",
+      "production-system-detail",
+      "incident-or-vulnerability-detail",
+      "unbounded-free-text"
+    ],
+    "unknownFields": "reject"
+  },
+  "retention": {
+    "inactiveInquiryDays": 90,
+    "absoluteIntakeDays": 180,
+    "conversionDeletionDays": 30,
+    "securityLogDays": 30,
+    "rateLimitSeconds": 60,
+    "turnstileTokenHashSeconds": 300
+  },
+  "deletion": {
+    "requestAcknowledgementDays": 7,
+    "requestCompletionDays": 30,
+    "conversionRule": "Delete the general-intake copy within 30 days after a written pilot agreement takes effect; the agreement governs any necessary replacement business record.",
+    "exceptionRule": "A documented legal duty or active dispute may suspend deletion only for the affected record; delete it within 30 days after the duty or dispute ends."
+  },
+  "processorInventory": {
+    "reviewedOn": "2026-07-28",
+    "nextReviewBy": "2026-10-26",
+    "reviewCadenceDays": 90,
+    "processors": [
+      {
+        "id": "cloudflare-turnstile",
+        "provider": "Cloudflare, Inc.",
+        "service": "Turnstile",
+        "status": "active",
+        "purpose": "Bot and abuse prevention for public forms and demo-session minting.",
+        "data": [
+          "browser and request security signals",
+          "challenge outcome",
+          "IP address"
+        ],
+        "retention": "Clavenar retains only a one-way token hash for at most 300 seconds; Cloudflare controls its security-signal retention under the linked addendum.",
+        "deletion": "The local token hash expires automatically; requests concerning Cloudflare-held signals may also be directed to Cloudflare under its addendum.",
+        "terms": "https://www.cloudflare.com/turnstile-privacy-policy/"
+      },
+      {
+        "id": "google-gmail",
+        "provider": "Google LLC",
+        "service": "Gmail",
+        "status": "active",
+        "purpose": "Receive minimized intake messages and conduct requested correspondence.",
+        "data": [
+          "business email address",
+          "correspondence",
+          "minimized intake enum selections"
+        ],
+        "retention": "General-intake messages follow the 90-day inactive and 180-day absolute intake limits.",
+        "deletion": "Vanteguard Labs deletes the general-intake copy on schedule or within 30 days after a verified deletion request, subject only to the documented exception rule.",
+        "terms": "https://policies.google.com/privacy"
+      },
+      {
+        "id": "plausible",
+        "provider": "Plausible Insights OÜ",
+        "service": "Plausible Analytics",
+        "status": "disabled",
+        "purpose": "Aggregate website measurement; disabled in the official 1.242.0 website build.",
+        "data": [
+          "none while disabled"
+        ],
+        "retention": "No new website event is sent by the official build while the integration is disabled.",
+        "deletion": "Re-enabling requires a reviewed inventory and a bounded analytics lifecycle before publication.",
+        "terms": "https://plausible.io/privacy"
+      },
+      {
+        "id": "web3forms",
+        "provider": "Web3Creative",
+        "service": "Web3Forms",
+        "status": "active",
+        "purpose": "Transmit the minimized, Turnstile-verified intake message to the controller mailbox.",
+        "data": [
+          "business email address",
+          "fixed delivery metadata",
+          "minimized intake enum selections"
+        ],
+        "retention": "Web3Forms states that it does not store form submissions and deletes service logs periodically, every two months.",
+        "deletion": "The provider does not expose a stored submission copy; its published two-month log deletion applies to service logs.",
+        "terms": "https://docs.web3forms.com/getting-started/faq"
+      }
+    ]
+  },
+  "publication": {
+    "source": true,
+    "built": true,
+    "deployed": true,
+    "exactMirror": true
+  },
+  "totals": {
+    "forms": 2,
+    "deliveredFields": 7,
+    "freeTextFields": 0,
+    "transientControlFields": 2,
+    "prohibitedContentClasses": 6,
+    "processors": 4
+  }
+}

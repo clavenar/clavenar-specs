@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/pilot-privacy-intake-v1.schema.json",
+  "title": "Clavenar public pilot privacy and intake contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "policyVersion",
+    "effectiveDate",
+    "controller",
+    "intake",
+    "retention",
+    "deletion",
+    "processorInventory",
+    "publication",
+    "totals"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.pilot-privacy-intake/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.242.0"
+    },
+    "policyVersion": {
+      "const": "1.0.0"
+    },
+    "effectiveDate": {
+      "const": "2026-07-28"
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legalName", "privacyContact"],
+      "properties": {
+        "legalName": {"const": "Vanteguard Labs LLC"},
+        "privacyContact": {"const": "contact@clavenar.com"}
+      }
+    },
+    "intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deliveryVersion",
+        "forms",
+        "transientControlFields",
+        "prohibitedContent",
+        "unknownFields"
+      ],
+      "properties": {
+        "deliveryVersion": {"const": "web3forms-browser-v2"},
+        "forms": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "deliveredFields", "enums"],
+            "properties": {
+              "kind": {"enum": ["pilot", "design_partner"]},
+              "deliveredFields": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 4,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "kind",
+                    "email",
+                    "evaluation_stage",
+                    "interest",
+                    "contact_timing"
+                  ]
+                }
+              },
+              "enums": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "minItems": 4,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "transientControlFields": {
+          "const": ["botcheck", "cf-turnstile-response"]
+        },
+        "prohibitedContent": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "credentials",
+              "secrets-or-private-keys",
+              "personal-or-regulated-data",
+              "production-system-detail",
+              "incident-or-vulnerability-detail",
+              "unbounded-free-text"
+            ]
+          }
+        },
+        "unknownFields": {"const": "reject"}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inactiveInquiryDays",
+        "absoluteIntakeDays",
+        "conversionDeletionDays",
+        "securityLogDays",
+        "rateLimitSeconds",
+        "turnstileTokenHashSeconds"
+      ],
+      "properties": {
+        "inactiveInquiryDays": {"const": 90},
+        "absoluteIntakeDays": {"const": 180},
+        "conversionDeletionDays": {"const": 30},
+        "securityLogDays": {"const": 30},
+        "rateLimitSeconds": {"const": 60},
+        "turnstileTokenHashSeconds": {"const": 300}
+      }
+    },
+    "deletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestAcknowledgementDays",
+        "requestCompletionDays",
+        "conversionRule",
+        "exceptionRule"
+      ],
+      "properties": {
+        "requestAcknowledgementDays": {"const": 7},
+        "requestCompletionDays": {"const": 30},
+        "conversionRule": {
+          "const": "Delete the general-intake copy within 30 days after a written pilot agreement takes effect; the agreement governs any necessary replacement business record."
+        },
+        "exceptionRule": {
+          "const": "A documented legal duty or active dispute may suspend deletion only for the affected record; delete it within 30 days after the duty or dispute ends."
+        }
+      }
+    },
+    "processorInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewedOn", "nextReviewBy", "reviewCadenceDays", "processors"],
+      "properties": {
+        "reviewedOn": {"const": "2026-07-28"},
+        "nextReviewBy": {"const": "2026-10-26"},
+        "reviewCadenceDays": {"const": 90},
+        "processors": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "required": ["id", "status"],
+                "properties": {
+                  "id": {"const": "cloudflare-turnstile"},
+                  "status": {"const": "active"}
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["id", "status"],
+                "properties": {
+                  "id": {"const": "google-gmail"},
+                  "status": {"const": "active"}
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["id", "status"],
+                "properties": {
+                  "id": {"const": "plausible"},
+                  "status": {"const": "disabled"}
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": ["id", "status"],
+                "properties": {
+                  "id": {"const": "web3forms"},
+                  "status": {"const": "active"}
+                }
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "provider",
+              "service",
+              "status",
+              "purpose",
+              "data",
+              "retention",
+              "deletion",
+              "terms"
+            ],
+            "properties": {
+              "id": {
+                "enum": ["cloudflare-turnstile", "google-gmail", "plausible", "web3forms"]
+              },
+              "provider": {"type": "string", "minLength": 1},
+              "service": {"type": "string", "minLength": 1},
+              "status": {"enum": ["active", "disabled"]},
+              "purpose": {"type": "string", "minLength": 1},
+              "data": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "retention": {"type": "string", "minLength": 1},
+              "deletion": {"type": "string", "minLength": 1},
+              "terms": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https://"
+              }
+            }
+          }
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "built", "deployed", "exactMirror"],
+      "properties": {
+        "source": {"const": true},
+        "built": {"const": true},
+        "deployed": {"const": true},
+        "exactMirror": {"const": true}
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forms",
+        "deliveredFields",
+        "freeTextFields",
+        "transientControlFields",
+        "prohibitedContentClasses",
+        "processors"
+      ],
+      "properties": {
+        "forms": {"const": 2},
+        "deliveredFields": {"const": 7},
+        "freeTextFields": {"const": 0},
+        "transientControlFields": {"const": 2},
+        "prohibitedContentClasses": {"const": 6},
+        "processors": {"const": 4}
+      }
+    }
+  }
+}

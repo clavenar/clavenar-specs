@@ -3318,3 +3318,25 @@ python3 -m pytest tests/test_external_install_contract.py
 python3 repos/clavenar-e2e/scripts/check_external_install.py \
   --source-root repos
 ```
+
+### Minimized public pilot intake
+
+[`clavenar.pilot-privacy-intake/v1`](contracts/pilot-privacy-intake-v1.fixture.json)
+limits the homepage and design-partner forms to a business email and
+allowlisted non-sensitive qualification enums. The backend rejects unknown,
+legacy, and cross-form fields; neither free text nor production-system,
+credential, incident, vulnerability, personal, or regulated-data detail has
+a public intake field. Turnstile and honeypot values remain transient and are
+never forwarded.
+
+The same contract publishes 90-day inactive and 180-day absolute
+general-intake limits, a 30-day verified-request completion target, a bounded
+conversion rule, and a four-provider inventory reviewed every 90 days.
+Plausible is disabled in the official 1.242.0 build and cannot be re-enabled
+without a reviewed bounded analytics lifecycle.
+
+```bash
+python3 -m pytest tests/test_pilot_privacy_intake_contract.py
+python3 repos/clavenar-e2e/scripts/check_pilot_privacy_intake.py \
+  --source-root repos
+```
