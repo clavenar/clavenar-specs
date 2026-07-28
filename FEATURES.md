@@ -3301,3 +3301,20 @@ DOCKER="sudo -n docker" \
   repos/clavenar-e2e/scripts/run-executable-documentation.sh \
   --phase staged --source-root repos --release-version 1.235.0
 ```
+
+### Exact public external installs
+
+[`clavenar.external-install/v1`](contracts/external-install-v1.fixture.json)
+binds the advertised npm, PyPI, Maven, NuGet, four-module Go, Rust Git/release,
+Lite, CLI, OCI image, and OCI Helm surfaces to exact immutable versions. The
+protected distribution runs all eight package/binary paths from clean
+containers, downloads eleven anonymous release assets, verifies checksums, and
+installs chart 0.35.0 with the exact 1.241.0 image values in a new Kind
+cluster. All workloads must become ready and every Clavenar image must remain
+an anonymously readable digest.
+
+```bash
+python3 -m pytest tests/test_external_install_contract.py
+python3 repos/clavenar-e2e/scripts/check_external_install.py \
+  --source-root repos
+```

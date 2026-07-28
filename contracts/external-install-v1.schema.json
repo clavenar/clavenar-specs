@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/external-install-v1.schema.json",
+  "title": "Clavenar external install contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "network",
+    "isolation",
+    "packageInstalls",
+    "helmInstall",
+    "protectedImages",
+    "totals"
+  ],
+  "properties": {
+    "contract": {"const": "clavenar.external-install/v1"},
+    "schemaVersion": {"const": 1},
+    "release": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "network": {"const": "public"},
+    "isolation": {"const": "clean-container-and-fresh-kind"},
+    "packageInstalls": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/packageInstall"}
+    },
+    "helmInstall": {"$ref": "#/$defs/helmInstall"},
+    "protectedImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositories", "subjects", "tagPolicy", "access"],
+      "properties": {
+        "repositories": {"const": 10},
+        "subjects": {"const": 11},
+        "tagPolicy": {"const": "digest-only"},
+        "access": {"const": "anonymous"}
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packageInstalls",
+        "goModuleTags",
+        "releaseAssets",
+        "helmInstalls",
+        "protectedImageRepositories",
+        "protectedImageSubjects"
+      ],
+      "properties": {
+        "packageInstalls": {"const": 8},
+        "goModuleTags": {"const": 4},
+        "releaseAssets": {"const": 11},
+        "helmInstalls": {"const": 1},
+        "protectedImageRepositories": {"const": 10},
+        "protectedImageSubjects": {"const": 11}
+      }
+    }
+  },
+  "$defs": {
+    "packageInstall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "repository",
+        "sourcePath",
+        "version",
+        "access",
+        "install",
+        "registry",
+        "verification"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "typescript-sdk",
+            "python-sdk",
+            "java-sdk",
+            "dotnet-sdk",
+            "go-sdk",
+            "rust-sdk",
+            "lite",
+            "cli"
+          ]
+        },
+        "repository": {"type": "string", "pattern": "^clavenar-[a-z0-9-]+$"},
+        "sourcePath": {"type": "string", "pattern": "^[A-Za-z0-9._/-]+$"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "access": {
+          "enum": [
+            "anonymous",
+            "authenticated-registry-and-anonymous-release"
+          ]
+        },
+        "install": {"type": "string", "minLength": 8},
+        "registry": {"type": "string", "minLength": 8},
+        "releaseAssets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"}
+        },
+        "moduleTags": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^(?:[a-z]+/){0,2}v[0-9]+\\.[0-9]+\\.[0-9]+$"}
+        },
+        "verification": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9-]+$"}
+        }
+      }
+    },
+    "helmInstall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "sourcePath",
+        "version",
+        "registry",
+        "release",
+        "valuesAsset",
+        "packagedValues",
+        "cluster",
+        "imagePolicy",
+        "verification"
+      ],
+      "properties": {
+        "repository": {"const": "clavenar-charts"},
+        "sourcePath": {"const": "README.md"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "registry": {"const": "oci://ghcr.io/clavenar/charts/clavenar"},
+        "release": {"type": "string", "pattern": "^https://github\\.com/clavenar/clavenar-charts/releases/tag/v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "valuesAsset": {"type": "string", "pattern": "^clavenar-images-[0-9]+\\.[0-9]+\\.[0-9]+\\.yaml$"},
+        "packagedValues": {"const": "examples/values-bundled.yaml"},
+        "cluster": {"const": "fresh-kind"},
+        "imagePolicy": {"const": "anonymous-exact-digest-only"},
+        "verification": {
+          "type": "array",
+          "minItems": 6,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z0-9-]+$"}
+        }
+      }
+    }
+  }
+}

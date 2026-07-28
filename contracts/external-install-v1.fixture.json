@@ -1,0 +1,147 @@
+{
+  "contract": "clavenar.external-install/v1",
+  "schemaVersion": 1,
+  "release": "1.241.0",
+  "network": "public",
+  "isolation": "clean-container-and-fresh-kind",
+  "packageInstalls": [
+    {
+      "id": "typescript-sdk",
+      "repository": "clavenar-typescript-sdk",
+      "sourcePath": "README.md",
+      "version": "1.6.0",
+      "access": "anonymous",
+      "install": "pnpm add @clavenar/agent-sdk@1.6.0",
+      "registry": "https://registry.npmjs.org",
+      "verification": ["install", "import", "hello-world"]
+    },
+    {
+      "id": "python-sdk",
+      "repository": "clavenar-python-sdk",
+      "sourcePath": "README.md",
+      "version": "1.5.0",
+      "access": "anonymous",
+      "install": "pip install clavenar-agent-sdk==1.5.0",
+      "registry": "https://pypi.org",
+      "verification": ["install", "import", "hello-world"]
+    },
+    {
+      "id": "java-sdk",
+      "repository": "clavenar-java-sdk",
+      "sourcePath": "README.md",
+      "version": "1.5.1",
+      "access": "authenticated-registry-and-anonymous-release",
+      "install": "com.clavenar:agent-sdk:1.5.1",
+      "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
+      "releaseAssets": [
+        "agent-sdk-1.5.1.jar",
+        "pom.xml",
+        "bom.json",
+        "bom.xml"
+      ],
+      "verification": ["authenticated-install", "compile", "anonymous-download"]
+    },
+    {
+      "id": "dotnet-sdk",
+      "repository": "clavenar-dotnet-sdk",
+      "sourcePath": "README.md",
+      "version": "1.6.0",
+      "access": "authenticated-registry-and-anonymous-release",
+      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.0",
+      "registry": "https://nuget.pkg.github.com/clavenar/index.json",
+      "releaseAssets": [
+        "Clavenar.AgentSdk.1.6.0.nupkg",
+        "Clavenar.AgentSdk.1.6.0.snupkg"
+      ],
+      "verification": ["authenticated-install", "compile", "anonymous-download"]
+    },
+    {
+      "id": "go-sdk",
+      "repository": "clavenar-go-sdk",
+      "sourcePath": "README.md",
+      "version": "1.0.0",
+      "access": "anonymous",
+      "install": "go get github.com/clavenar/clavenar-go-sdk@v1.0.0",
+      "registry": "https://proxy.golang.org",
+      "moduleTags": [
+        "v1.0.0",
+        "adapters/anthropic/v1.0.0",
+        "adapters/openai/v1.0.0",
+        "examples/v1.0.0"
+      ],
+      "verification": ["four-module-install", "compile", "hello-world"]
+    },
+    {
+      "id": "rust-sdk",
+      "repository": "clavenar-sdk",
+      "sourcePath": "README.md",
+      "version": "0.4.0",
+      "access": "anonymous",
+      "install": "cargo add clavenar-sdk --git https://github.com/clavenar/clavenar-sdk --tag v0.4.0",
+      "registry": "https://github.com/clavenar/clavenar-sdk/releases",
+      "releaseAssets": ["clavenar-sdk-0.4.0.crate"],
+      "verification": ["git-tag-install", "compile", "anonymous-download"]
+    },
+    {
+      "id": "lite",
+      "repository": "clavenar-lite",
+      "sourcePath": "README.md",
+      "version": "0.12.0",
+      "access": "anonymous",
+      "install": "curl -fsSLO https://github.com/clavenar/clavenar-lite/releases/download/v0.12.0/clavenar-lite-0.12.0-x86_64-linux-musl.tar.gz",
+      "registry": "https://ghcr.io/clavenar/clavenar-lite",
+      "releaseAssets": [
+        "clavenar-lite-0.12.0-x86_64-linux-musl.tar.gz",
+        "clavenar-lite-0.12.0-x86_64-linux-musl.tar.gz.sha256"
+      ],
+      "verification": ["anonymous-download", "checksum", "help", "anonymous-oci"]
+    },
+    {
+      "id": "cli",
+      "repository": "clavenar-ctl",
+      "sourcePath": "README.md",
+      "version": "0.3.0",
+      "access": "anonymous",
+      "install": "curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.0/clavenarctl-0.3.0-x86_64-linux-musl.tar.gz",
+      "registry": "https://github.com/clavenar/clavenar-ctl/releases",
+      "releaseAssets": [
+        "clavenarctl-0.3.0-x86_64-linux-musl.tar.gz",
+        "clavenarctl-0.3.0-x86_64-linux-musl.tar.gz.sha256"
+      ],
+      "verification": ["anonymous-download", "checksum", "help"]
+    }
+  ],
+  "helmInstall": {
+    "repository": "clavenar-charts",
+    "sourcePath": "README.md",
+    "version": "0.35.0",
+    "registry": "oci://ghcr.io/clavenar/charts/clavenar",
+    "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.35.0",
+    "valuesAsset": "clavenar-images-1.241.0.yaml",
+    "packagedValues": "examples/values-bundled.yaml",
+    "cluster": "fresh-kind",
+    "imagePolicy": "anonymous-exact-digest-only",
+    "verification": [
+      "anonymous-pull",
+      "checksum",
+      "fresh-install",
+      "hooks-complete",
+      "workloads-ready",
+      "exact-public-images"
+    ]
+  },
+  "protectedImages": {
+    "repositories": 10,
+    "subjects": 11,
+    "tagPolicy": "digest-only",
+    "access": "anonymous"
+  },
+  "totals": {
+    "packageInstalls": 8,
+    "goModuleTags": 4,
+    "releaseAssets": 11,
+    "helmInstalls": 1,
+    "protectedImageRepositories": 10,
+    "protectedImageSubjects": 11
+  }
+}

@@ -19,6 +19,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Retention claim boundaries](#retention-claim-boundaries) — configured duration, exact technical controls, recovery-point scope, and fixed-duration promotion evidence
 - [Route and schema release inventory](#route-and-schema-release-inventory) — generated route authority, source-bound types, and executable examples
 - [Executable documentation release inventory](#executable-documentation-release-inventory) — two-phase clean execution of install, quickstart, website, and Helm paths
+- [External install verification](#external-install-verification) — public registries, release assets, immutable images, and a fresh-cluster Helm install
 - [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
@@ -79,6 +80,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6d | [Public operational information boundary](#public-operational-information-boundary) | shipped | v1.232.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | shipped | v1.234.0 | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
 | 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | release acceptance in progress | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
+| 6g | [External install verification](#external-install-verification) | release acceptance in progress | v1.241.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8085,6 +8087,33 @@ phases.
 
 The strict schema is
 [`contracts/executable-documentation-v1.schema.json`](contracts/executable-documentation-v1.schema.json).
+
+## External install verification
+
+**Module status:** **release acceptance in progress for v1.241.0.**
+
+[`clavenar.external-install/v1`](contracts/external-install-v1.fixture.json)
+is the complete advertised public-install authority. It binds eight SDK,
+binary, and client-package installs; four nested Go module tags; eleven
+anonymous release assets; the authenticated Maven and NuGet registries; the
+anonymous npm, PyPI, Go, GitHub Release, OCI image, and OCI Helm surfaces; and
+one clean Kind cluster install of the exact chart and protected image values.
+
+The protected distribution boundary runs these checks only after all nine
+component publishers complete. Each package install begins in a clean
+digest-pinned container and must import, compile, or execute its minimal public
+surface. Each advertised archive is downloaded anonymously; binary and chart
+checksums must match before execution or extraction. The Helm check starts a
+new cluster, anonymously pulls chart `0.35.0`, installs its packaged bundled
+values plus `clavenar-images-1.241.0.yaml`, waits for hooks and workloads, and
+proves every Clavenar image is an anonymously readable exact digest.
+
+The public bundled values deliberately exclude the optional Exec image because
+it has a separate unpublished evaluation lifecycle. Missing documentation,
+registry authentication, public access, package import, release asset,
+checksum, chart content, workload readiness, or image digest fails publication.
+The strict schema is
+[`contracts/external-install-v1.schema.json`](contracts/external-install-v1.schema.json).
 ### Rooted file and outbound target boundary
 
 The exact
