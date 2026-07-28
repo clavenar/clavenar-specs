@@ -80,7 +80,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6d | [Public operational information boundary](#public-operational-information-boundary) | shipped | v1.232.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | shipped | v1.234.0 | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
 | 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | release acceptance in progress | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
-| 6g | [External install verification](#external-install-verification) | release acceptance in progress | v1.241.4 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
+| 6g | [External install verification](#external-install-verification) | release acceptance in progress | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8090,7 +8090,7 @@ The strict schema is
 
 ## External install verification
 
-**Module status:** **release acceptance in progress for v1.241.4.**
+**Module status:** **release acceptance in progress for v1.241.5.**
 
 [`clavenar.external-install/v1`](contracts/external-install-v1.fixture.json)
 is the complete advertised public-install authority. It binds eight SDK,
@@ -8104,8 +8104,8 @@ component publishers complete. Each package install begins in a clean
 digest-pinned container and must import, compile, or execute its minimal public
 surface. Each advertised archive is downloaded anonymously; binary and chart
 checksums must match before execution or extraction. The Helm check starts a
-new cluster, anonymously pulls chart `0.35.4`, installs its packaged bundled
-values plus `clavenar-images-1.241.4.yaml`, waits for hooks and workloads, and
+new cluster, anonymously pulls chart `0.35.5`, installs its packaged bundled
+values plus `clavenar-images-1.241.5.yaml`, waits for hooks and workloads, and
 proves every Clavenar image is an anonymously readable exact digest.
 
 The public bundled values deliberately exclude the optional Exec image because
