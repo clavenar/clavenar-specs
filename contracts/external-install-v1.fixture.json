@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.external-install/v1",
   "schemaVersion": 1,
-  "release": "1.241.0",
+  "release": "1.241.1",
   "network": "public",
   "isolation": "clean-container-and-fresh-kind",
   "packageInstalls": [
@@ -29,12 +29,12 @@
       "id": "java-sdk",
       "repository": "clavenar-java-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "com.clavenar:agent-sdk:1.5.1",
+      "install": "com.clavenar:agent-sdk:1.5.2",
       "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
       "releaseAssets": [
-        "agent-sdk-1.5.1.jar",
+        "agent-sdk-1.5.2.jar",
         "pom.xml",
         "bom.json",
         "bom.xml"
@@ -45,13 +45,13 @@
       "id": "dotnet-sdk",
       "repository": "clavenar-dotnet-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.0",
+      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.1",
       "registry": "https://nuget.pkg.github.com/clavenar/index.json",
       "releaseAssets": [
-        "Clavenar.AgentSdk.1.6.0.nupkg",
-        "Clavenar.AgentSdk.1.6.0.snupkg"
+        "Clavenar.AgentSdk.1.6.1.nupkg",
+        "Clavenar.AgentSdk.1.6.1.snupkg"
       ],
       "verification": ["authenticated-install", "compile", "anonymous-download"]
     },
@@ -75,24 +75,24 @@
       "id": "rust-sdk",
       "repository": "clavenar-sdk",
       "sourcePath": "README.md",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "access": "anonymous",
-      "install": "cargo add clavenar-sdk --git https://github.com/clavenar/clavenar-sdk --tag v0.4.0",
+      "install": "cargo add clavenar-sdk --git https://github.com/clavenar/clavenar-sdk --tag v0.4.1",
       "registry": "https://github.com/clavenar/clavenar-sdk/releases",
-      "releaseAssets": ["clavenar-sdk-0.4.0.crate"],
+      "releaseAssets": ["clavenar-sdk-0.4.1.crate"],
       "verification": ["git-tag-install", "compile", "anonymous-download"]
     },
     {
       "id": "lite",
       "repository": "clavenar-lite",
       "sourcePath": "README.md",
-      "version": "0.12.0",
+      "version": "0.12.1",
       "access": "anonymous",
-      "install": "curl -fsSLO https://github.com/clavenar/clavenar-lite/releases/download/v0.12.0/clavenar-lite-0.12.0-x86_64-linux-musl.tar.gz",
+      "install": "curl -fsSLO https://github.com/clavenar/clavenar-lite/releases/download/v0.12.1/clavenar-lite-0.12.1-x86_64-linux-musl.tar.gz",
       "registry": "https://ghcr.io/clavenar/clavenar-lite",
       "releaseAssets": [
-        "clavenar-lite-0.12.0-x86_64-linux-musl.tar.gz",
-        "clavenar-lite-0.12.0-x86_64-linux-musl.tar.gz.sha256"
+        "clavenar-lite-0.12.1-x86_64-linux-musl.tar.gz",
+        "clavenar-lite-0.12.1-x86_64-linux-musl.tar.gz.sha256"
       ],
       "verification": ["anonymous-download", "checksum", "help", "anonymous-oci"]
     },
@@ -100,13 +100,13 @@
       "id": "cli",
       "repository": "clavenar-ctl",
       "sourcePath": "README.md",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "access": "anonymous",
-      "install": "curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.0/clavenarctl-0.3.0-x86_64-linux-musl.tar.gz",
+      "install": "curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.1/clavenarctl-0.3.1-x86_64-linux-musl.tar.gz",
       "registry": "https://github.com/clavenar/clavenar-ctl/releases",
       "releaseAssets": [
-        "clavenarctl-0.3.0-x86_64-linux-musl.tar.gz",
-        "clavenarctl-0.3.0-x86_64-linux-musl.tar.gz.sha256"
+        "clavenarctl-0.3.1-x86_64-linux-musl.tar.gz",
+        "clavenarctl-0.3.1-x86_64-linux-musl.tar.gz.sha256"
       ],
       "verification": ["anonymous-download", "checksum", "help"]
     }
@@ -114,10 +114,10 @@
   "helmInstall": {
     "repository": "clavenar-charts",
     "sourcePath": "README.md",
-    "version": "0.35.0",
+    "version": "0.35.1",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.35.0",
-    "valuesAsset": "clavenar-images-1.241.0.yaml",
+    "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.35.1",
+    "valuesAsset": "clavenar-images-1.241.1.yaml",
     "packagedValues": "examples/values-bundled.yaml",
     "cluster": "fresh-kind",
     "imagePolicy": "anonymous-exact-digest-only",
