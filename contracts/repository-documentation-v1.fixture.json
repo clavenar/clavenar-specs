@@ -17,7 +17,7 @@
     {"name": "clavenar-go-sdk", "visibility": "public", "markdownFiles": 13},
     {"name": "clavenar-hil", "visibility": "public", "markdownFiles": 6},
     {"name": "clavenar-identity", "visibility": "public", "markdownFiles": 6},
-    {"name": "clavenar-internal-specs", "visibility": "restricted", "markdownFiles": 31},
+    {"name": "clavenar-internal-specs", "visibility": "restricted", "markdownFiles": 32},
     {"name": "clavenar-java-sdk", "visibility": "public", "markdownFiles": 9},
     {"name": "clavenar-ledger", "visibility": "public", "markdownFiles": 5},
     {"name": "clavenar-lite", "visibility": "public", "markdownFiles": 6},
@@ -31,7 +31,7 @@
     {"name": "clavenar-simulator", "visibility": "public", "markdownFiles": 6},
     {"name": "clavenar-specs", "visibility": "public", "markdownFiles": 11},
     {"name": "clavenar-typescript-sdk", "visibility": "public", "markdownFiles": 15},
-    {"name": "clavenar-website", "visibility": "public", "markdownFiles": 6},
+    {"name": "clavenar-website", "visibility": "public", "markdownFiles": 15},
     {"name": "clavenar-workload-identity", "visibility": "public", "markdownFiles": 5}
   ],
   "workspaceInputs": [
@@ -209,7 +209,7 @@
     "repositories": 30,
     "publicRepositories": 29,
     "restrictedRepositories": 1,
-    "markdownFiles": 265,
+    "markdownFiles": 275,
     "workspaceInputs": 2,
     "checks": 9,
     "claimStates": 4,

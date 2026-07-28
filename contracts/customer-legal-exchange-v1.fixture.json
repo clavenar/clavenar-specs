@@ -1,0 +1,246 @@
+{
+  "contract": "clavenar.customer-legal-exchange/v1",
+  "schemaVersion": 1,
+  "release": "1.243.0",
+  "packVersion": "1.0.0",
+  "candidateEffectiveDate": "2026-07-28",
+  "controller": {
+    "legalName": "Vanteguard Labs LLC",
+    "contact": "contact@clavenar.com"
+  },
+  "secureExchange": {
+    "protocol": "clavenar.customer-secure-exchange/v1",
+    "tool": {
+      "path": "tools/clavenar-secure-exchange.py",
+      "sha256": "sha256:95de0b634d61ed736df421d9485e6e1c0bc21a82f0fa90bc4eaac19f4a56d93b",
+      "pythonMinimum": "3.11",
+      "cryptographyMinimum": "42"
+    },
+    "algorithms": {
+      "keyAgreement": "X25519",
+      "keyDerivation": "HKDF-SHA-256",
+      "payload": "AES-256-GCM",
+      "commitment": "SHA-256"
+    },
+    "recipients": [
+      {
+        "role": "customer",
+        "privateKeyCustody": "customer-only",
+        "required": true
+      },
+      {
+        "role": "clavenar",
+        "privateKeyCustody": "order-specific-authorized-clavenar",
+        "required": true
+      }
+    ],
+    "transport": {
+      "custody": "customer-controlled",
+      "networkRequestsByTool": 0,
+      "universalClavenarRecipientPublished": false,
+      "authenticatedOutOfBandKeyVerification": true
+    },
+    "limits": {
+      "maximumFiles": 128,
+      "maximumFileBytes": 8388608,
+      "maximumPlaintextBytes": 16777216,
+      "maximumLifetimeHours": 168
+    },
+    "rejects": [
+      "plaintext-handoff",
+      "customer-private-key-handoff",
+      "same-recipient-for-both-roles",
+      "unverified-clavenar-recipient",
+      "symlink",
+      "absolute-or-parent-path",
+      "duplicate-path",
+      "file-or-bundle-over-limit",
+      "recipient-substitution",
+      "manifest-substitution",
+      "ciphertext-tamper",
+      "wrong-private-key",
+      "expired-envelope",
+      "mutable-envelope-reuse"
+    ],
+    "retainedEvidence": [
+      "bundle-id",
+      "recipient-key-commitments",
+      "manifest-commitment",
+      "created-and-expiry-times",
+      "authorized-owner-and-purpose",
+      "delivery-and-deletion-outcome"
+    ]
+  },
+  "legalPack": {
+    "basePath": "legal/v1.0",
+    "bindingState": "template-requires-completed-signed-order-form",
+    "pricingState": "not-set-until-approved-offer-and-signed-order-form",
+    "documents": [
+      {
+        "id": "master-services-agreement",
+        "path": "legal/v1.0/master-services-agreement.md",
+        "sha256": "sha256:488f760f1937d549d79f579d3151011688e427dc9a3f316f29b118032ceeaa24",
+        "covers": [
+          "services",
+          "confidentiality",
+          "security-and-privacy",
+          "intellectual-property",
+          "support",
+          "warranties",
+          "liability",
+          "termination",
+          "deletion"
+        ]
+      },
+      {
+        "id": "pilot-agreement",
+        "path": "legal/v1.0/pilot-agreement.md",
+        "sha256": "sha256:8548345d01c7dd34f573a53eb9b77aedd5a1ec4c7b8d38e18fc71d61b6b96970",
+        "covers": [
+          "evaluation-scope",
+          "accountable-owners",
+          "success-evidence",
+          "change-control",
+          "production-approval",
+          "pilot-exit"
+        ]
+      },
+      {
+        "id": "order-form",
+        "path": "legal/v1.0/order-form.md",
+        "sha256": "sha256:20fdba692852cb07042cea853b849f9d3e29451ecfda4931afa06cad9df6c07b",
+        "covers": [
+          "parties",
+          "incorporated-versions",
+          "commercial-fields",
+          "deployment-and-data",
+          "secure-exchange",
+          "transfer-election",
+          "signatures"
+        ]
+      },
+      {
+        "id": "data-processing-addendum",
+        "path": "legal/v1.0/data-processing-addendum.md",
+        "sha256": "sha256:d3893d9fa769fba93c003beebfb58363b6c804c75fc2c58f83a86ec3e6a11004",
+        "covers": [
+          "data-roles",
+          "documented-instructions",
+          "confidentiality",
+          "security",
+          "subprocessors",
+          "data-subject-assistance",
+          "incident-notice",
+          "return-and-deletion",
+          "audit",
+          "international-transfer"
+        ]
+      },
+      {
+        "id": "scc-election",
+        "path": "legal/v1.0/scc-election.md",
+        "sha256": "sha256:d53b937876012b38c3ba8a9139716d407ffa2f9c99d512440aae40ae163b3f3c",
+        "covers": [
+          "eu-decision-2021-914",
+          "module-2",
+          "module-3",
+          "annex-i",
+          "annex-ii",
+          "annex-iii",
+          "uk-addendum-boundary",
+          "supplementary-measures"
+        ]
+      },
+      {
+        "id": "security-data-schedule",
+        "path": "legal/v1.0/security-data-schedule.md",
+        "sha256": "sha256:abd6a596856ac3c0dc4fcef7cb44fcc2881bb331a88ed03ec883077111df5552",
+        "covers": [
+          "identity-and-isolation",
+          "secure-exchange",
+          "product-security",
+          "encryption-and-keys",
+          "backup-and-recovery",
+          "incident-response",
+          "retention-and-deletion",
+          "customer-responsibilities",
+          "assurance"
+        ]
+      },
+      {
+        "id": "procurement-response",
+        "path": "legal/v1.0/procurement-response.md",
+        "sha256": "sha256:62000c4f295aa0b588107f6843d151ae29b2c2c2e18c85303e53ca3765093304",
+        "covers": [
+          "company-and-product",
+          "security-and-privacy",
+          "assurance-status",
+          "explicit-nonclaims",
+          "available-evidence",
+          "customer-specific-completion"
+        ]
+      }
+    ],
+    "guides": [
+      {
+        "id": "pack-index",
+        "path": "legal/v1.0/README.md",
+        "sha256": "sha256:423509df167e19120197a2237191299db927de556f17c77c12b527d75c7b801e"
+      },
+      {
+        "id": "secure-exchange-guide",
+        "path": "legal/v1.0/secure-exchange-guide.md",
+        "sha256": "sha256:b160bbd52c6c28f2db8b2b213debd8fdefd556968d2c681bd4a8c93d98b5a7bc"
+      }
+    ],
+    "requiredExecutionFields": [
+      "customer-legal-name",
+      "accountable-and-legal-contacts",
+      "effective-and-term-dates",
+      "offer-version-price-billing-and-renewal",
+      "exact-release-topology-and-regions",
+      "permitted-and-prohibited-data",
+      "both-exchange-recipient-key-ids",
+      "customer-controlled-delivery-location",
+      "support-and-service-level",
+      "retention-return-and-deletion",
+      "data-roles-and-transfer-mechanism",
+      "governing-law-venue-and-signatures"
+    ],
+    "explicitNonclaims": [
+      "public-offer-or-price",
+      "production-approval",
+      "service-level",
+      "soc-2",
+      "iso-27001",
+      "pci-dss",
+      "hipaa-or-hitrust",
+      "fedramp"
+    ]
+  },
+  "approval": {
+    "requiredGroups": [
+      "Legal",
+      "Security"
+    ],
+    "scope": "customer-legal-pack-and-secure-exchange",
+    "exactBytesRequired": true,
+    "maximumReviewAgeDays": 90
+  },
+  "publication": {
+    "source": true,
+    "built": true,
+    "deployed": true,
+    "exactMirror": true
+  },
+  "totals": {
+    "legalDocuments": 7,
+    "guides": 2,
+    "downloadableTools": 1,
+    "publishedArtifacts": 10,
+    "requiredExecutionFields": 12,
+    "explicitNonclaims": 8,
+    "recipientRoles": 2,
+    "rejectedUnsafeStates": 14
+  }
+}

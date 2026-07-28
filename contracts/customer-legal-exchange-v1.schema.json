@@ -1,0 +1,453 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/schemas/customer-legal-exchange-v1.schema.json",
+  "title": "Clavenar customer legal pack and secure exchange",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "packVersion",
+    "candidateEffectiveDate",
+    "controller",
+    "secureExchange",
+    "legalPack",
+    "approval",
+    "publication",
+    "totals"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.customer-legal-exchange/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.243.0"
+    },
+    "packVersion": {
+      "const": "1.0.0"
+    },
+    "candidateEffectiveDate": {
+      "const": "2026-07-28"
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legalName",
+        "contact"
+      ],
+      "properties": {
+        "legalName": {
+          "const": "Vanteguard Labs LLC"
+        },
+        "contact": {
+          "const": "contact@clavenar.com"
+        }
+      }
+    },
+    "secureExchange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "tool",
+        "algorithms",
+        "recipients",
+        "transport",
+        "limits",
+        "rejects",
+        "retainedEvidence"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "clavenar.customer-secure-exchange/v1"
+        },
+        "tool": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "pythonMinimum",
+            "cryptographyMinimum"
+          ],
+          "properties": {
+            "path": {
+              "const": "tools/clavenar-secure-exchange.py"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "pythonMinimum": {
+              "const": "3.11"
+            },
+            "cryptographyMinimum": {
+              "const": "42"
+            }
+          }
+        },
+        "algorithms": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "keyAgreement",
+            "keyDerivation",
+            "payload",
+            "commitment"
+          ],
+          "properties": {
+            "keyAgreement": {
+              "const": "X25519"
+            },
+            "keyDerivation": {
+              "const": "HKDF-SHA-256"
+            },
+            "payload": {
+              "const": "AES-256-GCM"
+            },
+            "commitment": {
+              "const": "SHA-256"
+            }
+          }
+        },
+        "recipients": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/customerRecipient"
+            },
+            {
+              "$ref": "#/$defs/clavenarRecipient"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "transport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "custody",
+            "networkRequestsByTool",
+            "universalClavenarRecipientPublished",
+            "authenticatedOutOfBandKeyVerification"
+          ],
+          "properties": {
+            "custody": {
+              "const": "customer-controlled"
+            },
+            "networkRequestsByTool": {
+              "const": 0
+            },
+            "universalClavenarRecipientPublished": {
+              "const": false
+            },
+            "authenticatedOutOfBandKeyVerification": {
+              "const": true
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maximumFiles",
+            "maximumFileBytes",
+            "maximumPlaintextBytes",
+            "maximumLifetimeHours"
+          ],
+          "properties": {
+            "maximumFiles": {
+              "const": 128
+            },
+            "maximumFileBytes": {
+              "const": 8388608
+            },
+            "maximumPlaintextBytes": {
+              "const": 16777216
+            },
+            "maximumLifetimeHours": {
+              "const": 168
+            }
+          }
+        },
+        "rejects": {
+          "type": "array",
+          "minItems": 14,
+          "maxItems": 14,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        },
+        "retainedEvidence": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        }
+      }
+    },
+    "legalPack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basePath",
+        "bindingState",
+        "pricingState",
+        "documents",
+        "guides",
+        "requiredExecutionFields",
+        "explicitNonclaims"
+      ],
+      "properties": {
+        "basePath": {
+          "const": "legal/v1.0"
+        },
+        "bindingState": {
+          "const": "template-requires-completed-signed-order-form"
+        },
+        "pricingState": {
+          "const": "not-set-until-approved-offer-and-signed-order-form"
+        },
+        "documents": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {
+            "$ref": "#/$defs/document"
+          }
+        },
+        "guides": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/guide"
+          }
+        },
+        "requiredExecutionFields": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        },
+        "explicitNonclaims": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requiredGroups",
+        "scope",
+        "exactBytesRequired",
+        "maximumReviewAgeDays"
+      ],
+      "properties": {
+        "requiredGroups": {
+          "const": [
+            "Legal",
+            "Security"
+          ]
+        },
+        "scope": {
+          "const": "customer-legal-pack-and-secure-exchange"
+        },
+        "exactBytesRequired": {
+          "const": true
+        },
+        "maximumReviewAgeDays": {
+          "const": 90
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "built",
+        "deployed",
+        "exactMirror"
+      ],
+      "properties": {
+        "source": {
+          "const": true
+        },
+        "built": {
+          "const": true
+        },
+        "deployed": {
+          "const": true
+        },
+        "exactMirror": {
+          "const": true
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legalDocuments",
+        "guides",
+        "downloadableTools",
+        "publishedArtifacts",
+        "requiredExecutionFields",
+        "explicitNonclaims",
+        "recipientRoles",
+        "rejectedUnsafeStates"
+      ],
+      "properties": {
+        "legalDocuments": {
+          "const": 7
+        },
+        "guides": {
+          "const": 2
+        },
+        "downloadableTools": {
+          "const": 1
+        },
+        "publishedArtifacts": {
+          "const": 10
+        },
+        "requiredExecutionFields": {
+          "const": 12
+        },
+        "explicitNonclaims": {
+          "const": 8
+        },
+        "recipientRoles": {
+          "const": 2
+        },
+        "rejectedUnsafeStates": {
+          "const": 14
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "customerRecipient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "privateKeyCustody",
+        "required"
+      ],
+      "properties": {
+        "role": {
+          "const": "customer"
+        },
+        "privateKeyCustody": {
+          "const": "customer-only"
+        },
+        "required": {
+          "const": true
+        }
+      }
+    },
+    "clavenarRecipient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "privateKeyCustody",
+        "required"
+      ],
+      "properties": {
+        "role": {
+          "const": "clavenar"
+        },
+        "privateKeyCustody": {
+          "const": "order-specific-authorized-clavenar"
+        },
+        "required": {
+          "const": true
+        }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "sha256",
+        "covers"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^legal/v1\\.0/[a-z0-9-]+\\.md$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "covers": {
+          "type": "array",
+          "minItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          }
+        }
+      }
+    },
+    "guide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^legal/v1\\.0/(README|[a-z0-9-]+)\\.md$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

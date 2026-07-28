@@ -21,6 +21,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Executable documentation release inventory](#executable-documentation-release-inventory) — two-phase clean execution of install, quickstart, website, and Helm paths
 - [External install verification](#external-install-verification) — public registries, release assets, immutable images, and a fresh-cluster Helm install
 - [Pilot privacy and intake](#pilot-privacy-and-intake) — minimized enum-only qualification, bounded deletion, and reviewed processor inventory
+- [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) — exact agreement templates and local dual-recipient authenticated encryption
 - [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
@@ -82,7 +83,8 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | shipped | v1.234.0 | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
 | 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | release acceptance in progress | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 6g | [External install verification](#external-install-verification) | shipped | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
-| 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | release acceptance in progress | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
+| 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | shipped | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
+| 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | release acceptance in progress | v1.243.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8119,7 +8121,7 @@ The strict schema is
 
 ## Pilot privacy and intake
 
-**Module status:** **release acceptance in progress for v1.242.0.**
+**Module status:** **shipped in v1.242.0.**
 
 [`clavenar.pilot-privacy-intake/v1`](contracts/pilot-privacy-intake-v1.fixture.json)
 is the public qualification-data authority for the homepage pilot form and the
@@ -8149,6 +8151,45 @@ deletion, provider terms, a 90-day review cadence, and a next-review date.
 Re-enabling analytics requires a reviewed bounded lifecycle before
 publication. The strict schema is
 [`contracts/pilot-privacy-intake-v1.schema.json`](contracts/pilot-privacy-intake-v1.schema.json).
+
+## Customer legal pack and secure exchange
+
+**Module status:** **release acceptance in progress for v1.243.0.**
+
+[`clavenar.customer-legal-exchange/v1`](contracts/customer-legal-exchange-v1.fixture.json)
+binds one exact public pack: MSA, pilot agreement, Order Form, DPA, EU SCC
+election/appendix, Security and Data Schedule, Procurement Response, pack
+index, secure-exchange guide, and downloadable local tool. Every artifact has
+an exact SHA-256 commitment. The templates are not an offer or agreement until
+a completed signed Order Form identifies their exact versions; price, term,
+billing, renewal, topology, data scope, service level, transfer details, and
+signatures remain mandatory execution fields.
+
+The exchange tool performs no network request. It packages at most 128 regular
+files, 8 MiB each and 16 MiB in aggregate, into a deterministic archive. A
+random AES-256-GCM data key encrypts the archive and its exact path/size/digest
+manifest. Distinct customer and order-specific Clavenar X25519 recipients each
+receive an HKDF-SHA-256-derived AES-256-GCM wrapping of that data key. Creation,
+expiry, recipient role and key commitment, manifest, and ciphertext are
+authenticated. Envelope lifetime is at most 168 hours.
+
+The customer creates and retains its private key, verifies the order-specific
+Clavenar public recipient out of band, and controls envelope storage, access,
+audit, revocation, and deletion. No universal Clavenar recipient is published.
+Symlinks, absolute/parent paths, duplicates, plaintext handoff, customer
+private-key handoff, identical role recipients, unverified or substituted
+recipients, limit violations, manifest or ciphertext alteration, wrong keys,
+expiry, and mutable reuse fail closed.
+
+The legal pack covers confidentiality, security, incident response, data
+roles, intellectual property, support, liability, termination, retention, and
+deletion. Its SCC schedule incorporates the official Commission Implementing
+Decision (EU) 2021/914 text without altering it, supports Module 2 or Module 3,
+and requires completed appendices and any applicable UK mechanism before a
+restricted transfer. The Procurement Response explicitly marks unheld
+certifications and unagreed service levels as not claimed. The strict schema is
+[`contracts/customer-legal-exchange-v1.schema.json`](contracts/customer-legal-exchange-v1.schema.json).
+
 ### Rooted file and outbound target boundary
 
 The exact

@@ -3340,3 +3340,26 @@ python3 -m pytest tests/test_pilot_privacy_intake_contract.py
 python3 repos/clavenar-e2e/scripts/check_pilot_privacy_intake.py \
   --source-root repos
 ```
+
+### Customer-controlled legal and secure-exchange pack
+
+[`clavenar.customer-legal-exchange/v1`](contracts/customer-legal-exchange-v1.fixture.json)
+commits the exact MSA, pilot agreement, Order Form, DPA, SCC election,
+Security and Data Schedule, Procurement Response, pack index, exchange guide,
+and local-only exchange tool. Templates remain non-binding until a completed
+signed Order Form selects their versions and supplies the commercial,
+deployment, data, transfer, support, retention, and signature fields.
+
+The Python tool creates distinct customer and order-specific Clavenar X25519
+recipients, derives wrapping keys with HKDF-SHA-256, and authenticates the
+bounded payload and manifest with AES-256-GCM. It has no network path. Unsafe
+paths, symlinks, duplicate or over-limit entries, wrong/substituted recipients,
+metadata or ciphertext tampering, expiry, and mutable reuse fail closed.
+
+```bash
+python3 -m pytest tests/test_customer_legal_exchange_contract.py
+python3 repos/clavenar-e2e/scripts/check_customer_legal_exchange.py \
+  --source-root repos
+python3 repos/clavenar-website/public/tools/clavenar-secure-exchange.py \
+  inspect --input exchange.clex.json
+```
