@@ -192,7 +192,7 @@
         "repositories": {"const": 30},
         "publicRepositories": {"const": 29},
         "restrictedRepositories": {"const": 1},
-        "markdownFiles": {"const": 264},
+        "markdownFiles": {"const": 265},
         "workspaceInputs": {"const": 2},
         "checks": {"const": 9},
         "claimStates": {"const": 4},
