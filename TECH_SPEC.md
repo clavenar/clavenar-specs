@@ -22,6 +22,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [External install verification](#external-install-verification) — public registries, release assets, immutable images, and a fresh-cluster Helm install
 - [Pilot privacy and intake](#pilot-privacy-and-intake) — minimized enum-only qualification, bounded deletion, and reviewed processor inventory
 - [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) — exact agreement templates and local dual-recipient authenticated encryption
+- [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) — exact playbook paths, private-input aliases, owned next actions, and external-evidence-only gate advancement
 - [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
@@ -84,7 +85,8 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | release acceptance in progress | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 6g | [External install verification](#external-install-verification) | shipped | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | shipped | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
-| 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | release acceptance in progress | v1.243.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | shipped | v1.243.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6j | [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) | release acceptance pending external evidence | v1.244.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8189,6 +8191,34 @@ and requires completed appendices and any applicable UK mechanism before a
 restricted transfer. The Procurement Response explicitly marks unheld
 certifications and unagreed service levels as not claimed. The strict schema is
 [`contracts/customer-legal-exchange-v1.schema.json`](contracts/customer-legal-exchange-v1.schema.json).
+
+## Onboarding and prospect evidence
+
+**Module status:** **release acceptance pending external evidence for
+v1.244.0.**
+
+[`clavenar.onboarding-prospect-evidence/v1`](contracts/onboarding-prospect-evidence-v1.fixture.json)
+binds the exact case-sensitive kickoff and onboarding playbooks, three explicit
+private-input aliases, and one executable source checker. Private inputs are
+never inferred from workspace-relative paths. Prospect identities, contact
+details, message bodies, interview notes, and private evidence locations remain
+outside Git and all release artifacts.
+
+Every private prospect record has an opaque ID, source-row binding, owner,
+dated next action, state, and explicit outreach/interview event references.
+An event is evidence only when it represents actual external contact and
+commits an operator-retained private record by SHA-256. Documentation,
+templates, a populated prospect list, passing source checks, or a deployment
+cannot stand in for external contact.
+
+The discovery gate remains `pending-external-evidence` until all records are
+owned and dated, at least one actual outreach event and one actual interview
+event exist, and the gate explicitly cites those event IDs. Missing, stale,
+overdue, unowned, dangling, duplicated, future-dated, or uncommitted evidence
+fails closed. Discovery evidence does not grant production-pilot approval;
+the separate legal, privacy, security, deployment, and customer-approval gates
+still apply. The strict schema is
+[`contracts/onboarding-prospect-evidence-v1.schema.json`](contracts/onboarding-prospect-evidence-v1.schema.json).
 
 ### Rooted file and outbound target boundary
 

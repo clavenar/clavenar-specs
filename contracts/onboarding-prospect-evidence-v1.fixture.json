@@ -1,0 +1,133 @@
+{
+  "contract": "clavenar.onboarding-prospect-evidence/v1",
+  "schemaVersion": 1,
+  "release": "1.244.0",
+  "privacyBoundary": {
+    "identityStorage": "operator-selected-private-root",
+    "releaseArtifactIdentityCount": 0,
+    "rawContactDataInGit": false,
+    "publicReceiptFields": [
+      "contract",
+      "release",
+      "policy-sha256",
+      "record-count",
+      "owned-next-action-count",
+      "outreach-event-count",
+      "interview-event-count",
+      "gate-status",
+      "result"
+    ],
+    "prohibitedPublicFields": [
+      "name",
+      "company",
+      "email",
+      "phone",
+      "handle",
+      "message-body",
+      "interview-notes",
+      "private-evidence-location"
+    ]
+  },
+  "artifacts": {
+    "playbooks": [
+      "OUTREACH_KICKOFF.md",
+      "PARTNER_ONBOARDING.md"
+    ],
+    "privateInputAliases": [
+      "CLAVENAR_PROSPECT_REGISTER",
+      "CLAVENAR_OUTREACH_TEMPLATES",
+      "CLAVENAR_PROSPECT_EVIDENCE_REGISTER"
+    ],
+    "caseSensitivePaths": true,
+    "relativePrivatePathFallback": false,
+    "smokeChecker": "scripts/check_onboarding_prospect_evidence.py",
+    "smokeCommand": "python3 scripts/check_onboarding_prospect_evidence.py --source-root .. --require-source --require-private-inputs"
+  },
+  "recordPolicy": {
+    "opaqueIdPattern": "^prospect-[0-9]{3}$",
+    "requiredFields": [
+      "id",
+      "source-row",
+      "state",
+      "owner-ref",
+      "next-action",
+      "next-action-due-on",
+      "outreach-event-refs",
+      "interview-event-refs"
+    ],
+    "allowedStates": [
+      "new",
+      "next-action-owned",
+      "outreach-sent",
+      "reply-received",
+      "interview-completed",
+      "qualified",
+      "archived"
+    ],
+    "ownerRequired": true,
+    "datedNextActionRequired": true,
+    "staleOrOverdueRejected": true
+  },
+  "eventPolicy": {
+    "actualExternalContactRequired": true,
+    "sourceCompletenessCountsAsEvidence": false,
+    "evidenceKinds": [
+      "outreach",
+      "interview"
+    ],
+    "requiredFields": [
+      "event-id",
+      "kind",
+      "prospect-ref",
+      "owner-ref",
+      "occurred-at",
+      "channel",
+      "outcome",
+      "evidence-ref",
+      "evidence-sha256",
+      "recorded-at"
+    ],
+    "evidenceCommitmentRequired": true,
+    "maximumEvidenceAgeDays": 30,
+    "permittedChannels": [
+      "email",
+      "direct-message",
+      "network-introduction",
+      "video-call",
+      "phone-call",
+      "in-person"
+    ],
+    "permittedOutcomes": [
+      "sent",
+      "replied",
+      "no-reply",
+      "declined",
+      "follow-up",
+      "qualified",
+      "not-fit",
+      "pilot-interest"
+    ]
+  },
+  "gatePolicy": {
+    "missingEvidenceState": "pending-external-evidence",
+    "deliveryCreditWithoutAdvance": false,
+    "minimumActualOutreachEvents": 1,
+    "minimumActualInterviewEvents": 1,
+    "advanceRequires": [
+      "all-records-owned",
+      "all-records-have-dated-next-action",
+      "actual-outreach-evidence",
+      "actual-interview-evidence",
+      "explicit-gate-evidence-refs"
+    ],
+    "productionPilotApprovalIndependent": true
+  },
+  "totals": {
+    "playbooks": 2,
+    "privateInputAliases": 3,
+    "recordStates": 7,
+    "evidenceKinds": 2,
+    "publicIdentityFields": 0,
+    "requiredGateConditions": 5
+  }
+}

@@ -3363,3 +3363,24 @@ python3 repos/clavenar-e2e/scripts/check_customer_legal_exchange.py \
 python3 repos/clavenar-website/public/tools/clavenar-secure-exchange.py \
   inspect --input exchange.clex.json
 ```
+
+### Evidence-gated outreach and onboarding
+
+[`clavenar.onboarding-prospect-evidence/v1`](contracts/onboarding-prospect-evidence-v1.fixture.json)
+binds exact case-sensitive playbook paths and explicit environment aliases for
+the private prospect register, outreach templates, and opaque evidence
+register. The release graph contains no prospect identities or raw contact
+data.
+
+Each private record must have an owner and dated next action. Discovery moves
+only when the register cites SHA-256-committed evidence for actual outreach and
+an actual interview; source completeness, templates, builds, and deploys never
+count as prospect evidence. Production-pilot approval remains a separate gate.
+
+```bash
+python3 -m pytest tests/test_onboarding_prospect_evidence_contract.py
+python3 repos/clavenar-e2e/scripts/check_onboarding_prospect_evidence.py \
+  --source-root repos \
+  --require-source \
+  --require-private-inputs
+```

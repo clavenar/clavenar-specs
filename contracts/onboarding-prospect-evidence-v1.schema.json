@@ -1,0 +1,495 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/schemas/onboarding-prospect-evidence-v1.schema.json",
+  "title": "Clavenar onboarding and prospect evidence boundary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "privacyBoundary",
+    "artifacts",
+    "recordPolicy",
+    "eventPolicy",
+    "gatePolicy",
+    "totals"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.onboarding-prospect-evidence/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.244.0"
+    },
+    "privacyBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identityStorage",
+        "releaseArtifactIdentityCount",
+        "rawContactDataInGit",
+        "publicReceiptFields",
+        "prohibitedPublicFields"
+      ],
+      "properties": {
+        "identityStorage": {
+          "const": "operator-selected-private-root"
+        },
+        "releaseArtifactIdentityCount": {
+          "const": 0
+        },
+        "rawContactDataInGit": {
+          "const": false
+        },
+        "publicReceiptFields": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "contract"
+            },
+            {
+              "const": "release"
+            },
+            {
+              "const": "policy-sha256"
+            },
+            {
+              "const": "record-count"
+            },
+            {
+              "const": "owned-next-action-count"
+            },
+            {
+              "const": "outreach-event-count"
+            },
+            {
+              "const": "interview-event-count"
+            },
+            {
+              "const": "gate-status"
+            },
+            {
+              "const": "result"
+            }
+          ],
+          "items": false,
+          "minItems": 9,
+          "maxItems": 9,
+          "uniqueItems": true
+        },
+        "prohibitedPublicFields": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "name"
+            },
+            {
+              "const": "company"
+            },
+            {
+              "const": "email"
+            },
+            {
+              "const": "phone"
+            },
+            {
+              "const": "handle"
+            },
+            {
+              "const": "message-body"
+            },
+            {
+              "const": "interview-notes"
+            },
+            {
+              "const": "private-evidence-location"
+            }
+          ],
+          "items": false,
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playbooks",
+        "privateInputAliases",
+        "caseSensitivePaths",
+        "relativePrivatePathFallback",
+        "smokeChecker",
+        "smokeCommand"
+      ],
+      "properties": {
+        "playbooks": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "OUTREACH_KICKOFF.md"
+            },
+            {
+              "const": "PARTNER_ONBOARDING.md"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "privateInputAliases": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "CLAVENAR_PROSPECT_REGISTER"
+            },
+            {
+              "const": "CLAVENAR_OUTREACH_TEMPLATES"
+            },
+            {
+              "const": "CLAVENAR_PROSPECT_EVIDENCE_REGISTER"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "caseSensitivePaths": {
+          "const": true
+        },
+        "relativePrivatePathFallback": {
+          "const": false
+        },
+        "smokeChecker": {
+          "const": "scripts/check_onboarding_prospect_evidence.py"
+        },
+        "smokeCommand": {
+          "const": "python3 scripts/check_onboarding_prospect_evidence.py --source-root .. --require-source --require-private-inputs"
+        }
+      }
+    },
+    "recordPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "opaqueIdPattern",
+        "requiredFields",
+        "allowedStates",
+        "ownerRequired",
+        "datedNextActionRequired",
+        "staleOrOverdueRejected"
+      ],
+      "properties": {
+        "opaqueIdPattern": {
+          "const": "^prospect-[0-9]{3}$"
+        },
+        "requiredFields": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "id"
+            },
+            {
+              "const": "source-row"
+            },
+            {
+              "const": "state"
+            },
+            {
+              "const": "owner-ref"
+            },
+            {
+              "const": "next-action"
+            },
+            {
+              "const": "next-action-due-on"
+            },
+            {
+              "const": "outreach-event-refs"
+            },
+            {
+              "const": "interview-event-refs"
+            }
+          ],
+          "items": false,
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "allowedStates": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "new"
+            },
+            {
+              "const": "next-action-owned"
+            },
+            {
+              "const": "outreach-sent"
+            },
+            {
+              "const": "reply-received"
+            },
+            {
+              "const": "interview-completed"
+            },
+            {
+              "const": "qualified"
+            },
+            {
+              "const": "archived"
+            }
+          ],
+          "items": false,
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true
+        },
+        "ownerRequired": {
+          "const": true
+        },
+        "datedNextActionRequired": {
+          "const": true
+        },
+        "staleOrOverdueRejected": {
+          "const": true
+        }
+      }
+    },
+    "eventPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actualExternalContactRequired",
+        "sourceCompletenessCountsAsEvidence",
+        "evidenceKinds",
+        "requiredFields",
+        "evidenceCommitmentRequired",
+        "maximumEvidenceAgeDays",
+        "permittedChannels",
+        "permittedOutcomes"
+      ],
+      "properties": {
+        "actualExternalContactRequired": {
+          "const": true
+        },
+        "sourceCompletenessCountsAsEvidence": {
+          "const": false
+        },
+        "evidenceKinds": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "outreach"
+            },
+            {
+              "const": "interview"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "requiredFields": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "event-id"
+            },
+            {
+              "const": "kind"
+            },
+            {
+              "const": "prospect-ref"
+            },
+            {
+              "const": "owner-ref"
+            },
+            {
+              "const": "occurred-at"
+            },
+            {
+              "const": "channel"
+            },
+            {
+              "const": "outcome"
+            },
+            {
+              "const": "evidence-ref"
+            },
+            {
+              "const": "evidence-sha256"
+            },
+            {
+              "const": "recorded-at"
+            }
+          ],
+          "items": false,
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "evidenceCommitmentRequired": {
+          "const": true
+        },
+        "maximumEvidenceAgeDays": {
+          "const": 30
+        },
+        "permittedChannels": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "email"
+            },
+            {
+              "const": "direct-message"
+            },
+            {
+              "const": "network-introduction"
+            },
+            {
+              "const": "video-call"
+            },
+            {
+              "const": "phone-call"
+            },
+            {
+              "const": "in-person"
+            }
+          ],
+          "items": false,
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "permittedOutcomes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "sent"
+            },
+            {
+              "const": "replied"
+            },
+            {
+              "const": "no-reply"
+            },
+            {
+              "const": "declined"
+            },
+            {
+              "const": "follow-up"
+            },
+            {
+              "const": "qualified"
+            },
+            {
+              "const": "not-fit"
+            },
+            {
+              "const": "pilot-interest"
+            }
+          ],
+          "items": false,
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      }
+    },
+    "gatePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "missingEvidenceState",
+        "deliveryCreditWithoutAdvance",
+        "minimumActualOutreachEvents",
+        "minimumActualInterviewEvents",
+        "advanceRequires",
+        "productionPilotApprovalIndependent"
+      ],
+      "properties": {
+        "missingEvidenceState": {
+          "const": "pending-external-evidence"
+        },
+        "deliveryCreditWithoutAdvance": {
+          "const": false
+        },
+        "minimumActualOutreachEvents": {
+          "const": 1
+        },
+        "minimumActualInterviewEvents": {
+          "const": 1
+        },
+        "advanceRequires": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "all-records-owned"
+            },
+            {
+              "const": "all-records-have-dated-next-action"
+            },
+            {
+              "const": "actual-outreach-evidence"
+            },
+            {
+              "const": "actual-interview-evidence"
+            },
+            {
+              "const": "explicit-gate-evidence-refs"
+            }
+          ],
+          "items": false,
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "productionPilotApprovalIndependent": {
+          "const": true
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playbooks",
+        "privateInputAliases",
+        "recordStates",
+        "evidenceKinds",
+        "publicIdentityFields",
+        "requiredGateConditions"
+      ],
+      "properties": {
+        "playbooks": {
+          "const": 2
+        },
+        "privateInputAliases": {
+          "const": 3
+        },
+        "recordStates": {
+          "const": 7
+        },
+        "evidenceKinds": {
+          "const": 2
+        },
+        "publicIdentityFields": {
+          "const": 0
+        },
+        "requiredGateConditions": {
+          "const": 5
+        }
+      }
+    }
+  }
+}

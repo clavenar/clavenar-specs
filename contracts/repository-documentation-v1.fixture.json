@@ -17,7 +17,7 @@
     {"name": "clavenar-go-sdk", "visibility": "public", "markdownFiles": 13},
     {"name": "clavenar-hil", "visibility": "public", "markdownFiles": 6},
     {"name": "clavenar-identity", "visibility": "public", "markdownFiles": 6},
-    {"name": "clavenar-internal-specs", "visibility": "restricted", "markdownFiles": 32},
+    {"name": "clavenar-internal-specs", "visibility": "restricted", "markdownFiles": 34},
     {"name": "clavenar-java-sdk", "visibility": "public", "markdownFiles": 9},
     {"name": "clavenar-ledger", "visibility": "public", "markdownFiles": 5},
     {"name": "clavenar-lite", "visibility": "public", "markdownFiles": 6},
@@ -84,11 +84,17 @@
       ],
       "requiredMarkers": [
         "outside the product release graph",
-        "founder-maintained prospect register"
+        "founder-maintained prospect register",
+        "CLAVENAR_PROSPECT_REGISTER",
+        "CLAVENAR_OUTREACH_TEMPLATES",
+        "CLAVENAR_PROSPECT_EVIDENCE_REGISTER",
+        "check_onboarding_prospect_evidence.py"
       ],
       "forbiddenMarkers": [
         "../../outreach/templates.md",
         "../../prospects.md",
+        "scripts/smoke-install.sh",
+        "scripts/smoke-e2e.sh",
         "/home/debian/claude"
       ],
       "requiredWhenPresent": true
@@ -209,7 +215,7 @@
     "repositories": 30,
     "publicRepositories": 29,
     "restrictedRepositories": 1,
-    "markdownFiles": 275,
+    "markdownFiles": 277,
     "workspaceInputs": 2,
     "checks": 9,
     "claimStates": 4,
