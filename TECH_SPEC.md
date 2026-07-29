@@ -86,7 +86,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6g | [External install verification](#external-install-verification) | shipped | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | shipped | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
 | 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | shipped | v1.243.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
-| 6j | [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) | release acceptance pending external evidence | v1.244.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6j | [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) | source delivered; external validation not performed | v1.244.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8194,8 +8194,8 @@ certifications and unagreed service levels as not claimed. The strict schema is
 
 ## Onboarding and prospect evidence
 
-**Module status:** **release acceptance pending external evidence for
-v1.244.0.**
+**Module status:** **source delivered for v1.244.0; external outreach and
+interview validation was not performed.**
 
 [`clavenar.onboarding-prospect-evidence/v1`](contracts/onboarding-prospect-evidence-v1.fixture.json)
 binds the exact case-sensitive kickoff and onboarding playbooks, three explicit
