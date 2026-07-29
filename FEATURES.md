@@ -3345,9 +3345,10 @@ python3 repos/clavenar-e2e/scripts/check_pilot_privacy_intake.py \
 
 [`clavenar.customer-legal-exchange/v1`](contracts/customer-legal-exchange-v1.fixture.json)
 commits the exact MSA, pilot agreement, Order Form, DPA, SCC election,
-Security and Data Schedule, Procurement Response, pack index, exchange guide,
-and local-only exchange tool. Templates remain non-binding until a completed
-signed Order Form selects their versions and supplies the commercial,
+Founding Design Partner Offer, Security and Data Schedule, Procurement
+Response, pack index, exchange guide, and local-only exchange tool. Templates
+and the offer schedule remain non-binding until a completed signed Order Form
+selects their versions and supplies the customer-specific commercial,
 deployment, data, transfer, support, retention, and signature fields.
 
 The Python tool creates distinct customer and order-specific Clavenar X25519
@@ -3380,6 +3381,39 @@ count as prospect evidence. Production-pilot approval remains a separate gate.
 ```bash
 python3 -m pytest tests/test_onboarding_prospect_evidence_contract.py
 python3 repos/clavenar-e2e/scripts/check_onboarding_prospect_evidence.py \
+  --source-root repos \
+  --require-source \
+  --require-private-inputs
+```
+
+### Exact commercial offer and validation gate
+
+[`clavenar.commercial-offer/v1`](contracts/commercial-offer-v1.fixture.json)
+defines Founding Design Partner Offer 1.0.0 once: four-week USD $0 evaluation,
+one agent, one tool/action surface, optional signed 12-month USD $15,000 first
+subscription year for up to 25 per-tenant registered agents, and a separately
+signed USD $36,000 renewal. It grants no production approval, automatic
+renewal, lifetime lock, automatic overage, or publicity right.
+
+The Website renders from an exact contract copy and publishes the versioned
+offer schedule. The legal pack commits that schedule and the aligned Order
+Form. The onboarding playbooks and private strategy carry the same duration,
+price, unit, conversion, renewal, and non-claim terms.
+
+The source checker keeps cash, burn, runway, prospect identity, and pricing
+notes private. Its delivery mode requires complete financial inputs, at least
+one SHA-256-committed actual pricing conversation, and an exact
+Founder/Product/Finance/Legal/GTM approval. Receipts contain only status and
+opaque accepted/rejected/countered counts.
+
+Release 1.245.0 delivered this source boundary under an owner-directed scope
+reduction. The private register remains pending, contains zero pricing
+conversations, and has no exact release approval; those missing states are not
+market validation.
+
+```bash
+python3 -m pytest tests/test_commercial_offer_contract.py
+python3 repos/clavenar-e2e/scripts/check_commercial_offer.py \
   --source-root repos \
   --require-source \
   --require-private-inputs

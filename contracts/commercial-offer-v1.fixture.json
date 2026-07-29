@@ -1,0 +1,118 @@
+{
+  "contract": "clavenar.commercial-offer/v1",
+  "schemaVersion": 1,
+  "release": "1.245.0",
+  "offerId": "founding-design-partner",
+  "offerVersion": "1.0.0",
+  "releaseState": "exact-owner-approval-required",
+  "approvalOwner": "Vanteguard Labs / Founder, Product, Finance, Legal & GTM",
+  "eligibility": {
+    "cohortLimit": 3,
+    "selectionBasis": "first-three-signed-order-forms"
+  },
+  "evaluation": {
+    "durationWeeks": 4,
+    "durationDays": 28,
+    "feeUsd": 0,
+    "feeDisplay": "USD $0",
+    "currency": "USD",
+    "agentLimit": 1,
+    "toolSurfaceLimit": 1,
+    "productionAuthorization": false,
+    "customerApprovalRequired": true,
+    "stages": [
+      "scope-and-baseline",
+      "observe",
+      "tune-and-rehearse",
+      "decision-and-exit"
+    ]
+  },
+  "conversion": {
+    "optional": true,
+    "signedOrderFormRequired": true,
+    "termMonths": 12,
+    "firstYearFeeUsd": 15000,
+    "firstYearFeeDisplay": "USD $15,000",
+    "invoiceTiming": "annual-in-advance-net-30",
+    "billingUnit": "per-tenant-registered-agent",
+    "includedRegisteredAgents": 25,
+    "excludedAgentStates": [
+      "suspended",
+      "retired"
+    ],
+    "additionalCapacity": "signed-order-form-amendment-only",
+    "automaticAgentOverageBilling": false,
+    "automaticTokenOverageBilling": false
+  },
+  "renewal": {
+    "automatic": false,
+    "newSignedOrderRequired": true,
+    "annualListFeeUsd": 36000,
+    "annualListFeeDisplay": "USD $36,000",
+    "lifetimePriceLock": false
+  },
+  "publicity": {
+    "required": false,
+    "separateWrittenPermissionRequired": true,
+    "discountConditionalOnPublicity": false
+  },
+  "alignment": {
+    "offerSchedule": "legal/v1.0/founding-design-partner-offer.md",
+    "orderForm": "legal/v1.0/order-form.md",
+    "websiteSurfaces": [
+      "design-partners.html",
+      "start/champion-pilot.html",
+      "start/champion-rollout.html"
+    ],
+    "onboardingPlaybooks": [
+      "OUTREACH_KICKOFF.md",
+      "PARTNER_ONBOARDING.md"
+    ],
+    "privateStrategyRequired": true
+  },
+  "validationPolicy": {
+    "privateInputAliases": [
+      "CLAVENAR_COMMERCIAL_VALIDATION_REGISTER",
+      "CLAVENAR_COMMERCIAL_OFFER_APPROVAL"
+    ],
+    "financialAmountsPublic": false,
+    "publicFinancialAmountCount": 0,
+    "cashBurnRunwayRequired": true,
+    "actualPricingConversationRequired": true,
+    "pricingEvidenceIdentityPrivate": true,
+    "sourceCompletenessCountsAsEvidence": false,
+    "acceptedConversationOutcomes": [
+      "accepted",
+      "rejected",
+      "countered"
+    ],
+    "exactApprovalRequired": true,
+    "approvalGroups": [
+      "Founder",
+      "Product",
+      "Finance",
+      "Legal",
+      "GTM"
+    ]
+  },
+  "explicitNonclaims": [
+    "production-authorized-by-offer",
+    "free-first-subscription-year",
+    "six-month-free-program",
+    "lifetime-price-lock",
+    "automatic-renewal",
+    "automatic-agent-overage-billing",
+    "automatic-token-overage-billing",
+    "required-logo-case-study-or-reference"
+  ],
+  "totals": {
+    "publicOfferSchedules": 1,
+    "websiteSurfaces": 3,
+    "onboardingPlaybooks": 2,
+    "privateInputAliases": 2,
+    "approvalGroups": 5,
+    "acceptedConversationOutcomes": 3,
+    "explicitNonclaims": 8,
+    "publicFinancialAmounts": 0
+  }
+}

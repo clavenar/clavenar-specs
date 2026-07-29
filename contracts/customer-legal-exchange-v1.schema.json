@@ -25,13 +25,13 @@
       "const": 1
     },
     "release": {
-      "const": "1.243.0"
+      "const": "1.245.0"
     },
     "packVersion": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "candidateEffectiveDate": {
-      "const": "2026-07-28"
+      "const": "2026-07-29"
     },
     "controller": {
       "type": "object",
@@ -218,12 +218,12 @@
           "const": "template-requires-completed-signed-order-form"
         },
         "pricingState": {
-          "const": "not-set-until-approved-offer-and-signed-order-form"
+          "const": "one-approved-offer-schedule-requires-signed-order-form"
         },
         "documents": {
           "type": "array",
-          "minItems": 7,
-          "maxItems": 7,
+          "minItems": 8,
+          "maxItems": 8,
           "items": {
             "$ref": "#/$defs/document"
           }
@@ -324,7 +324,7 @@
       ],
       "properties": {
         "legalDocuments": {
-          "const": 7
+          "const": 8
         },
         "guides": {
           "const": 2
@@ -333,7 +333,7 @@
           "const": 1
         },
         "publishedArtifacts": {
-          "const": 10
+          "const": 11
         },
         "requiredExecutionFields": {
           "const": 12

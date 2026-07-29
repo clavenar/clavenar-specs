@@ -1,0 +1,470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/schemas/commercial-offer-v1.schema.json",
+  "title": "Clavenar founding design-partner commercial offer",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "offerId",
+    "offerVersion",
+    "releaseState",
+    "approvalOwner",
+    "eligibility",
+    "evaluation",
+    "conversion",
+    "renewal",
+    "publicity",
+    "alignment",
+    "validationPolicy",
+    "explicitNonclaims",
+    "totals"
+  ],
+  "properties": {
+    "contract": {
+      "const": "clavenar.commercial-offer/v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "release": {
+      "const": "1.245.0"
+    },
+    "offerId": {
+      "const": "founding-design-partner"
+    },
+    "offerVersion": {
+      "const": "1.0.0"
+    },
+    "releaseState": {
+      "const": "exact-owner-approval-required"
+    },
+    "approvalOwner": {
+      "const": "Vanteguard Labs / Founder, Product, Finance, Legal & GTM"
+    },
+    "eligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cohortLimit",
+        "selectionBasis"
+      ],
+      "properties": {
+        "cohortLimit": {
+          "const": 3
+        },
+        "selectionBasis": {
+          "const": "first-three-signed-order-forms"
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "durationWeeks",
+        "durationDays",
+        "feeUsd",
+        "feeDisplay",
+        "currency",
+        "agentLimit",
+        "toolSurfaceLimit",
+        "productionAuthorization",
+        "customerApprovalRequired",
+        "stages"
+      ],
+      "properties": {
+        "durationWeeks": {
+          "const": 4
+        },
+        "durationDays": {
+          "const": 28
+        },
+        "feeUsd": {
+          "const": 0
+        },
+        "feeDisplay": {
+          "const": "USD $0"
+        },
+        "currency": {
+          "const": "USD"
+        },
+        "agentLimit": {
+          "const": 1
+        },
+        "toolSurfaceLimit": {
+          "const": 1
+        },
+        "productionAuthorization": {
+          "const": false
+        },
+        "customerApprovalRequired": {
+          "const": true
+        },
+        "stages": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "scope-and-baseline"
+            },
+            {
+              "const": "observe"
+            },
+            {
+              "const": "tune-and-rehearse"
+            },
+            {
+              "const": "decision-and-exit"
+            }
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        }
+      }
+    },
+    "conversion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "optional",
+        "signedOrderFormRequired",
+        "termMonths",
+        "firstYearFeeUsd",
+        "firstYearFeeDisplay",
+        "invoiceTiming",
+        "billingUnit",
+        "includedRegisteredAgents",
+        "excludedAgentStates",
+        "additionalCapacity",
+        "automaticAgentOverageBilling",
+        "automaticTokenOverageBilling"
+      ],
+      "properties": {
+        "optional": {
+          "const": true
+        },
+        "signedOrderFormRequired": {
+          "const": true
+        },
+        "termMonths": {
+          "const": 12
+        },
+        "firstYearFeeUsd": {
+          "const": 15000
+        },
+        "firstYearFeeDisplay": {
+          "const": "USD $15,000"
+        },
+        "invoiceTiming": {
+          "const": "annual-in-advance-net-30"
+        },
+        "billingUnit": {
+          "const": "per-tenant-registered-agent"
+        },
+        "includedRegisteredAgents": {
+          "const": 25
+        },
+        "excludedAgentStates": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "suspended"
+            },
+            {
+              "const": "retired"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "additionalCapacity": {
+          "const": "signed-order-form-amendment-only"
+        },
+        "automaticAgentOverageBilling": {
+          "const": false
+        },
+        "automaticTokenOverageBilling": {
+          "const": false
+        }
+      }
+    },
+    "renewal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "automatic",
+        "newSignedOrderRequired",
+        "annualListFeeUsd",
+        "annualListFeeDisplay",
+        "lifetimePriceLock"
+      ],
+      "properties": {
+        "automatic": {
+          "const": false
+        },
+        "newSignedOrderRequired": {
+          "const": true
+        },
+        "annualListFeeUsd": {
+          "const": 36000
+        },
+        "annualListFeeDisplay": {
+          "const": "USD $36,000"
+        },
+        "lifetimePriceLock": {
+          "const": false
+        }
+      }
+    },
+    "publicity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "separateWrittenPermissionRequired",
+        "discountConditionalOnPublicity"
+      ],
+      "properties": {
+        "required": {
+          "const": false
+        },
+        "separateWrittenPermissionRequired": {
+          "const": true
+        },
+        "discountConditionalOnPublicity": {
+          "const": false
+        }
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offerSchedule",
+        "orderForm",
+        "websiteSurfaces",
+        "onboardingPlaybooks",
+        "privateStrategyRequired"
+      ],
+      "properties": {
+        "offerSchedule": {
+          "const": "legal/v1.0/founding-design-partner-offer.md"
+        },
+        "orderForm": {
+          "const": "legal/v1.0/order-form.md"
+        },
+        "websiteSurfaces": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "design-partners.html"
+            },
+            {
+              "const": "start/champion-pilot.html"
+            },
+            {
+              "const": "start/champion-rollout.html"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "onboardingPlaybooks": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "OUTREACH_KICKOFF.md"
+            },
+            {
+              "const": "PARTNER_ONBOARDING.md"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "privateStrategyRequired": {
+          "const": true
+        }
+      }
+    },
+    "validationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privateInputAliases",
+        "financialAmountsPublic",
+        "publicFinancialAmountCount",
+        "cashBurnRunwayRequired",
+        "actualPricingConversationRequired",
+        "pricingEvidenceIdentityPrivate",
+        "sourceCompletenessCountsAsEvidence",
+        "acceptedConversationOutcomes",
+        "exactApprovalRequired",
+        "approvalGroups"
+      ],
+      "properties": {
+        "privateInputAliases": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "CLAVENAR_COMMERCIAL_VALIDATION_REGISTER"
+            },
+            {
+              "const": "CLAVENAR_COMMERCIAL_OFFER_APPROVAL"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "financialAmountsPublic": {
+          "const": false
+        },
+        "publicFinancialAmountCount": {
+          "const": 0
+        },
+        "cashBurnRunwayRequired": {
+          "const": true
+        },
+        "actualPricingConversationRequired": {
+          "const": true
+        },
+        "pricingEvidenceIdentityPrivate": {
+          "const": true
+        },
+        "sourceCompletenessCountsAsEvidence": {
+          "const": false
+        },
+        "acceptedConversationOutcomes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "accepted"
+            },
+            {
+              "const": "rejected"
+            },
+            {
+              "const": "countered"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "exactApprovalRequired": {
+          "const": true
+        },
+        "approvalGroups": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "Founder"
+            },
+            {
+              "const": "Product"
+            },
+            {
+              "const": "Finance"
+            },
+            {
+              "const": "Legal"
+            },
+            {
+              "const": "GTM"
+            }
+          ],
+          "items": false,
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        }
+      }
+    },
+    "explicitNonclaims": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "production-authorized-by-offer"
+        },
+        {
+          "const": "free-first-subscription-year"
+        },
+        {
+          "const": "six-month-free-program"
+        },
+        {
+          "const": "lifetime-price-lock"
+        },
+        {
+          "const": "automatic-renewal"
+        },
+        {
+          "const": "automatic-agent-overage-billing"
+        },
+        {
+          "const": "automatic-token-overage-billing"
+        },
+        {
+          "const": "required-logo-case-study-or-reference"
+        }
+      ],
+      "items": false,
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicOfferSchedules",
+        "websiteSurfaces",
+        "onboardingPlaybooks",
+        "privateInputAliases",
+        "approvalGroups",
+        "acceptedConversationOutcomes",
+        "explicitNonclaims",
+        "publicFinancialAmounts"
+      ],
+      "properties": {
+        "publicOfferSchedules": {
+          "const": 1
+        },
+        "websiteSurfaces": {
+          "const": 3
+        },
+        "onboardingPlaybooks": {
+          "const": 2
+        },
+        "privateInputAliases": {
+          "const": 2
+        },
+        "approvalGroups": {
+          "const": 5
+        },
+        "acceptedConversationOutcomes": {
+          "const": 3
+        },
+        "explicitNonclaims": {
+          "const": 8
+        },
+        "publicFinancialAmounts": {
+          "const": 0
+        }
+      }
+    }
+  }
+}

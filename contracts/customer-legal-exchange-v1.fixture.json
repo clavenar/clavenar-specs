@@ -1,9 +1,9 @@
 {
   "contract": "clavenar.customer-legal-exchange/v1",
   "schemaVersion": 1,
-  "release": "1.243.0",
-  "packVersion": "1.0.0",
-  "candidateEffectiveDate": "2026-07-28",
+  "release": "1.245.0",
+  "packVersion": "1.1.0",
+  "candidateEffectiveDate": "2026-07-29",
   "controller": {
     "legalName": "Vanteguard Labs LLC",
     "contact": "contact@clavenar.com"
@@ -74,7 +74,7 @@
   "legalPack": {
     "basePath": "legal/v1.0",
     "bindingState": "template-requires-completed-signed-order-form",
-    "pricingState": "not-set-until-approved-offer-and-signed-order-form",
+    "pricingState": "one-approved-offer-schedule-requires-signed-order-form",
     "documents": [
       {
         "id": "master-services-agreement",
@@ -108,7 +108,7 @@
       {
         "id": "order-form",
         "path": "legal/v1.0/order-form.md",
-        "sha256": "sha256:20fdba692852cb07042cea853b849f9d3e29451ecfda4931afa06cad9df6c07b",
+        "sha256": "sha256:aa07ca5fe0645011f20b1771330c34f258345f3ad50a3adcaa561b1c11f30567",
         "covers": [
           "parties",
           "incorporated-versions",
@@ -117,6 +117,19 @@
           "secure-exchange",
           "transfer-election",
           "signatures"
+        ]
+      },
+      {
+        "id": "founding-design-partner-offer",
+        "path": "legal/v1.0/founding-design-partner-offer.md",
+        "sha256": "sha256:789ec11f95dd7bf0a62aa447ec21d723d3b6c74c7067cf71fefe9004c7fd1f25",
+        "covers": [
+          "four-week-evaluation",
+          "optional-first-year-subscription",
+          "registered-agent-billing",
+          "separate-renewal",
+          "production-non-authorization",
+          "publicity-permission"
         ]
       },
       {
@@ -185,7 +198,7 @@
       {
         "id": "pack-index",
         "path": "legal/v1.0/README.md",
-        "sha256": "sha256:423509df167e19120197a2237191299db927de556f17c77c12b527d75c7b801e"
+        "sha256": "sha256:e18385df7389d3567e07ffc296aa3e36c78797c3715c9eb2b79a9d6a87f5a509"
       },
       {
         "id": "secure-exchange-guide",
@@ -208,7 +221,7 @@
       "governing-law-venue-and-signatures"
     ],
     "explicitNonclaims": [
-      "public-offer-or-price",
+      "binding-offer-without-signed-order-form",
       "production-approval",
       "service-level",
       "soc-2",
@@ -234,10 +247,10 @@
     "exactMirror": true
   },
   "totals": {
-    "legalDocuments": 7,
+    "legalDocuments": 8,
     "guides": 2,
     "downloadableTools": 1,
-    "publishedArtifacts": 10,
+    "publishedArtifacts": 11,
     "requiredExecutionFields": 12,
     "explicitNonclaims": 8,
     "recipientRoles": 2,

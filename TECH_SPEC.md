@@ -23,6 +23,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Pilot privacy and intake](#pilot-privacy-and-intake) — minimized enum-only qualification, bounded deletion, and reviewed processor inventory
 - [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) — exact agreement templates and local dual-recipient authenticated encryption
 - [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) — exact playbook paths, private-input aliases, owned next actions, and external-evidence-only gate advancement
+- [Commercial offer and private validation](#commercial-offer-and-private-validation) — one exact price/term/billing schedule with private financial and live-conversation evidence
 - [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
 - [Demo experience](#demo-experience) — public-facing demo design
 - [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
@@ -87,6 +88,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | shipped | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
 | 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | shipped | v1.243.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 6j | [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) | source delivered; external validation not performed | v1.244.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6k | [Commercial offer and private validation](#commercial-offer-and-private-validation) | source delivered under owner scope reduction; financial/pricing validation not performed | v1.245.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -8156,16 +8158,18 @@ publication. The strict schema is
 
 ## Customer legal pack and secure exchange
 
-**Module status:** **release acceptance in progress for v1.243.0.**
+**Module status:** **pack 1.0.0 shipped in v1.243.0; pack 1.1.0 exact approval
+required for v1.245.0.**
 
 [`clavenar.customer-legal-exchange/v1`](contracts/customer-legal-exchange-v1.fixture.json)
-binds one exact public pack: MSA, pilot agreement, Order Form, DPA, EU SCC
+binds one exact public pack: MSA, pilot agreement, Order Form, Founding Design
+Partner Offer, DPA, EU SCC
 election/appendix, Security and Data Schedule, Procurement Response, pack
 index, secure-exchange guide, and downloadable local tool. Every artifact has
-an exact SHA-256 commitment. The templates are not an offer or agreement until
-a completed signed Order Form identifies their exact versions; price, term,
-billing, renewal, topology, data scope, service level, transfer details, and
-signatures remain mandatory execution fields.
+an exact SHA-256 commitment. The offer schedule is not an agreement until a
+completed signed Order Form identifies its exact version; topology, data
+scope, service level, transfer details, customer-specific dates, and signatures
+remain mandatory execution fields.
 
 The exchange tool performs no network request. It packages at most 128 regular
 files, 8 MiB each and 16 MiB in aggregate, into a deterministic archive. A
@@ -8219,6 +8223,52 @@ fails closed. Discovery evidence does not grant production-pilot approval;
 the separate legal, privacy, security, deployment, and customer-approval gates
 still apply. The strict schema is
 [`contracts/onboarding-prospect-evidence-v1.schema.json`](contracts/onboarding-prospect-evidence-v1.schema.json).
+
+## Commercial offer and private validation
+
+**Module status:** **source delivered for v1.245.0 under an owner-directed
+scope reduction; private financial/pricing validation and release approval
+were not performed.**
+
+[`clavenar.commercial-offer/v1`](contracts/commercial-offer-v1.fixture.json)
+is the sole public founding-design-partner offer authority. Offer 1.0.0 is
+limited to the first three signed Order Forms. It defines a four-week,
+USD $0 evaluation for one agent and one tool/action surface. The offer itself
+grants no production authorization; any production, enforcement, data, or
+topology scope must be approved separately in the completed Order Form.
+
+Conversion is optional and requires a new signed Order Form: a 12-month first
+subscription year at USD $15,000, invoiced annually in advance net 30, for up
+to 25 per-tenant registered agents. Suspended and retired agents do not count.
+Additional capacity requires a signed amendment; there is no automatic agent
+or token overage billing. Renewal is not automatic, carries no lifetime price
+lock, and requires another signed Order Form at the current USD $36,000 annual
+list fee. Logo use, case studies, quotes, benchmarks, and references are not
+consideration for the discount and each require separate written permission.
+
+The exact contract is mirrored into Website build data, public schemas, and the
+deployment contract directory. It binds the versioned offer schedule, legal
+Order Form, three Website surfaces, two onboarding playbooks, and a required
+private-strategy alignment. Conflicting two-week/six-month duration, free
+subscription year, lifetime lock, per-cluster meter, automatic renewal or
+overage, implied production, or mandatory publicity fails the source, build,
+live, or protected-release gate.
+
+Cash, average monthly burn, calculated runway, the minimum-runway decision,
+prospect identity, and raw pricing notes remain private. Public receipts expose
+only completion state and opaque outcome counts. Delivery requires at least
+one actual pricing conversation with an accepted, rejected, or countered
+outcome and a SHA-256 commitment to operator-retained evidence. Source
+completeness, internal review, build, or deployment cannot replace that event.
+The final gate binds the exact public contract, offer schedule, Order Form,
+Website data, private strategy, onboarding playbook, private validation
+register, and Founder/Product/Finance/Legal/GTM approval. The strict schema is
+[`contracts/commercial-offer-v1.schema.json`](contracts/commercial-offer-v1.schema.json).
+
+The owner accepted the engineering boundary without advancing that final gate.
+Cash/burn/runway remain pending, pricing-conversation count remains zero, and
+the changed pack bytes have no current exact Legal/Security approval. None of
+those missing states is represented as validation or release evidence.
 
 ### Rooted file and outbound target boundary
 

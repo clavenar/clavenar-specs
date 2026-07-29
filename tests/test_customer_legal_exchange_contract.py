@@ -23,12 +23,12 @@ def test_customer_legal_exchange_fixture_matches_strict_schema() -> None:
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.Draft202012Validator(schema).validate(fixture)
     assert fixture["contract"] == "clavenar.customer-legal-exchange/v1"
-    assert fixture["release"] == "1.243.0"
+    assert fixture["release"] == "1.245.0"
     assert fixture["totals"] == {
-        "legalDocuments": 7,
+        "legalDocuments": 8,
         "guides": 2,
         "downloadableTools": 1,
-        "publishedArtifacts": 10,
+        "publishedArtifacts": 11,
         "requiredExecutionFields": 12,
         "explicitNonclaims": 8,
         "recipientRoles": 2,
@@ -94,6 +94,12 @@ def test_public_documents_cover_required_legal_and_safety_boundaries() -> None:
             "SOC 2 report | Not claimed",
             "ISO 27001 certification | Not claimed",
             "No default public SLA",
+        ),
+        "legal/v1.0/founding-design-partner-offer.md": (
+            "## Four-week evaluation",
+            "USD $15,000",
+            "There is no automatic renewal",
+            "Each requires separate written",
         ),
     }
     for name, markers in required.items():
