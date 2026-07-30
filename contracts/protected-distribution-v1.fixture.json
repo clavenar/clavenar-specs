@@ -96,14 +96,16 @@
       "clavenar-chaos-monkey",
       "clavenar-console",
       "clavenar-deep-review",
+      "clavenar-demo-mint",
       "clavenar-hil",
       "clavenar-identity",
       "clavenar-ledger",
       "clavenar-policy-engine",
       "clavenar-proxy",
-      "clavenar-simulator"
+      "clavenar-simulator",
+      "clavenar-website"
     ],
-    "subjectCount": 11,
+    "subjectCount": 13,
     "tagPolicy": "digest-only"
   },
   "policyVersion": "1.0.0",

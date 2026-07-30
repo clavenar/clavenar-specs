@@ -85,13 +85,13 @@
             "pattern": "^clavenar-[a-z0-9-]+$",
             "type": "string"
           },
-          "maxItems": 10,
-          "minItems": 10,
+          "maxItems": 12,
+          "minItems": 12,
           "type": "array",
           "uniqueItems": true
         },
         "subjectCount": {
-          "const": 11
+          "const": 13
         },
         "tagPolicy": {
           "const": "digest-only"

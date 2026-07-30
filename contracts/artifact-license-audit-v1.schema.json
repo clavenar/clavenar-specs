@@ -53,8 +53,8 @@
     },
     "imageSubjects": {
       "type": "array",
-      "minItems": 11,
-      "maxItems": 11,
+      "minItems": 13,
+      "maxItems": 13,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -125,11 +125,11 @@
       ],
       "properties": {
         "packages": {"const": 31},
-        "images": {"const": 11},
-        "sboms": {"const": 42},
-        "provenance": {"const": 42},
-        "primaryArtifacts": {"const": 42},
-        "releaseRecords": {"const": 126},
+        "images": {"const": 13},
+        "sboms": {"const": 44},
+        "provenance": {"const": 44},
+        "primaryArtifacts": {"const": 44},
+        "releaseRecords": {"const": 132},
         "cargoPackages": {"const": 20},
         "checks": {"const": 17}
       }

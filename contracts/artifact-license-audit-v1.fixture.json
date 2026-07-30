@@ -67,6 +67,10 @@
       "repository": "clavenar-deep-review"
     },
     {
+      "subject": "image:demo-mint",
+      "repository": "clavenar-demo-mint"
+    },
+    {
       "subject": "image:hil",
       "repository": "clavenar-hil"
     },
@@ -93,6 +97,10 @@
     {
       "subject": "image:upstream-stub",
       "repository": "clavenar-simulator"
+    },
+    {
+      "subject": "image:website",
+      "repository": "clavenar-website"
     }
   ],
   "dependencyPolicy": {
@@ -149,11 +157,11 @@
   ],
   "totals": {
     "packages": 31,
-    "images": 11,
-    "sboms": 42,
-    "provenance": 42,
-    "primaryArtifacts": 42,
-    "releaseRecords": 126,
+    "images": 13,
+    "sboms": 44,
+    "provenance": 44,
+    "primaryArtifacts": 44,
+    "releaseRecords": 132,
     "cargoPackages": 20,
     "checks": 17
   }
