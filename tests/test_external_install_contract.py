@@ -24,8 +24,8 @@ def test_inventory_is_strict_complete_and_public():
         "goModuleTags": 4,
         "releaseAssets": 11,
         "helmInstalls": 1,
-        "protectedImageRepositories": 10,
-        "protectedImageSubjects": 11,
+        "protectedImageRepositories": 12,
+        "protectedImageSubjects": 13,
     }
 
 
@@ -47,8 +47,8 @@ def test_fresh_helm_install_is_exact_and_anonymous():
     assert helm["cluster"] == "fresh-kind"
     assert helm["imagePolicy"] == "anonymous-exact-digest-only"
     assert FIXTURE["protectedImages"] == {
-        "repositories": 10,
-        "subjects": 11,
+        "repositories": 12,
+        "subjects": 13,
         "tagPolicy": "digest-only",
         "access": "anonymous",
     }
