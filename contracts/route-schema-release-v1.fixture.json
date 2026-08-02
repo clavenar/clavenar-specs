@@ -912,10 +912,10 @@
   ],
   "release": "1.234.0",
   "routeAuthority": {
-    "contractVersion": "1.11.0",
-    "endpointCapabilityMatrixSha256": "sha256:9f49de843bb642dd896c80bf7eff7c694600715ca3be6a8fd9be966611a007c7",
-    "listenerMatrixSha256": "sha256:c5b96577544c5164955edaf26a59f4af1e8f68a70421ba47e08ce1119ec1defd",
-    "workloadCapabilityBundleSha256": "sha256:46fc5a68f0af2555e19b095f7ff7394326d75b405bc1648b8c2e98d4175a6c7f"
+    "contractVersion": "1.12.0",
+    "endpointCapabilityMatrixSha256": "sha256:f33787f91c6c29a04a5913d2f636f14e86f0d07fde1f21bad47238dde41b65f3",
+    "listenerMatrixSha256": "sha256:136eda09eb1bc53d7189157cf25d62224c4b5d022dc89c6c96a9c8da6d85d7ca",
+    "workloadCapabilityBundleSha256": "sha256:d059a8452323e498b54e57b2e5102dee73eba044983bab5ba5da3307b101fb79"
   },
   "routes": [
     {
@@ -1511,6 +1511,16 @@
       "allowedCallerIds": [
         "service-console"
       ],
+      "capability": "identity.attestation.measurement.manage",
+      "family": "identity-attestation-measurement-manage",
+      "method": "POST",
+      "pathTemplate": "/agents/{id}/tpm2-enrollment-challenges",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-console"
+      ],
       "capability": "identity.agent.lifecycle",
       "family": "identity-agent-lifecycle",
       "method": "POST",
@@ -1620,6 +1630,16 @@
       "family": "identity-agent-svid",
       "method": "POST",
       "pathTemplate": "/svid",
+      "service": "identity"
+    },
+    {
+      "allowedCallerIds": [
+        "service-proxy"
+      ],
+      "capability": "identity.svid.agent.renew",
+      "family": "identity-agent-svid-renew",
+      "method": "POST",
+      "pathTemplate": "/svid/renew",
       "service": "identity"
     },
     {
@@ -2390,7 +2410,7 @@
   "schemaVersion": 1,
   "totals": {
     "contracts": 6,
-    "routes": 139,
+    "routes": 141,
     "schemas": 12,
     "services": 4,
     "typeBindings": 13

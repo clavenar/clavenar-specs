@@ -60,7 +60,7 @@
       ],
       "properties": {
         "routes": {
-          "const": 139
+          "const": 141
         },
         "services": {
           "const": 4
@@ -78,8 +78,8 @@
     },
     "routes": {
       "type": "array",
-      "minItems": 139,
-      "maxItems": 139,
+      "minItems": 141,
+      "maxItems": 141,
       "items": {
         "type": "object",
         "additionalProperties": false,

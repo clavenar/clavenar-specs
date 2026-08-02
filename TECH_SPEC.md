@@ -71,7 +71,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | § | Module | Status | Landed | Services touched |
 |---|---|---|---|---|
 | 1 | [Identity service](#identity-service) | shipped | — | `clavenar-identity` (new, port 8086 / 8186), `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil` |
-| 1a | [Workload attestation verifier contract](#6-capability-attestation) | real `k8s-key-bound` verifier shipped and production-required | v1.131.0 | `clavenar-proxy`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-e2e`, `clavenar-charts` |
+| 1a | [Workload attestation verifier contract](#6-capability-attestation) | real `k8s-key-bound` and `tpm2-quote` verifiers implemented; production refuses mock evidence | v1.131.0 + current source | `clavenar-proxy`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-e2e`, `clavenar-charts` |
 | 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | shipped | chain v3 | `clavenar-identity`, `clavenar-ctl` (new binary `clavenarctl`), `clavenar-console`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-chaos-monkey` |
 | 2a | [Pre-flight certification](#agent-onboarding-wao) | shipped | v1.22.0 | `clavenar-ctl` (`agents certify`), `clavenar-identity` (`/agents/{id}/certification` + `CertificationMode` gate + `certified_at_version`), `clavenar-chaos-catalog` (`agent_cert` family), `clavenar-ledger` (no change — v3 `agent.certified` rows), `clavenar-console` (cert badge) |
 | 3 | [Tenancy scope](#tenancy-scope) | described | — | (semantics, no new service) |
@@ -429,6 +429,9 @@ Standalone Rust service, port 8086. It is the only component allowed to mint SVI
 | Method | Path | Purpose | Auth |
 |---|---|---|---|
 | `POST` | `/svid` | Sign a caller-owned CSR into an instance SVID against bound attestation evidence | One-use exact Simulator bootstrap/recovery or exact current agent SVID + target authority + attestation evidence (§6) |
+| `POST` | `/svid/renew` | Renew an agent SVID against the exact verified current leaf | Exact Proxy workload mTLS; Proxy forwards the verified agent leaf and no caller assertion |
+| `POST` | `/agents/{id}/tpm2-enrollment-challenges` | Open one bounded, durable TPM enrollment challenge | Exact Console workload mTLS + OIDC `agents:admin` |
+| `POST` | `/tpm2-enrollment/{challenge_id}/svid` | Complete initial enrollment with a CSR-bound TPM quote | One unexpired, unused operator-created challenge plus the pinned TPM quote (§6.3) |
 | `POST` | `/agents/{id}/svid-recovery?tenant=<t>` | Revoke current SVIDs and open one recovery generation | mTLS + OIDC `agents:admin`; mandatory reason; signed durable lifecycle row |
 | `POST` | `/workload-svid` | Sign a service-owned CSR into its next exact workload generation | Exact pinned bootstrap once/recovery once, or exact current workload leaf; immutable request ID/CSR intent |
 | `POST` | `/workloads/{service}/svid-recovery` | Revoke the current workload SVID and open one bootstrap recovery generation | Exact Console mTLS endpoint capability + OIDC `workloads:recover`; mandatory reason; signed durable lifecycle row |
@@ -505,8 +508,9 @@ outbox before returning the certificate. Failures terminalize as `denied` or
 `failed`; startup changes abandoned `pending` rows to immutable `interrupted`
 without re-signing. Database triggers forbid terminal rewrites and intent
 deletion, require an issued intent to reference its exact tenant/agent SVID,
-and forbid rewriting or deleting that relationship. Real attestation methods
-remain a separate rollout from this key-custody and lifecycle boundary.
+and forbid rewriting or deleting that relationship. The TPM quote enrollment
+and exact-current renewal paths in §6.3 implement the external-agent rollout;
+deployment activation remains explicit through pinned trust-anchor configuration.
 
 #### 4.2 Storage
 
@@ -593,11 +597,12 @@ The signing service returns `{ signature, key_id, signed_at }`. The proxy's NATS
 
 ### 6. Capability attestation
 
-**Implementation status.** The `k8s-key-bound` verifier, signed measurement
-approval lifecycle, strict SVID issuance binding, exact-current runtime lookup,
-Proxy cache, and Policy input are shipped. Production refuses `dev-mock`,
-caller-supplied headers, unbound cache entries, revoked/superseded leaves, and
-unsigned/global measurement allowlists.
+**Implementation status.** The `k8s-key-bound` and `tpm2-quote` verifiers,
+signed measurement approval lifecycle, strict SVID issuance binding,
+operator-mediated one-use TPM enrollment, exact-current renewal and runtime
+lookup, Proxy cache, and Policy input are implemented. Production refuses
+`dev-mock`, caller-supplied headers, unbound cache entries,
+revoked/superseded leaves, and unsigned/global measurement allowlists.
 
 The canonical machine contract is
 [`contracts/attestation-verifier-v1.schema.json`](contracts/attestation-verifier-v1.schema.json),
