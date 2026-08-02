@@ -629,6 +629,16 @@ cat manifest.sig    # 128 hex chars + LF
 
 **Implementation status.** The strict JSON Schema, real Ed25519 `k8s-key-bound` verifier, signed measurement approval/retirement lifecycle, CSR/SVID/caller binding, append-only verified results, exact-current Proxy runtime lookup, strict Policy input, fixtures, Compose mounts, Helm immutable ConfigMap, and release drift checker ship together. Limits are 64 KiB evidence, 32-byte/120-second challenges, 30-second future skew, 300-second evidence age, 900-second verified-result lifetime, and a 300-second cache ceiling. Production excludes `dev-mock`; SVID rotation, revocation, approval retirement, and every binding substitution fail closed.
 
+The defined `tpm2-quote` profile extends production verification to agents
+outside Kubernetes without replacing `k8s-key-bound`. A pinned P-256 AK signs
+the raw TPM quote; Identity checks the TPM magic/type/safe clock, qualified
+signer, exact SHA-256 PCR selection and digest, signed measurement approval,
+and a qualification covering the one-use challenge plus every CSR/SVID/SPIFFE
+binding. Initial issuance is an operator-authorized, durably one-use challenge;
+renewal is forwarded by Proxy only for the exact currently authenticated agent
+leaf. The TLS key remains caller-owned and CSR-self-signed; the profile claims
+co-located challenge-time TPM possession, not TPM-resident TLS key storage.
+
 The development mock emits only a strict-shaped local fixture and production
 configuration rejects it. Request headers can remove a claim for deny testing
 but cannot construct, replace, or strengthen one.

@@ -668,6 +668,80 @@ deny[msg] {
 Measurement approval is tenant-scoped and signed; a checked-in global
 allowlist or matching measurement string is not approval under this contract.
 
+#### 6.3 TPM 2.0 quote evidence profile
+
+`tpm2-quote` is the production profile for agents running outside the
+Kubernetes trust boundary. It complements `k8s-key-bound`; selecting it never
+disables or weakens the Kubernetes verifier.
+
+The decoded verifier-v1 `evidence` bytes are one strict JSON object:
+
+```json
+{
+  "schemaVersion": 1,
+  "akKeyId": "edge-agent-ak-1",
+  "quoteMessage": "<unpadded-base64url TPMS_ATTEST>",
+  "quoteSignature": "<unpadded-base64url TPMT_SIGNATURE>",
+  "pcrBank": "sha256",
+  "pcrValues": {
+    "0": "<64 lowercase hex>",
+    "2": "<64 lowercase hex>",
+    "4": "<64 lowercase hex>",
+    "7": "<64 lowercase hex>"
+  }
+}
+```
+
+Unknown fields, other banks, missing or additional PCRs, noncanonical hex,
+oversized structures, and alternate signature encodings reject. The
+boot-loaded anchor registry fixes, per `akKeyId`, the platform issuer, exact
+P-256 AK SPKI, SHA-256 SPKI `trustAnchorId`, TPM qualified name, and selected
+PCR set. The AK is created under the platform EK as a restricted ECDSA/SHA-256
+attestation key; anchor installation is an explicit operator custody ceremony,
+not trust-on-first-use.
+
+The verifier parses the TPM structures itself and requires:
+
+- `TPMS_ATTEST.magic == TPM_GENERATED_VALUE`, type `TPM_ST_ATTEST_QUOTE`,
+  exact configured qualified signer, and `clockInfo.safe == 1`;
+- `TPMT_SIGNATURE` ECDSA with SHA-256 and a valid signature from the pinned AK
+  over the complete raw `TPMS_ATTEST` bytes;
+- an exact SHA-256 PCR selection and a quote `pcrDigest` equal to SHA-256 of
+  the selected PCR values concatenated in TPM selection order; that digest is
+  the normalized `measurementSha256` checked against the signed tenant/workload
+  measurement approval;
+- `extraData` equal to the 32-byte qualification below.
+
+Qualification is
+`SHA-256("clavenar-tpm2-quote-v1\0" || fields)`. Each field is encoded as a
+two-byte unsigned big-endian length followed by its bytes. In order, the fields
+are contract version (UTF-8), canonical request UUID text, raw 32-byte challenge
+nonce, `publicKeySha256`, `svidSha256`, `spiffeId`, `tenant`, `workload`,
+`instance`, `platformIssuer`, `trustAnchorId`, `measurementPolicyVersion`,
+`verifierPolicyVersion`, and canonical RFC 3339 `requestedAt`. No field can be
+omitted or re-ordered. The CSR remains self-signature-verified separately;
+together, that proof of key possession and the TPM-signed qualification bind
+the requested TLS key to the quoted platform for this one challenge. This does
+not claim that the TLS private key is TPM-resident or non-exportable.
+
+Initial issuance is operator-mediated and two-step. An `agents:admin` caller
+creates one 120-second challenge for the exact registered agent and CSR; the
+challenge row commits the target SPIFFE ID, expected bindings, operator
+identity, and unused state before the nonce is returned. The agent produces the
+quote locally and returns only its CSR/evidence. Successful issuance atomically
+consumes the challenge and bootstrap generation before releasing the leaf.
+Expiry, replay, changed CSR/evidence/operator, or partial persistence rejects.
+
+Normal renewal stays agent-authorized. The public Proxy mTLS listener exposes
+an exact SVID-renewal route, overwrites any caller-supplied forwarding context
+with the verified inbound leaf's SPIFFE ID, fingerprint, and SPKI digest, and
+forwards a structured request over its workload mTLS identity. Identity accepts
+that envelope only from the exact Proxy route capability, re-resolves the
+forwarded leaf as the current non-revoked generation, verifies a fresh quote,
+and atomically supersedes it. External agents renew at least every 30 minutes;
+the one-hour SVID ceiling is unchanged. The route cannot create an initial
+identity, open recovery authority, or target another agent.
+
 ### 7. Wire-contract changes
 
 Shared types are duplicated on each side of the wire. The fields below need to land **simultaneously** in both repos of each pair:
