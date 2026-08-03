@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.external-install/v1",
   "schemaVersion": 1,
-  "release": "1.245.10",
+  "release": "1.245.11",
   "network": "public",
   "isolation": "clean-container-and-fresh-kind",
   "packageInstalls": [
@@ -117,7 +117,7 @@
     "version": "0.36.5",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
     "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.5",
-    "valuesAsset": "clavenar-images-1.245.10.yaml",
+    "valuesAsset": "clavenar-images-1.245.11.yaml",
     "packagedValues": "examples/values-bundled.yaml",
     "cluster": "fresh-kind",
     "imagePolicy": "anonymous-exact-digest-only",
