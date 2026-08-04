@@ -126,7 +126,7 @@ Console `/audit` shows `intent_category` and `reasoning` columns.
 
 **Concept.** Policy is the rules layer. It evaluates pure-Rust Rego (`regorus` crate) over a set of `.rego` files describing tool denylists, business-hours windows, attestation requirements, and velocity thresholds. The proxy maps Brain's `authorized` boolean to an `intent_score` (`0.1` if true, `0.5` if false); Policy's `intent_score >= 0.2` rule means a Brain rejection alone fails policy — Brain and Policy compose as defense-in-depth, not as alternatives.
 
-**Implementation.** `clavenar-policy-engine:8082`. Wire surface: `POST /evaluate`, body `PolicyInput { tool_type, agent_history, intent_score, agent_id, method, current_time, correlation_id, recent_request_count, attestation, agent_spiffe }`. The proxy stamps `current_time` (RFC 3339) explicitly; the rego fallback `time.now_ns()` only fires for non-proxy callers. Rego files live at `clavenar-policy-engine/policies/*.rego` (denylist, business_hours, velocity, attestation).
+**Implementation.** `clavenar-policy-engine:8082`. Wire surface: `POST /evaluate`, body `PolicyInput { tool_type, agent_history, intent_score, agent_id, method, current_time, correlation_id, recent_request_count, attestation, agent_spiffe }`. The service replaces caller-supplied time, velocity, spend-window, cumulative-spend, and budget fields before production evaluation; malformed or unavailable state fails closed. Rego files live at `clavenar-policy-engine/policies/*.rego` (denylist, business_hours, velocity, attestation).
 
 **Verify.**
 
@@ -142,7 +142,7 @@ Returns `{ "allow": false, "reason": "..." }` — wire_transfer requires HIL or 
 
 **Concept.** A circuit breaker against runaway agents. Tracks per-agent request rate over a sliding window and breaks the circuit when the rate exceeds threshold. Two backends: `InProcessTracker` for single-process deployments, `NatsKvTracker` for clustered ones. The two-backend split exists because you want production deploys to share state across replicas (so an agent burst can't be amplified by load-balancing across pods) but local development shouldn't need a NATS dependency.
 
-**Implementation.** `clavenar-policy-engine` selects via `CLAVENAR_VELOCITY_BACKEND={in-process|nats-kv}`. Falls back to in-process if `nats-kv` is requested but NATS is unreachable. `InProcessTracker` is `HashMap<String, VecDeque<Instant>>`. `NatsKvTracker` uses a JetStream KV bucket with JSON-encoded ms timestamps and a CAS update loop with per-agent local mutex.
+**Implementation.** `clavenar-policy-engine` selects via `CLAVENAR_VELOCITY_BACKEND={inprocess|nats-kv}`. A NATS-connected deployment defaults to `nats-kv`; standalone mode defaults to `inprocess`. Requested distributed state that cannot connect or later degrades fails closed instead of silently changing enforcement scope. `InProcessTracker` is size-bounded. `NatsKvTracker` uses the exact `clavenar_velocity` JetStream KV bucket with JSON-encoded millisecond timestamps and a CAS update loop with per-agent local mutex. Cumulative monthly budget state uses the same posture in the separate `clavenar_policy_spend` bucket.
 
 **Verify.**
 
