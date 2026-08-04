@@ -28,7 +28,7 @@ def test_release_inventory_is_strict_and_complete():
     assert FIXTURE["release"] == "1.234.0"
     assert FIXTURE["totals"] == {
         "contracts": 6,
-        "routes": 139,
+        "routes": 141,
         "schemas": 12,
         "services": 4,
         "typeBindings": 13,
@@ -51,13 +51,13 @@ def test_route_inventory_has_exact_unique_service_counts():
         (route["service"], route["method"], route["pathTemplate"])
         for route in routes
     }
-    assert len(keys) == len(routes) == 139
+    assert len(keys) == len(routes) == 141
     assert {
         service: sum(route["service"] == service for route in routes)
         for service in ("hil", "identity", "ledger", "policy-engine")
     } == {
         "hil": 29,
-        "identity": 49,
+        "identity": 51,
         "ledger": 36,
         "policy-engine": 25,
     }
@@ -93,4 +93,3 @@ def test_public_docs_name_the_generated_contract_and_correct_routes():
     assert "GET /verify" in inventory
     assert "CLAVENAR_CONSOLE_SAML_IDP_METADATA_URL" in inventory
     assert "dsnSecretKey" in inventory
-

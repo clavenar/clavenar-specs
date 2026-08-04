@@ -913,9 +913,9 @@
   "release": "1.234.0",
   "routeAuthority": {
     "contractVersion": "1.12.0",
-    "endpointCapabilityMatrixSha256": "sha256:7db888290f46201af0be3e390a8fc25787e803bd3afff3ffaaa4adab58798c7f",
+    "endpointCapabilityMatrixSha256": "sha256:cad0c37139646ca319ad8f3ccddd794bf38d7274ce2410c2ae1545da36f67562",
     "listenerMatrixSha256": "sha256:136eda09eb1bc53d7189157cf25d62224c4b5d022dc89c6c96a9c8da6d85d7ca",
-    "workloadCapabilityBundleSha256": "sha256:7ff053187ab1259bd5f4692aab362ed08acd8ae9fe165f00364bcb758c7e72c4"
+    "workloadCapabilityBundleSha256": "sha256:5b5f75d891c3ed88c1fd66a267fc7e28b438ae36984c2b43636bbe1be197147a"
   },
   "routes": [
     {
