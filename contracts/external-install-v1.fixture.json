@@ -9,9 +9,9 @@
       "id": "typescript-sdk",
       "repository": "clavenar-typescript-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "access": "anonymous",
-      "install": "pnpm add @clavenar/agent-sdk@1.6.0",
+      "install": "pnpm add @clavenar/agent-sdk@1.6.1",
       "registry": "https://registry.npmjs.org",
       "verification": ["install", "import", "hello-world"]
     },
@@ -19,9 +19,9 @@
       "id": "python-sdk",
       "repository": "clavenar-python-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "access": "anonymous",
-      "install": "pip install clavenar-agent-sdk==1.5.0",
+      "install": "pip install clavenar-agent-sdk==1.5.1",
       "registry": "https://pypi.org",
       "verification": ["install", "import", "hello-world"]
     },
@@ -29,12 +29,12 @@
       "id": "java-sdk",
       "repository": "clavenar-java-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.2",
+      "version": "1.5.3",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "com.clavenar:agent-sdk:1.5.2",
+      "install": "com.clavenar:agent-sdk:1.5.3",
       "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
       "releaseAssets": [
-        "agent-sdk-1.5.2.jar",
+        "agent-sdk-1.5.3.jar",
         "pom.xml",
         "bom.json",
         "bom.xml"
@@ -45,13 +45,13 @@
       "id": "dotnet-sdk",
       "repository": "clavenar-dotnet-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.1",
+      "version": "1.6.2",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.1",
+      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.2",
       "registry": "https://nuget.pkg.github.com/clavenar/index.json",
       "releaseAssets": [
-        "Clavenar.AgentSdk.1.6.1.nupkg",
-        "Clavenar.AgentSdk.1.6.1.snupkg"
+        "Clavenar.AgentSdk.1.6.2.nupkg",
+        "Clavenar.AgentSdk.1.6.2.snupkg"
       ],
       "verification": ["authenticated-install", "compile", "anonymous-download"]
     },
