@@ -2716,11 +2716,11 @@ python3 scripts/check_tenant_state_migration.py \
 
 The async heavy-LLM auditor (`clavenar-deep-review`) layered on top of the four-layer security pipeline. It does *not* gate live traffic — that's HIL's job — but reviews a sampled slice of the audit stream with a substantially smarter model (Opus 4.7) to catch what Haiku missed and to deepen verdicts on what it flagged. See `TECH_SPEC.md#forensic-tier-deep-review` for the full design.
 
-### 15.1 Async NATS consumer on `clavenar.forensic`
+### 15.1 Durable forensic consumer and exact output outbox
 
-**Concept.** Deep-review subscribes to the same subject the ledger consumes from. Its emitted findings go back onto the same subject so the ledger picks them up via its existing consumer — no second subscription, no second envelope. The consumer filters its own emissions to prevent an infinite loop (matches on `method ∈ {deep_review_finding, deep_review_failed, deep_review_skipped}`).
+**Concept.** Deep-review and ledger attach independent durable consumers to the shared `clavenar-forensic` stream. Selected inputs are acknowledged only after exact strict terminal output is retained and broker-acknowledged.
 
-**Implementation.** `clavenar-deep-review/src/consumer.rs`. NATS core pubsub (not JetStream — matches existing infra without an `-js` flag bump). Per-agent ring-buffer history populated unconditionally so the next event has full context regardless of sampling outcome. Tokio semaphore for bounded concurrency (default 4).
+**Implementation.** `consumer.rs` owns durable pull intake and graceful drain; `event.rs` owns typed strict/legacy normalization and pre-history sanitization; `job.rs` persists exact envelopes and delivery phases in `clavenar_deep_review_jobs`; `forensic.rs` builds canonical `clavenar.forensic-event/v1` observations. Sampling is deterministic, history is tenant-isolated and globally bounded, and strict producer identity prevents self-review.
 
 **Verify.**
 
@@ -2734,9 +2734,9 @@ docker logs clavenar-dev-deep-review-1 | grep -E 'deep_review_(finding|failed|sk
 
 ### 15.2 Per-event pipeline (sample → permit → budget → mask → prompt → review → emit)
 
-**Concept.** Ten-step pipeline per incoming event: receive → self-emission filter → record in history → sample decision → semaphore permit → budget gate → PII mask → prompt build (strips brain verdict) → provider call (with retry/backoff) → emit finding (or sentinel).
+**Concept.** Receive/validate → sanitize and read prior tenant-agent history → stable sample → permit → resume job or reserve durable budget → independent prompt → deadline-bounded provider call → retain exact output → acknowledged publish → input ack.
 
-**Implementation.** `clavenar-deep-review/src/lib.rs::review_one_event`. Brain verdict fields (`authorized`, `intent_category`, `reasoning`, `signal`, `persona_drift_score`, `injection_detected`, `malicious_code_detected`, `compromised_package_detected`, plus `policy_decision.{allow, reasons, review}`) are *stripped* from the prompt — independent reasoning is the entire value proposition.
+**Implementation.** `clavenar-deep-review/src/review.rs::review_event`. Brain verdict fields are recursively stripped from current and historical provider-safe snapshots. Only transient failures retry, and calls plus deterministic jitter share one absolute deadline.
 
 ### 15.3 `brain_delta` computation (server-side)
 
@@ -2755,7 +2755,7 @@ docker logs clavenar-dev-deep-review-1 | grep -E 'deep_review_(finding|failed|sk
 
 ### 15.4 Three sentinel event types
 
-**Concept.** Three `method` values on the existing `LogRequest` envelope distinguished by their `policy_decision` JSON payload shape — no `clavenar-ledger` wire change.
+**Concept.** Established domain method shapes carried inside strict `clavenar.forensic-event/v1` observations. Ledger validates/claims strict provenance and projects the domain into its existing read model.
 
 **Implementation.**
 
@@ -2767,15 +2767,15 @@ docker logs clavenar-dev-deep-review-1 | grep -E 'deep_review_(finding|failed|sk
 
 **Verify.** `curl http://localhost:8083/audit | jq '.[] | select(.method | startswith("deep_review_"))'`.
 
-### 15.5 Daily token budget (UTC midnight reset)
+### 15.5 Durable per-tenant daily token budget
 
-**Concept.** Per-day cap on `input + output` tokens to bound spend. Reset at UTC midnight by day-ordinal comparison.
+**Concept.** Fleet-wide per-tenant UTC-day cap on a conservative retry-sequence reservation.
 
-**Implementation.** `clavenar-deep-review/src/budget.rs`. Default `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP=1_000_000` (~$60/day Opus 4.7). Demo VPS pinned to `200_000` (~$12/day) so a stuck visitor session can never rack up a bill. `try_reserve` is the gate before any vendor call; `record_actual` reconciles the estimate with the response's `usage` field on success.
+**Implementation.** `clavenar-deep-review/src/budget.rs`. JetStream KV CAS values survive restart and replica hand-off. Reservations include system/user input, maximum output, and every possible attempt and are not refunded because failed calls may be billable.
 
-### 15.6 PII regex masker (six patterns, idempotent)
+### 15.6 Pre-history secret and PII sanitization
 
-**Concept.** Defense in depth — every string leaf in the event JSON is regex-masked before the prompt builder strips brain-verdict fields, so even fields that get stripped never reach the vendor API in raw form.
+**Concept.** Raw broker input never enters history or provider prompts. Sensitive keys are removed wholesale, values are masked recursively, and depth/string/collection bounds constrain hostile payloads.
 
 **Implementation.** `clavenar-deep-review/src/pii.rs`. Patterns + sentinels:
 
@@ -2787,14 +2787,15 @@ docker logs clavenar-dev-deep-review-1 | grep -E 'deep_review_(finding|failed|sk
 | IPv4 | `[IPV4]` |
 | PEM private-key block | `[PEM_PRIVATE_KEY]` |
 | AWS access key (`AKIA…`) | `[AWS_ACCESS_KEY_ID]` |
+| Bearer/JWT/GitHub/generic assigned secrets | typed redaction sentinel |
 
 The masker is idempotent — masking twice produces the same string — verified by the compliance harness on every benchmark case.
 
-### 15.7 Alert webhook (Red + high-confidence, rate-limited per agent)
+### 15.7 Durable alert webhook (Red + high-confidence)
 
-**Concept.** Page on `verdict == Red && confidence >= page_confidence` (default `0.85`). Rate-limited per agent (token bucket, refill 1/min) so a misbehaving agent can't storm the alert channel.
+**Concept.** Page on `verdict == Red && confidence >= page_confidence` (default `0.85`). Rate-limit by tenant-agent and retain unsuccessful delivery in the job outbox.
 
-**Implementation.** `clavenar-deep-review/src/alert.rs`. Slack-shape JSON POST when `CLAVENAR_DEEP_REVIEW_ALERT_WEBHOOK` is set; over-limit pages are dropped silently — the finding still lands in the ledger so the alert can be reconstructed.
+**Implementation.** `clavenar-deep-review/src/alert.rs`. Slack-shape JSON POST occurs only after evidence persistence. HTTP non-2xx is failure; bounded immediate retries plus the durable sweeper handle outages and rate limiting.
 
 **Verify.**
 
@@ -2803,7 +2804,7 @@ The masker is idempotent — masking twice produces the same string — verified
 nc -lk 9999 &
 CLAVENAR_DEEP_REVIEW_ALERT_WEBHOOK=http://localhost:9999/page ./run.sh
 # Drive a scenario known to produce a Red verdict
-# Observe one JSON POST on the sink; subsequent Reds from the same agent within 1min are dropped
+# Observe one JSON POST; subsequent Reds remain rate-limited and pending
 ```
 
 ### 15.8 25-case seed benchmark + hermetic compliance harness

@@ -4945,10 +4945,10 @@ The fast classifier remains in place — it's still the only thing fast enough t
 **In scope (v1.x MVP):**
 
 - Single provider — `AnthropicOpusProvider` (Opus 4.7).
-- NATS core pubsub consumer on `clavenar.forensic` (subject the proxy already publishes forensic rows to; matches existing infra without a JetStream upgrade).
-- Per-event budget gate, retry, concurrency limit, paging.
+- Durable JetStream pull consumer `deep-review` on stream `clavenar-forensic`, filtered to `clavenar.forensic`, with explicit terminal acknowledgements.
+- Typed strict/legacy normalization, tenant-isolated bounded history, durable per-tenant budget, deadline-bounded retry, concurrency limit, and durable alert delivery.
 - Three sentinel ledger event types (`deep_review_finding` / `deep_review_failed` / `deep_review_skipped`).
-- Reuses existing `LogRequest` envelope — no `clavenar-ledger` wire change.
+- Emits canonical `clavenar.forensic-event/v1` observation envelopes; ledger validates provenance and projects their domain payload into the existing `deep_review_*` read model.
 - Deterministic `MockProvider` in-repo so e2e and CI do not burn vendor tokens.
 - 25-case seed benchmark covering all four blind-spot classes + hermetic compliance harness.
 
@@ -4956,42 +4956,40 @@ The fast classifier remains in place — it's still the only thing fast enough t
 
 - Ensemble across vendors (Opus + Gemini + GPT majority vote) — speculative complexity before single-model benchmark data exists.
 - Sequential escalation (Opus → Gemini → GPT on disagreement) — same reasoning.
-- Per-tenant cost attribution — multi-tenant budgeting needs a deployment-level tenancy model clavenar doesn't have yet.
 - Adaptive sampling (auto-tune sample rate against remaining budget) — manual knobs for v1; auto-tune is polish.
-- Dead-letter queue for failed reviews — retry + soft-fail covers transient failures; add once telemetry shows sustained outages.
+- A separate dead-letter stream — retained KV jobs plus the input durable consumer are the recovery surface.
 - Persona-aware prompting (feed `clavenar-brain/personas/` into the prompt) — worth measuring against v1 baseline first.
-- JetStream-durable consumer — MVP uses core NATS to match existing `nats:2` container (no `-js` flag); upgrading is an e2e infra change.
 - Path-dep on `clavenar-brain/src/pii.rs` — MVP ships a small in-tree regex masker (`clavenar-deep-review/src/pii.rs`); merging masker codebases is a v1.x+1 swap-in.
 
-Two former non-goals — *auto-quarantine via identity on Red findings* and *pre-emptive HIL on the agent's next request post-Red* — graduated out of this list: [§11 Closed-loop containment](#11-closed-loop-containment) is the "proper design" the original deferral demanded (tiered response, shadow-mode default, idempotent command path, exempt prefixes).
+Two former non-goals — *auto-quarantine via identity on Red findings* and *pre-emptive HIL on the agent's next request post-Red* — graduated out of this list: [§11 Closed-loop containment](#11-closed-loop-containment) is the "proper design" the original deferral demanded (tiered response, audit-only shadow mode, idempotent command path, exempt prefixes).
 
 ### 3. Architecture
 
 ```
-                      proxy (publishes forensic row)
-                                 ↓
-                          clavenar.forensic ── NATS core
-                          ↓                ↓
-              clavenar-ledger        clavenar-deep-review
-              (appends row)         (samples → review → emits finding)
-                                              ↓
-                                   clavenar.forensic (republishes)
-                                              ↓
-                                   clavenar-ledger
-                                   (appends finding row)
+                 strict + retained legacy publishers
+                                ↓
+                 clavenar-forensic JetStream (file)
+                      ↓ durable           ↓ durable
+              clavenar-ledger       clavenar-deep-review
+              (chain append)        (normalize → sample → review)
+                                             ↓
+                              clavenar_deep_review_jobs KV
+                              (budget + exact output outbox)
+                                             ↓ acknowledged
+                              clavenar.forensic strict output
 ```
 
-Deep-review subscribes to the same subject the ledger consumes from. Its emitted findings go back onto the same subject so the ledger picks them up via its existing consumer — no second subscription, no second envelope. The consumer filters its own emissions to prevent an infinite loop (matches on `method ∈ {deep_review_finding, deep_review_failed, deep_review_skipped}`).
+Deep-review and ledger attach independent durable consumers to the same persistent stream. Deep-review emits strict observation envelopes back to the captured subject with stable `Nats-Msg-Id` values. Producer identity, rather than attacker-controlled domain `method`, is the self-emission guard. The exact output bytes and delivery phase are retained before publish, so a crash or lost acknowledgement replays the same evidence rather than generating a contradictory finding.
 
 Per-event pipeline:
 
-1. **Receive** — NATS message arrives, parsed as `Value`. Self-emission filter ignores own `method` values. Recorded in per-agent ring buffer (`History`) unconditionally so the next event has full context regardless of sampling outcome.
-2. **Sample** — `should_sample(brain_authorized, rate_flagged, rate_green)`. Default: 100% flagged, 1% Green for blind-spot mitigation.
-3. **Permit** — `tokio::sync::Semaphore::acquire_owned()`; bounded concurrent dispatch (default 4). Backpressure naturally surfaces through NATS subscriber queue.
-4. **Budget gate** — `budget.try_reserve(estimated_tokens)`. On exceed: emit `deep_review_skipped { reason: "budget" }` sentinel and return.
-5. **PII mask** — `pii::mask_pii` over every string leaf in the event JSON. Defense in depth; the prompt builder strips brain-verdict fields downstream regardless.
-6. **Prompt build** — `prompt::build_user_message(masked_event, history)`. Brain verdict fields (`authorized`, `intent_category`, `reasoning`, `signal`, `persona_drift_score`, `injection_detected`, `malicious_code_detected`, `compromised_package_detected`, plus `policy_decision.{allow, reasons, review}`) are *stripped*. Independent reasoning is the entire value proposition — feeding brain's verdict in turns deep-review into a confirmation engine that structurally cannot find what Haiku missed.
-7. **Provider call** — `provider.review(&prompt)` wrapped in `with_backoff` (1s / 4s / 16s exponential backoff + full jitter, 60s total wall-clock budget per event).
+1. **Receive** — durable delivery metadata supplies the stable stream sequence for retained legacy rows. Strict canonical envelopes are validated field-for-field; legacy inputs require explicit `agent_id`, `method`, and boolean `authorized`. Poison messages are `Term` acknowledged.
+2. **Sanitize/history** — minimize and recursively mask the event before storage. History is keyed by `(tenant, agent_id)`, deduplicated by source identity, and bounded by entries, agent cardinality, and aggregate bytes. Prior history is read before recording the current event.
+3. **Sample** — a SHA-256-derived stable fraction of source identity selects the event. Default: 100% flagged, 1% Green for blind-spot mitigation. Redelivery and replica hand-off cannot change the result.
+4. **Permit** — `tokio::sync::Semaphore::acquire_owned()` bounds concurrent dispatch (default 4); JetStream `max_ack_pending` supplies broker backpressure.
+5. **Resume/create job** — a retained KV job bypasses provider execution. Otherwise a CAS-backed per-tenant UTC-day reservation covers system prompt, user prompt, maximum output, and every possible attempt. On exceed, create a durable `deep_review_skipped` job.
+6. **Prompt build** — brain-verdict fields are recursively stripped from sanitized current/history snapshots. Independent reasoning is the value proposition; feeding Brain's result in would create a confirmation engine.
+7. **Provider call** — `provider.review(&prompt)` is wrapped in retryable-error classification and one absolute deadline covering vendor calls plus deterministic full-jitter delays. Parse, quota, and other non-transient errors are not retried.
 8. **Compute `brain_delta`** — server-side, from the (`brain_authorized`, `deep_verdict`) pair:
 
    ```
@@ -5003,16 +5001,16 @@ Per-event pipeline:
    (brain_authorized=false, deep=Red)    → Agreed
    ```
 
-9. **Emit** — publish `deep_review_finding` row to `clavenar.forensic`. If `verdict == Red && confidence ≥ page_confidence`: `alert_sink.maybe_page(...)` fires the configured Slack-shape webhook (rate-limited).
-10. **Soft-fail on retry exhaust** — emit `deep_review_failed { reason }` where reason ∈ `timeout` / `vendor_5xx` / `parse_error` / `quota_exceeded` / `rate_limited` / `unknown_vendor_error`. Consumer advances.
+9. **Persist and emit** — retain the exact canonical strict envelope, stable broker message ID, containment plan, and eligible alert before publish. Publish order is finding → enforce-only command → containment sentinel → alert. Each persistent publish is acknowledged before its phase is marked complete.
+10. **Acknowledge/recover** — acknowledge the input only after every mandatory output is broker-acknowledged. Alert failure does not hold the input once its durable outbox row exists; the sweeper retries it. Provider exhaustion becomes a durable `deep_review_failed` output.
 
-History capacity defaults: last 20 events by `agent_id`, capped at 50 by `correlation_id` per the roadmap. Both knobs are env-tunable.
+History defaults to 20 events per `(tenant, agent_id)`, the latest 50 matching a correlation, at most 10,000 agent keys and 64 MiB total. All bounds are startup-validated.
 
 ### 4. Wire surface
 
-**Inbound:** the same `LogRequest` JSON envelope every other forensic-row publisher emits. No new schema. `LogRequest.method` and `LogRequest.policy_decision` are the only fields deep-review reads beyond identity/correlation.
+**Inbound:** canonical `clavenar.forensic-event/v1` plus retained legacy `LogRequest` rows. Strict events are reviewed only when their payload projects an `agent_id`, `method|operation`, and explicit `authorized|policy_decision.allow`; other valid lifecycle observations are acknowledged as unsupported projections. Legacy rows without an explicit boolean authorization are poison, not implicitly Green. Strict producer/service, UUID, timestamp, digest, SPIFFE, provenance, tenant, and exact-field invariants match ledger validation.
 
-**Outbound:** three new `method` values on the same `LogRequest` envelope, distinguished by their JSON payload shape inside `policy_decision`:
+**Outbound:** canonical `clavenar.forensic-event/v1` with `producer.service=deep-review`, `stage=observation.recorded`, a certificate-DER credential fingerprint, deterministic event/idempotency UUIDs, source causal predecessor when available, and one of four domain `method` values. The domain payload retains the established read-model shape:
 
 | `method` | `policy_decision` payload shape |
 |---|---|
@@ -5026,7 +5024,7 @@ History capacity defaults: last 20 events by `agent_id`, capped at 50 by `correl
 - `reason` (failed) ∈ `"Timeout" | "Vendor5xx" | "ParseError" | "QuotaExceeded" | "RateLimited" | "UnknownVendorError"`.
 - `reason` (skipped) is a free-form string; v1 only emits `"budget"`.
 
-The ledger needs no code change. Chain v3's `HashableEntryV3` is event-kind-polymorphic via `payload_sha256` — adding new `method` values is mechanical. Operators see the new rows in the existing audit table; the dedicated `/deep-review` console route is deferred (see §8).
+Ledger validates and transactionally claims the strict stage, retains its canonical payload/envelope provenance, then projects the nested domain shape into the existing audit columns and case logic. This projection preserves the original legacy correlation when present while the strict envelope carries a canonical correlation UUID.
 
 ### 5. Sampling, budgeting, retries, concurrency
 
@@ -5039,44 +5037,52 @@ All knobs are env-driven. Defaults in parens.
 | `CLAVENAR_DEEP_REVIEW_CONCURRENCY` | `4` | Max concurrent in-flight reviews (tokio semaphore) |
 | `CLAVENAR_DEEP_REVIEW_DAILY_TOKEN_CAP` | `1_000_000` | Input + output tokens per UTC day; deployments should set a reviewed cost ceiling |
 | `CLAVENAR_DEEP_REVIEW_RETRY_BUDGET_SECS` | `60` | Per-event wall-clock budget across retries |
+| `CLAVENAR_DEEP_REVIEW_PROVIDER_TIMEOUT_SECS` | `25` | Individual provider request timeout; must not exceed retry budget |
 | `CLAVENAR_DEEP_REVIEW_PAGE_CONFIDENCE` | `0.85` | Confidence floor for paging on Red |
 | `CLAVENAR_DEEP_REVIEW_ALERT_WEBHOOK` | (none) | Slack-shape webhook URL; disabled when unset |
 | `CLAVENAR_DEEP_REVIEW_HISTORY_PER_AGENT` | `20` | Per-agent history ring-buffer capacity |
 | `CLAVENAR_DEEP_REVIEW_HISTORY_PER_CORRELATION` | `50` | Per-correlation history cap |
+| `CLAVENAR_DEEP_REVIEW_HISTORY_MAX_AGENTS` | `10_000` | Total tenant-agent history cardinality bound |
+| `CLAVENAR_DEEP_REVIEW_HISTORY_MAX_BYTES` | `67_108_864` | Aggregate sanitized history memory bound |
 | `CLAVENAR_DEEP_REVIEW_METRICS_PORT` | `8087` | Prometheus `/metrics` port. Sibling `identity` owns `8086` |
-| `CLAVENAR_DEEP_REVIEW_ANTHROPIC_API_KEY` | `mock-key` | API key; sentinel `mock-key` selects `MockProvider` |
+| `CLAVENAR_DEEP_REVIEW_PROVIDER` | **required** | Explicit `mock` or `anthropic` selection |
+| `CLAVENAR_DEEP_REVIEW_ANTHROPIC_API_KEY` | (none) | Required only for the Anthropic provider |
+| `CLAVENAR_DEEP_REVIEW_ANTHROPIC_URL` | Anthropic Messages API | Provider endpoint |
 | `CLAVENAR_DEEP_REVIEW_NATS_URL` | `nats://localhost:4222` | NATS connect string. Same URL the proxy/brain/ledger consumers use |
 | `CLAVENAR_DEEP_REVIEW_FORENSIC_SUBJECT` | `clavenar.forensic` | Subscribe subject for inbound forensic rows |
-| `CLAVENAR_DEEP_REVIEW_FINDINGS_SUBJECT` | `clavenar.forensic` | Publish subject for emitted `deep_review_*` rows. Defaults to the same subject so the ledger picks them up via its existing consumer; split only when an operator runs deep-review against a dedicated audit stream |
-| `CLAVENAR_DEEP_REVIEW_CONTAINMENT` | `shadow` | Closed-loop containment mode: `off` \| `shadow` \| `enforce` ([§11](#11-closed-loop-containment)). Unknown value degrades to `off` with a loud warn |
-| `CLAVENAR_DEEP_REVIEW_CONTAIN_CONFIDENCE` | `0.90` | Hard-tier confidence floor (clamped to `[0,1]`) |
+| `CLAVENAR_DEEP_REVIEW_CONTAINMENT` | `off` | Closed-loop containment mode: `off` \| audit-only `shadow` \| `enforce`; mock + enforce is invalid |
+| `CLAVENAR_DEEP_REVIEW_CONTAIN_CONFIDENCE` | `0.90` | Hard-tier confidence floor; invalid ranges fail startup |
 | `CLAVENAR_DEEP_REVIEW_CONTAIN_EXEMPT_PREFIXES` | (none) | Comma-separated `agent_id` prefixes that never receive the hard tier (soft tier still applies) |
 | `CLAVENAR_DEEP_REVIEW_CONTAINMENT_SUBJECT` | `clavenar.containment.request` | JetStream subject containment commands are published to |
 | `CLAVENAR_DEEP_REVIEW_SAMPLE_RATE_DEMO` | `1.0` | Sample rate for `demo-`-prefixed agents, overriding the green/flagged split — demo containment must fire deterministically, and Escalated findings start as brain-Green events that would otherwise sample at 1% |
+| `CLAVENAR_DEEP_REVIEW_DRAIN_TIMEOUT_SECS` | `75` | SIGINT/SIGTERM worker-drain deadline |
+| `CLAVENAR_DEEP_REVIEW_JETSTREAM_REPLICAS` | `1` | Durable consumer and KV replica count |
 
-Retry algorithm: full-jitter exponential backoff at `1s / 4s / 16s`. Each delay is sampled uniformly from `[0, base]` per the AWS Architecture Blog full-jitter prescription. Total wall-clock is enforced via `retry_budget` even if individual sleeps complete fast — a slow vendor call that returns one second before the budget expires is not retried.
+Retry algorithm: deterministic full-jitter exponential backoff at `1s / 4s / 16s`; transient transport, timeout, 429, and 5xx failures are retryable. One absolute deadline wraps sleeps and calls. Deterministic jitter avoids synchronized storms while preserving exact redelivery behavior.
 
-Budget tracker resets at UTC midnight via day-ordinal comparison (cheap; no tokio interval). `try_reserve` is the gate before any vendor call; `record_actual` reconciles the estimate with the response's `usage` field on success.
+Budget values are per tenant in `clavenar_deep_review_jobs`, updated through JetStream KV CAS, and reset on the UTC date boundary. The conservative reservation covers system + user input, maximum output, and all four attempts and is not refunded because failed vendor requests can still be billable.
 
-Paging is rate-limited per agent: `AlertRateLimiter` is a token bucket keyed by `agent_id`, refill 1 / minute. Over-limit pages are dropped silently — the finding still lands in the ledger, so the alert can be reconstructed.
+Paging is rate-limited per `(tenant, agent_id)`, refill 1/minute. Eligible alerts persist in the job outbox; non-2xx/transport failures and rate-limited attempts remain pending for the sweeper.
 
 ### 6. Failure-mode posture
 
-- **Vendor 5xx / timeout / parse error.** Retry 3× per the backoff schedule. On exhaust: emit `deep_review_failed` and advance the NATS consumer. Never blocks the audit stream.
+- **Vendor 5xx / timeout.** Retry within the absolute deadline. Parse/quota/permanent errors fail immediately. Persist and publish `deep_review_failed`, then acknowledge input.
 - **Vendor 429.** Same retry path; mapped to `RateLimited` reason on exhaust.
 - **Daily budget exceeded.** Emit `deep_review_skipped { reason: "budget" }` and advance. Counter resets at UTC midnight.
 - **Sampling skip.** No sentinel emitted. `_skipped` events would dominate the ledger and obscure real coverage gaps; sampling decisions are recoverable from the brain's full event stream.
-- **Alert rate-limit.** Page dropped silently; finding still landed.
-- **Self-emission loop.** Filtered at the consumer entry by `method` prefix.
-- **NATS publish failure on emit.** Logged at `warn`, the event is dropped (best-effort posture). A persistent NATS outage will surface in the brain → ledger path long before it affects deep-review, since brain has the same dependency on the same subject.
+- **Alert rate-limit/outage.** Finding remains durable; the alert stays pending in KV for later delivery.
+- **Self-emission loop.** Filtered by strict producer identity (and retained legacy method vocabulary), not solely attacker-controlled payload text.
+- **NATS/KV publish failure.** Input is NAKed or left unacknowledged. A retained exact job resumes without another model call; stable message IDs deduplicate a lost acknowledgement.
+- **Poison input.** Oversized, malformed, noncanonical, unknown-field, digest-mismatched, or missing-authorization input receives explicit JetStream `Term`.
+- **Process termination.** SIGINT/SIGTERM stops pulling and drains workers under a deadline. Unexpected supervised-task exit is process-fatal.
 
 Three sentinel types (`finding` / `failed` / `skipped`) make every coverage gap queryable from the ledger.
 
 ### 7. PII handling
 
-`clavenar-deep-review/src/pii.rs` is an in-tree regex masker. Patterns: SSN, email, IPv4, credit-card (Luhn-shape 13-19 digit), PEM blocks, AWS access keys. Sentinels: `[SSN]`, `[EMAIL]`, `[IPV4]`, `[CC]`, `[PEM_PRIVATE_KEY]`, `[AWS_ACCESS_KEY_ID]`. The masker is idempotent — masking twice produces the same string — verified by the compliance harness on every benchmark case.
+`clavenar-deep-review/src/pii.rs` is an in-tree regex masker. Patterns include SSN, email, IPv4, credit-card-shaped numbers, PEM blocks, AWS/GitHub credentials, bearer/JWT tokens, and generic secret assignments. Sensitive JSON keys are replaced wholesale, strings/collections/depth are bounded, and the masker is idempotent.
 
-Mask is applied to every string leaf in the event JSON *before* the prompt builder strips brain-verdict fields. Defense in depth: even fields that get stripped never reach the vendor API in raw form.
+Masking/minimization is applied before history or prompt construction; raw broker bytes never enter either boundary. Brain verdict fields are then stripped recursively from current and historical snapshots.
 
 The masker is deliberately small. A future v1.x+1 task is to swap it for the more capable `clavenar-brain/src/pii.rs` masker (which has bigram embedding + regex). Two masker implementations is documented technical debt; the rationale for *not* path-dep'ing brain's masker at MVP is avoiding ~30 transitive deps and a BrainState coupling for a 60-line regex job.
 
@@ -5102,7 +5108,7 @@ The masker is deliberately small. A future v1.x+1 task is to swap it for the mor
 
 Hermetic test coverage at MVP:
 
-- 57 unit tests across alert, budget, config, consumer, finding, history, pii, prompt, providers (mock + Opus wiremock), retry, review, sampler.
+- Unit tests cover alert, budget, config, containment, event validation, forensic output, job integrity, history, PII, prompt, providers (mock + Opus wiremock), retry, review, sampling, and readiness.
 - 8 integration tests in `tests/compliance.rs` driving the full benchmark corpus through the prompt builder + PII mask + `MockProvider`.
 - 25-case seed benchmark in `benchmark/cases.json` covering `slow_exfiltration` (4) / `persona_drift` (4) / `indirect_injection` (4) / `recon_probing` (6) / `benign_workflow` (5) / `mixed` (2). Each case is a (`history`, `event`, `expected_verdict`, `min_confidence`) tuple.
 - System-prompt invariants: ≥14,500 chars (Opus prompt-cache ephemeral-prefix floor) and all four named blind-spot topics present, asserted via unit test.
@@ -5113,14 +5119,14 @@ Producing a published baseline accuracy number against real Opus (parallel to br
 
 The architectural decisions resolved by `/grill-me`:
 
-1. Async post-hoc execution mode, NATS consumer on the same `clavenar.forensic` subject (not on the hot path, not a separate JetStream stream at v1 to match existing infra).
+1. Async post-hoc execution mode, independent durable consumer on the shared persistent `clavenar-forensic` stream (not on the hot path).
 2. Sampling: 100% flagged + configurable Green floor (not full traffic, not flagged-only — Green sampling is the blind-spot mitigator).
 3. Single provider per deployment behind an `LlmProvider` trait (not ensemble, not sequential escalation — both deferred pending benchmark data).
-4. Reuse `LogRequest` envelope with three new `method` values (not a new wire envelope, not a parallel chain).
+4. Strict `clavenar.forensic-event/v1` output with ledger projection into the established `deep_review_*` domain methods (not a parallel chain).
 5. Brain verdict stripped from prompt; `brain_delta` computed server-side (not "feed brain's verdict in for the model to react to" — that's a confirmation engine).
-6. Per-event soft-fail with three sentinel types (not at-least-once durable redelivery, not best-effort silent drop).
+6. Per-event soft-fail with three terminal types, exact KV-retained output, and at-least-once durable redelivery until terminal evidence is acknowledged.
 7. In-tree regex PII masker at MVP (not path-dep on brain's masker — deferred swap with documented rationale).
-8. Page on Red + high-confidence only, rate-limited per agent; no auto-block (async detection + auto-block is a self-DoS waiting to happen). *Superseded in part by [§11](#11-closed-loop-containment): containment is still not an in-path block, and the self-DoS concern is answered by the shadow-mode default, the Escalated-only hard-tier bar, and exempt prefixes.*
+8. Page on Red + high-confidence only, durably retained and rate-limited per tenant-agent. Containment defaults off; shadow is audit-only; enforcement requires an explicitly selected non-mock provider.
 
 
 ### 11. Closed-loop containment
@@ -5138,15 +5144,17 @@ A Red finding stops being a dead-end log line: deep-review triggers **tiered aut
 
 #### 11.2 Rollout modes
 
-`CLAVENAR_DEEP_REVIEW_CONTAINMENT = off | shadow | enforce`, binary default **shadow**:
+`CLAVENAR_DEEP_REVIEW_CONTAINMENT = off | shadow | enforce`, binary default **off**:
 
 - `off` — decide() never runs; no commands, no sentinels.
-- `shadow` — the soft tier enforces (blast radius: one extra human review); the hard tier **degrades to the soft flag** and stamps `shadowed_action: "suspend"` on its sentinel. Operators graduate to `enforce` on measured false-positive data, answering the original deferral objection ("reconsider only if false-positive rate is essentially zero") empirically rather than on paper.
+- `shadow` — audit-only for both tiers. The sentinel records the exact action enforce mode would issue (and `shadowed_action: "suspend"` for the hard tier), but no containment command or force-HIL flag is produced.
 - `enforce` — both tiers act.
+
+`CLAVENAR_DEEP_REVIEW_PROVIDER=mock` with `containment=enforce` is an invalid startup configuration. A deterministic test heuristic can never actuate identity.
 
 #### 11.3 Containment command (JetStream)
 
-Stream `clavenar-containment`, subject `clavenar.containment.request` (`max_age` 24 h, `duplicate_window` 10 min). Both identity (boot) and deep-review (first publish) `get_or_create` the stream with this pinned config. The publisher sets a `Nats-Msg-Id` header (`containment.<correlation_id|agent_id>.<action>.<reviewed_at unix>`) for broker-side dedupe; identity-side idempotency covers redelivery beyond the window (suspend no-ops on an already-Suspended agent and emits no duplicate chain row; `force_hil` skips when an unexpired entry carries the same `correlation_id`, so redelivery never extends a window).
+Stream `clavenar-containment`, subject `clavenar.containment.request` (`max_age` 24 h, `duplicate_window` 10 min). Identity is the stream manager; deep-review ensures it only when enforcement is enabled. The publisher's stable `Nats-Msg-Id` is `clavenar.containment.v1.deep-review.<source-event-sha256>.<action>`. Identity-side idempotency covers redelivery beyond the broker window.
 
 ```jsonc
 {
@@ -5166,7 +5174,7 @@ Stream `clavenar-containment`, subject `clavenar.containment.request` (`max_age`
 
 Identity's durable consumer (`identity-containment`) resolves the agent itself: `agent_spiffe` → exact `(tenant, agent_name)`; else a global unique-CN lookup. **Unknown or ambiguous CNs are terminal skips** (ack + warn + best-effort `containment_unresolved` forensic row) — identity never guesses a tenant for a suspend and never retry-loops an unresolvable command.
 
-Emission ordering is pinned: **finding → command → sentinel**. Evidence lands before action; a crash can produce a Red finding with no containment sentinel (auditable gap, runbook-covered) but never a containment without its finding.
+Emission ordering is pinned and phase-retained in KV: **finding → enforce-only command → sentinel → alert**. Evidence lands before action. A failed mandatory phase leaves the input unacknowledged and resumes from the exact retained job; shadow skips the command phase entirely.
 
 #### 11.4 `force_hil` state (NATS-KV) and enforcement path
 
@@ -5192,11 +5200,11 @@ A request already parked awaiting a HIL decision when the suspend lands must not
 
 #### 11.6 Audit + incident case
 
-Every containment decision lands as a `deep_review_containment` sentinel (§4 table) — including shadow-mode would-have-suspended rows (`shadowed_action`) and exemption suppressions (`exempted: true`). The identity-side suspend independently emits the `agent.suspended` chain-v3 row with synthetic actor `deep-review`/`internal`. On a `tier=="hard" && mode=="enforce" && action=="suspend"` sentinel, the ledger's forensic consumer best-effort auto-opens an incident case ("Containment: <agent_id> (deep-review Red)", deduped by correlation-id among non-closed cases) with a `contained` timeline event — the operator gets the release-and-postmortem workflow for free. Shadow mode never opens cases.
+Every containment decision lands as a `deep_review_containment` sentinel (§4 table) — including audit-only shadow recommendations and exemption suppressions. The identity-side suspend independently emits its lifecycle row. On a hard/enforce/suspend sentinel, ledger auto-opens the deduplicated incident case. Shadow emits no command, changes no identity/KV state, and never opens a case.
 
 #### 11.7 Demo scenario
 
-The curated `/demo` scenario (`auditor-fights-back`) exercises the loop end-to-end for a visitor: a green-tier fire that brain authorizes, Opus flags Red (Escalated), containment freezes the visitor's own demo agent, and the visitor releases it from the console. Two supporting pieces:
+The curated `/demo` scenario runs with the explicit mock provider and shadow mode. It demonstrates a Red/Escalated finding plus an auditable containment recommendation without suspending or force-flagging a visitor agent. End-to-end actuation is an operator test that requires a real provider plus explicit enforcement. Two supporting pieces remain:
 
 - **Ledger demo echo.** Curated green fires write their forensic row via HTTP `POST /log` (`source: "demo"`) and never transit NATS, so deep-review would never see them. After a successful HTTP append of a `source == "demo"` row, the ledger republishes it to `clavenar.forensic`; its own forensic consumer acks-and-skips `source == "demo"` messages so the row is never double-appended. `source: "demo"` on the NATS subject is hereby reserved for this echo semantics.
 - **Demo agent registration.** Demo agents are registered in identity at session exchange (tenant = the demo prefix, best-effort, idempotent) so a hard-tier suspend can resolve them and the visitor can release their own agent. Demo write access is self-scoped: release/clear on exactly the visitor's own `(prefix, demo_agent_id)` record, resolved-then-compared server-side.
@@ -5205,7 +5213,7 @@ Deployments exempt the simulator's persona prefixes (`CONTAIN_EXEMPT_PREFIXES`) 
 
 #### 11.8 Trust-boundary change
 
-Deep-review previously could only forge `deep_review_*` rows; with containment it holds an actuation path. Mitigations, in depth: the NATS mTLS perimeter gates who can publish commands at all; identity is the sole executor and applies its own resolution + state machine (a command cannot mint, widen, or decommission — only suspend/flag); the hard tier requires the strictest verdict shape; shadow is the binary default; exempt prefixes bound the blast radius; clear/release are admin-gated; and every action is chain-audited from three angles (sentinel, lifecycle row, case). See the [threat model](#threat-model) for the updated elevation-of-privilege entry.
+With `enforce`, deep-review holds an actuation path. Mitigations, in depth: explicit real-provider selection; mock/enforce startup rejection; off default; audit-only shadow; NATS mTLS and exact publish authority; identity as the sole executor with its own resolution/state machine; strict hard-tier bar; exempt prefixes; admin-gated clear/release; and chain evidence from sentinel, lifecycle row, and case. See the [threat model](#threat-model) for the elevation-of-privilege entry.
 
 ---
 
@@ -7592,57 +7600,57 @@ diagnosis.
 
 ### clavenar-deep-review
 
-Async forensic auditor. Subscribes to the same `clavenar.forensic`
-subject the ledger consumes from; emits findings via three new
-`method` values on the existing `LogRequest` envelope. See
+Async forensic auditor. Durably consumes the same persistent forensic stream
+as ledger, then emits canonical `clavenar.forensic-event/v1` observations that
+ledger projects into the established `deep_review_*` methods. See
 [Forensic-tier deep review](#forensic-tier-deep-review) for the
 feature spec.
 
 #### Spoofing & Tampering
 
-Deep-review reads from NATS and posts to Anthropic. There is no
-inbound HTTP request surface — its only published port is the
-Prometheus `/metrics` endpoint.
+Deep-review reads from NATS and, in `anthropic` provider mode, posts to
+Anthropic. Its only HTTP listener exposes health, readiness, and Prometheus
+metrics.
 
-→ **NATS-side action item tracked separately as B7.5** (see
-[Internal service mTLS](#internal-service-mtls) §8 — NATS TLS is
-substrate-level and intentionally split out from the application-cert
-slice). Adds TLS to the NATS link so an attacker who lands on the
-overlay network cannot publish forged forensic rows that deep-review
-would dutifully feed into a paid vendor call.
+NATS mTLS binds the connection to the `deep-review` workload certificate.
+Exact subject and JetStream API grants permit its one durable consumer, its
+owned jobs/budget/outbox KV bucket, strict forensic output, and the optional
+containment command; it has no broad Core subscription grant.
 
 #### Repudiation
 
-Findings are anchored in the chain by the ledger's standard append
-path — same audit trail as any other forensic row. `brain_delta` and
-`reviewing_model` are part of the canonical hash; an after-the-fact
-edit of which model said what is detectable on chain `verify`.
+Findings are anchored in the chain by ledger's strict append path. Stable
+event/idempotency identities, the source causal predecessor, exact canonical
+envelope bytes, producer certificate fingerprint, `brain_delta`, and
+`reviewing_model` make contradiction or after-the-fact editing detectable.
 
 #### Information disclosure
 
-Deep-review calls **Anthropic Claude Opus 4.7** by default. Sensitive
-payloads transit the Anthropic API. Same explicit trust dependency as
-brain's Haiku 4.5 call; the same "Zero-Knowledge Bonus" invariant
-applies (Opus is separate from any agent's primary LLM).
+Provider selection is explicit. `anthropic` uses **Anthropic Claude Opus 4.7**
+and therefore makes Anthropic an explicit trust dependency; `mock` performs no
+vendor call and cannot enable containment enforcement.
 
-PII regex masking runs before the vendor call (see §7 of
-[Forensic-tier deep review](#forensic-tier-deep-review)). The
-mock-mode path (`CLAVENAR_DEEP_REVIEW_ANTHROPIC_API_KEY=mock-key`)
-bypasses the vendor entirely and is used by e2e + CI.
+Sensitive JSON keys are removed recursively and PII/credential patterns are
+masked before an event enters history or a provider prompt (see §7 of
+[Forensic-tier deep review](#forensic-tier-deep-review)). Explicit
+`CLAVENAR_DEEP_REVIEW_PROVIDER=mock` bypasses the vendor and is used by e2e and
+CI.
 
 #### Denial of service
 
-- **Vendor outage cannot stall the audit stream.** Retry budget +
-  soft-fail + `deep_review_failed` sentinel make each per-event
-  failure recoverable; the consumer keeps advancing.
+- **Vendor outage does not lose selected evidence.** A bounded retry deadline
+  becomes an exact retained `deep_review_failed` sentinel. The input is
+  acknowledged only after terminal output is broker-acknowledged; progress
+  acknowledgements protect long-running work from premature redelivery.
 - **Token bomb.** A pathological attacker who can publish to
   `clavenar.forensic` could try to drive deep-review into a budget
   exhaustion that hides their own subsequent events from review.
-  Daily token cap defends against catastrophic spend; `_skipped`
-  sentinels make the coverage gap auditable. The real defense is
-  still the NATS perimeter (same as every other forensic publisher).
-- **Alert storm.** Per-agent token bucket (1 page / minute) prevents
-  Red-finding amplification from a single misbehaving agent.
+  A durable per-tenant daily reservation cap defends against catastrophic
+  spend; `_skipped` sentinels make the coverage gap auditable. The exact NATS
+  publisher allowlist remains the primary input perimeter.
+- **Alert storm.** Per-tenant-agent throttling (1 page / minute) limits
+  amplification. Eligible alerts remain in a durable outbox until delivery or
+  an explicit unconfigured terminal state; non-2xx responses are failures.
 
 #### Elevation of privilege
 
@@ -7656,11 +7664,11 @@ into human review — a denial-of-service lever, not a privilege grant
 widen, or decommission). Mitigations, in depth: the NATS mTLS
 perimeter gates command publish; **identity is the sole executor**
 and applies its own agent resolution + lifecycle state machine; the
-hard tier requires Red + confidence ≥ floor + `Escalated`; `shadow`
-is the binary default; exempt prefixes bound the blast radius;
-release/clear are admin-gated; and every action is audited from three
-angles (containment sentinel, `agent.suspended` chain-v3 row,
-auto-opened incident case). The brain → proxy → policy → ledger
+hard tier requires Red + confidence ≥ floor + `Escalated`; `off` is the
+binary default and `shadow` is audit-only; mock/enforce is rejected; exempt
+prefixes bound the blast radius; release/clear are admin-gated; and every
+enforce action is audited through the containment sentinel, identity lifecycle
+row, and incident case when applicable. The brain → proxy → policy → ledger
 verdict pipeline remains unaffected by deep-review's outputs.
 
 ### clavenar-hil
