@@ -138,7 +138,7 @@
       ],
       "sourceBindings": [
         {
-          "itemSha256": "sha256:ba282b97228165e359be7e22223efcf225573ec2c9d57e8e98679678c324e081",
+          "itemSha256": "sha256:24bb13f596c968455bdff077b70d21525134ea60063fcd584023caf2ab48b41c",
           "kind": "rust-item",
           "path": "src/wire.rs",
           "repository": "clavenar-policy-engine",
@@ -475,7 +475,7 @@
       ],
       "sourceBindings": [
         {
-          "itemSha256": "sha256:0039578d84cfbec96f0d256103e14ba62368650ad067841ff7bf0f998ff0de9e",
+          "itemSha256": "sha256:e766aa56352c2e20e35e269f0293be66cda4a1644cfb9f2fee404243447ac210",
           "kind": "rust-item",
           "path": "src/types.rs",
           "repository": "clavenar-ledger",
@@ -913,9 +913,9 @@
   "release": "1.234.0",
   "routeAuthority": {
     "contractVersion": "1.12.0",
-    "endpointCapabilityMatrixSha256": "sha256:cad0c37139646ca319ad8f3ccddd794bf38d7274ce2410c2ae1545da36f67562",
+    "endpointCapabilityMatrixSha256": "sha256:1d0a77ede07bb44e88f88860c4f238b797826d308dce5bfb024996b3461fa6ae",
     "listenerMatrixSha256": "sha256:136eda09eb1bc53d7189157cf25d62224c4b5d022dc89c6c96a9c8da6d85d7ca",
-    "workloadCapabilityBundleSha256": "sha256:5b5f75d891c3ed88c1fd66a267fc7e28b438ae36984c2b43636bbe1be197147a"
+    "workloadCapabilityBundleSha256": "sha256:19b238818065b578e3fbd2a0c1b2439913bd95e36b367b1850bc8c56b950e46b"
   },
   "routes": [
     {

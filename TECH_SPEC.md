@@ -4830,7 +4830,7 @@ validation.
 | Multi-replica policy-rule consistency | deferred | The supported policy engine remains single-replica; behavioral-history KV is a different state class. |
 | Exact CLI policy CRUD parity | deferred | Test, learn, scaffold, library, and exchange workflows do not equal create/read/update/activate/deactivate/delete parity. |
 | Pinned real-provider deep-review accuracy benchmark | deferred | The deterministic 25-case mock corpus is not a published real-provider accuracy result. |
-| Sandbox severity adversarial corpus | shipped | Version 0.2.0 pins 40 reviewed classifications. This is static annotation only, never authorization, tenant-authority enforcement, or execution isolation. |
+| Sandbox severity adversarial corpus | shipped | Version 0.2.0 pins 55 reviewed classifications. This is static annotation only, never authorization, tenant-authority enforcement, or execution isolation. |
 | Biometric mobile-push approval | deferred | No provider, device-enrollment, biometric-assertion, or callback path ships. |
 | Hard-gated approver-group routing | deferred | Quorum and advisory escalation control count and routing; they do not restrict a pending to one named group. |
 
