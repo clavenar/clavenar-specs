@@ -2339,7 +2339,7 @@ manifest so an unwired run cannot silently redefine the shipped catalog.
 
 ```bash
 ./repos/clavenar-chaos-monkey/target/release/clavenar-chaos-monkey \
-  --proxy-url https://localhost:8443/mcp --only stolen_svid_replay
+  --proxy-url https://localhost:8443/mcp --only invalid_actor_token
 # Asserts predicted verdict, exits 0 on match
 ```
 

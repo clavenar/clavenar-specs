@@ -118,7 +118,7 @@
       "scenarioIds": [
         "cross_tenant_unfederated",
         "expired_grant",
-        "stolen_svid_replay"
+        "invalid_actor_token"
       ]
     },
     {
