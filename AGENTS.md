@@ -2,9 +2,11 @@
 # clavenar-specs — public spec hub: TECH_SPEC.md is the source of truth for every wire contract
 
 ## Build, test, lint
-Docs repo, no build/test/lint. Nothing compiles here — it is Markdown plus one
-shared `cargo-deny` config. Validate edits by eye and by anchor (every cross-ref
-in prose must resolve to a `## ` heading in `TECH_SPEC.md`).
+- Contract tests: `python3 -m unittest discover -v -s tests -p 'test_*.py'`
+- Validate prose links and anchors through the repository-documentation gate in
+  sibling `clavenar-e2e` after cross-repository documentation changes.
+- There is no compiled application here, but the JSON schemas, fixtures, sync
+  scripts, and Python regression tests are executable release inputs—not prose.
 
 ## Layout
 - `TECH_SPEC.md` — the consolidated wire-contract spec; **source of truth**. Each
@@ -19,6 +21,12 @@ in prose must resolve to a `## ` heading in `TECH_SPEC.md`).
 - `SECURITY.md` — vulnerability-disclosure policy in the GitHub `SECURITY.md`
   convention; kept a separate root file so it surfaces in the GitHub Security tab.
 - `deny.toml` — the **canonical** `cargo-deny` config for the whole Rust fleet.
+- `contracts/` — versioned JSON schemas and canonical fixtures mirrored into
+  implementing repositories; change the public contract here first.
+- `scripts/` — contract synchronization and validation helpers, including the
+  customer legal-exchange mirror.
+- `tests/` — regression tests for contract fixtures, source mirrors, and public
+  claim boundaries.
 - `docs/ARCHITECTURE.md` — C4 context + container view, deployment topology,
   trust chain; the visual index over `TECH_SPEC.md`.
 - `docs/CARGO_DEPENDENCIES.md` — cross-repo dependency conventions (no Cargo
@@ -43,8 +51,6 @@ in prose must resolve to a `## ` heading in `TECH_SPEC.md`).
   the `§0` status table. If you rename a `## ` heading, fix every link to it.
 - Markdown voice is terse and technical; tables over prose where a table fits.
   Don't reformat untouched sections in an edit — keep diffs tight.
-- After adding or updating a feature, also update the relevant `MANUAL_TESTS*`
-  file(s) when needed.
 - Commit subjects must start with a lowercase letter.
 
 ## Pointers
