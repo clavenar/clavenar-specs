@@ -78,8 +78,8 @@
       "manifest": "charts/clavenar/Chart.yaml",
       "registry": "oci://ghcr.io/clavenar/charts/clavenar",
       "repository": "clavenar-charts",
-      "tag": "v0.36.8",
-      "version": "0.36.8"
+      "tag": "v0.36.9",
+      "version": "0.36.9"
     }
   ],
   "contract": "clavenar.protected-distribution/v1",
