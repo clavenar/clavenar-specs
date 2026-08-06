@@ -475,7 +475,7 @@
       ],
       "sourceBindings": [
         {
-          "itemSha256": "sha256:e766aa56352c2e20e35e269f0293be66cda4a1644cfb9f2fee404243447ac210",
+          "itemSha256": "sha256:008999fe6c3c3024bc24f4c72be36f16b5bdb2f536041a0dfb1ac518a38330b7",
           "kind": "rust-item",
           "path": "src/types.rs",
           "repository": "clavenar-ledger",
