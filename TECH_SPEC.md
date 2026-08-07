@@ -8199,8 +8199,8 @@ component publishers complete. Each package install begins in a clean
 digest-pinned container and must import, compile, or execute its minimal public
 surface. Each advertised archive is downloaded anonymously; binary and chart
 checksums must match before execution or extraction. The Helm check starts a
-new cluster, anonymously pulls chart `0.36.0`, installs its packaged bundled
-values plus `clavenar-images-1.245.5.yaml`, waits for hooks and workloads, and
+new cluster, anonymously pulls chart `0.36.10`, installs its packaged bundled
+values plus `clavenar-images-1.245.14.yaml`, waits for Jobs and workloads, and
 proves every Clavenar image is an anonymously readable exact digest.
 
 The public bundled values deliberately exclude the optional Exec image because
@@ -8209,6 +8209,30 @@ registry authentication, public access, package import, release asset,
 checksum, chart content, workload readiness, or image digest fails publication.
 The strict schema is
 [`contracts/external-install-v1.schema.json`](contracts/external-install-v1.schema.json).
+
+## Existing-cluster installer
+
+**Module status:** **release acceptance in progress for v1.245.14.**
+
+[`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
+defines the one-command installation boundary for an existing Kubernetes or
+K3s cluster. The stable `https://clavenar.com/install.sh` bootstrap verifies
+one immutable versioned installer before execution. The installer confirms the
+selected context, performs read-only API, version, node, storage, permission,
+collision, render, and exact-image preflight checks, then installs the exact
+public chart and image values with Helm wait and Job completion enabled.
+
+The bundled profile additionally executes one authenticated `tools/list`
+request and requires the verified Ledger chain to advance. Custom values retain
+workload and image verification but cannot inherit that bundled functional
+claim. Repeated execution verifies or upgrades only an installer-owned release;
+foreign releases fail closed unless the operator explicitly adopts the exact
+current chart. A non-secret in-cluster ConfigMap records the receipt.
+
+Cluster creation, node or firewall configuration, container-runtime and storage
+provisioner installation, and cloud infrastructure are outside this contract.
+The strict schema is
+[`contracts/cluster-install-v1.schema.json`](contracts/cluster-install-v1.schema.json).
 
 ## Pilot privacy and intake
 

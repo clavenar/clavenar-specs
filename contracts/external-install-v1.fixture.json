@@ -114,9 +114,9 @@
   "helmInstall": {
     "repository": "clavenar-charts",
     "sourcePath": "README.md",
-    "version": "0.36.9",
+    "version": "0.36.10",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.9",
+    "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.10",
     "valuesAsset": "clavenar-images-1.245.14.yaml",
     "packagedValues": "examples/values-bundled.yaml",
     "cluster": "fresh-kind",

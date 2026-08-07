@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.com/contracts/cluster-install-v1.schema.json",
+  "title": "Clavenar existing-cluster install contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "release",
+    "scope",
+    "bootstrap",
+    "installer",
+    "clusterAccess",
+    "helmInstall",
+    "profiles",
+    "lifecycle",
+    "outOfScope"
+  ],
+  "properties": {
+    "contract": {"const": "clavenar.cluster-install/v1"},
+    "schemaVersion": {"const": 1},
+    "release": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "scope": {"const": "existing-kubernetes-cluster"},
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "shell", "command"],
+      "properties": {
+        "url": {"const": "https://clavenar.com/install.sh"},
+        "shell": {"const": "sh"},
+        "command": {"const": "curl -fsSL https://clavenar.com/install.sh | sh"}
+      }
+    },
+    "installer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "url", "checksumUrl", "sha256", "shell"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "url": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
+        "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
+        "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
+        "shell": {"const": "bash"}
+      }
+    },
+    "clusterAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clients",
+        "contextPolicy",
+        "minimumKubernetesMinor",
+        "maximumKubernetesMinor",
+        "preflight"
+      ],
+      "properties": {
+        "clients": {
+          "const": ["kubectl", "k3s-kubectl"]
+        },
+        "contextPolicy": {"const": "explicit-or-confirmed-current-context"},
+        "minimumKubernetesMinor": {"const": 30},
+        "maximumKubernetesMinor": {"const": 36},
+        "preflight": {
+          "const": [
+            "api-reachable",
+            "context-confirmed",
+            "version-supported",
+            "nodes-ready",
+            "default-storage-class",
+            "permissions-complete",
+            "release-collision-checked",
+            "render-valid",
+            "exact-digest-images"
+          ]
+        }
+      }
+    },
+    "helmInstall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "version",
+        "registry",
+        "releaseUrl",
+        "checksumAsset",
+        "valuesAsset",
+        "valuesSha256",
+        "packagedValues",
+        "defaultNamespace",
+        "defaultRelease",
+        "timeout",
+        "wait",
+        "waitForJobs"
+      ],
+      "properties": {
+        "repository": {"const": "clavenar-charts"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "registry": {"const": "oci://ghcr.io/clavenar/charts/clavenar"},
+        "releaseUrl": {"type": "string", "pattern": "^https://github\\.com/clavenar/clavenar-charts/releases/tag/v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "checksumAsset": {"type": "string", "pattern": "^clavenar-[0-9]+\\.[0-9]+\\.[0-9]+\\.tgz\\.sha256$"},
+        "valuesAsset": {"type": "string", "pattern": "^clavenar-images-[0-9]+\\.[0-9]+\\.[0-9]+\\.yaml$"},
+        "valuesSha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
+        "packagedValues": {"const": "examples/values-bundled.yaml"},
+        "defaultNamespace": {"const": "clavenar"},
+        "defaultRelease": {"const": "clavenar"},
+        "timeout": {"const": "10m"},
+        "wait": {"const": true},
+        "waitForJobs": {"const": true}
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "#/$defs/profile"},
+            {
+              "properties": {
+                "name": {"const": "bundled"},
+                "default": {"const": true},
+                "values": {"const": "examples/values-bundled.yaml"},
+                "verification": {
+                  "const": [
+                    "workloads-ready",
+                    "exact-digest-images",
+                    "tools-list",
+                    "ledger-chain-advanced"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/profile"},
+            {
+              "properties": {
+                "name": {"const": "custom"},
+                "default": {"const": false},
+                "values": {"const": "operator-supplied"},
+                "verification": {
+                  "const": ["workloads-ready", "exact-digest-images"]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "states",
+        "collisionPolicy",
+        "failurePolicy",
+        "adoptionPolicy",
+        "receipt"
+      ],
+      "properties": {
+        "states": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"enum": ["absent", "current", "upgrade", "failed", "foreign"]}
+        },
+        "collisionPolicy": {"const": "fail-closed"},
+        "failurePolicy": {"const": "preserve-release-and-state"},
+        "adoptionPolicy": {"const": "explicit-exact-release-only"},
+        "receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "nameTemplate", "containsSecrets"],
+          "properties": {
+            "kind": {"const": "ConfigMap"},
+            "nameTemplate": {"const": "{release}-cluster-install-receipt"},
+            "containsSecrets": {"const": false}
+          }
+        }
+      }
+    },
+    "outOfScope": {
+      "const": [
+        "cluster-provisioning",
+        "node-configuration",
+        "container-runtime-installation",
+        "firewall-configuration",
+        "storage-provisioner-installation",
+        "cloud-infrastructure"
+      ]
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "default", "values", "verification"],
+      "properties": {
+        "name": {"enum": ["bundled", "custom"]},
+        "default": {"type": "boolean"},
+        "values": {"enum": ["examples/values-bundled.yaml", "operator-supplied"]},
+        "verification": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "workloads-ready",
+              "exact-digest-images",
+              "tools-list",
+              "ledger-chain-advanced"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

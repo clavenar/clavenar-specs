@@ -3332,13 +3332,30 @@ binds the advertised npm, PyPI, Maven, NuGet, four-module Go, Rust Git/release,
 Lite, CLI, OCI image, and OCI Helm surfaces to exact immutable versions. The
 protected distribution runs all eight package/binary paths from clean
 containers, downloads eleven anonymous release assets, verifies checksums, and
-installs chart 0.36.0 with the exact 1.245.5 image values in a new Kind
+installs chart 0.36.10 with the exact 1.245.14 image values in a new Kind
 cluster. All workloads must become ready and every Clavenar image must remain
 an anonymously readable digest.
 
 ```bash
 python3 -m pytest tests/test_external_install_contract.py
 python3 repos/clavenar-e2e/scripts/check_external_install.py \
+  --source-root repos
+```
+
+### One-command existing-cluster install
+
+[`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
+binds `curl -fsSL https://clavenar.com/install.sh | sh` to a checksum-verified,
+immutable installer for an existing Kubernetes or K3s API. It confirms the
+context before mutation, verifies cluster permissions and storage, installs the
+exact chart and digest values, waits for Jobs and workloads, runs the bundled
+functional proof, and writes a non-secret in-cluster receipt. It never creates
+or reconfigures a cluster, node, runtime, firewall, provisioner, or cloud
+resource.
+
+```bash
+python3 -m pytest tests/test_cluster_install_contract.py
+python3 repos/clavenar-e2e/scripts/check_cluster_install.py \
   --source-root repos
 ```
 

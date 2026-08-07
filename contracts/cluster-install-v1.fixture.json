@@ -1,0 +1,88 @@
+{
+  "contract": "clavenar.cluster-install/v1",
+  "schemaVersion": 1,
+  "release": "1.245.14",
+  "scope": "existing-kubernetes-cluster",
+  "bootstrap": {
+    "url": "https://clavenar.com/install.sh",
+    "shell": "sh",
+    "command": "curl -fsSL https://clavenar.com/install.sh | sh"
+  },
+  "installer": {
+    "version": "1.0.0",
+    "url": "https://clavenar.com/installers/clavenar-install-1.0.0.sh",
+    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.0.0.sh.sha256",
+    "sha256": "sha256:23f69919b1174346e046dd49a7cc0aa7dc9ff01a63417ae06422e78086c29eb4",
+    "shell": "bash"
+  },
+  "clusterAccess": {
+    "clients": ["kubectl", "k3s-kubectl"],
+    "contextPolicy": "explicit-or-confirmed-current-context",
+    "minimumKubernetesMinor": 30,
+    "maximumKubernetesMinor": 36,
+    "preflight": [
+      "api-reachable",
+      "context-confirmed",
+      "version-supported",
+      "nodes-ready",
+      "default-storage-class",
+      "permissions-complete",
+      "release-collision-checked",
+      "render-valid",
+      "exact-digest-images"
+    ]
+  },
+  "helmInstall": {
+    "repository": "clavenar-charts",
+    "version": "0.36.10",
+    "registry": "oci://ghcr.io/clavenar/charts/clavenar",
+    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.10",
+    "checksumAsset": "clavenar-0.36.10.tgz.sha256",
+    "valuesAsset": "clavenar-images-1.245.14.yaml",
+    "valuesSha256": "sha256:7349c8214e70e6ccae9ef657c877f038af610f174728e820a1137fc32f7fd404",
+    "packagedValues": "examples/values-bundled.yaml",
+    "defaultNamespace": "clavenar",
+    "defaultRelease": "clavenar",
+    "timeout": "10m",
+    "wait": true,
+    "waitForJobs": true
+  },
+  "profiles": [
+    {
+      "name": "bundled",
+      "default": true,
+      "values": "examples/values-bundled.yaml",
+      "verification": [
+        "workloads-ready",
+        "exact-digest-images",
+        "tools-list",
+        "ledger-chain-advanced"
+      ]
+    },
+    {
+      "name": "custom",
+      "default": false,
+      "values": "operator-supplied",
+      "verification": ["workloads-ready", "exact-digest-images"]
+    }
+  ],
+  "lifecycle": {
+    "states": ["absent", "current", "upgrade", "failed", "foreign"],
+    "collisionPolicy": "fail-closed",
+    "failurePolicy": "preserve-release-and-state",
+    "adoptionPolicy": "explicit-exact-release-only",
+    "receipt": {
+      "kind": "ConfigMap",
+      "nameTemplate": "{release}-cluster-install-receipt",
+      "containsSecrets": false
+    }
+  },
+  "outOfScope": [
+    "cluster-provisioning",
+    "node-configuration",
+    "container-runtime-installation",
+    "firewall-configuration",
+    "storage-provisioner-installation",
+    "cloud-infrastructure"
+  ]
+}
