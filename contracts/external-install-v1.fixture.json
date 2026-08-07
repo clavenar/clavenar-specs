@@ -45,13 +45,13 @@
       "id": "dotnet-sdk",
       "repository": "clavenar-dotnet-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.2",
+      "version": "1.6.3",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.2",
+      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.3",
       "registry": "https://nuget.pkg.github.com/clavenar/index.json",
       "releaseAssets": [
-        "Clavenar.AgentSdk.1.6.2.nupkg",
-        "Clavenar.AgentSdk.1.6.2.snupkg"
+        "Clavenar.AgentSdk.1.6.3.nupkg",
+        "Clavenar.AgentSdk.1.6.3.snupkg"
       ],
       "verification": ["authenticated-install", "compile", "anonymous-download"]
     },
