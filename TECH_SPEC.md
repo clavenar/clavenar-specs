@@ -8199,7 +8199,7 @@ component publishers complete. Each package install begins in a clean
 digest-pinned container and must import, compile, or execute its minimal public
 surface. Each advertised archive is downloaded anonymously; binary and chart
 checksums must match before execution or extraction. The Helm check starts a
-new cluster, anonymously pulls chart `0.36.10`, installs its packaged bundled
+new cluster, anonymously pulls chart `0.36.11`, installs its packaged bundled
 values plus `clavenar-images-1.245.16.yaml`, waits for Jobs and workloads, and
 proves every Clavenar image is an anonymously readable exact digest.
 

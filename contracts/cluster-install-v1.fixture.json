@@ -12,7 +12,7 @@
     "version": "1.0.0",
     "url": "https://clavenar.com/installers/clavenar-install-1.0.0.sh",
     "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.0.0.sh.sha256",
-    "sha256": "sha256:b9dff7786184cb94fed3d896f6e0ab28af4c16c001c4e62433691ee779c8a30b",
+    "sha256": "sha256:91b7f30a790cfee098ea172c7324ca9c9709e0a333c6cb765fc6bcee6a5a8ae9",
     "shell": "bash"
   },
   "clusterAccess": {
@@ -34,10 +34,10 @@
   },
   "helmInstall": {
     "repository": "clavenar-charts",
-    "version": "0.36.10",
+    "version": "0.36.11",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.10",
-    "checksumAsset": "clavenar-0.36.10.tgz.sha256",
+    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.11",
+    "checksumAsset": "clavenar-0.36.11.tgz.sha256",
     "valuesAsset": "clavenar-images-1.245.16.yaml",
     "valuesSha256": "sha256:7349c8214e70e6ccae9ef657c877f038af610f174728e820a1137fc32f7fd404",
     "packagedValues": "examples/values-bundled.yaml",
