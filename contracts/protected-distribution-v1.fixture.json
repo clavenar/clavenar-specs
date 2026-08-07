@@ -15,8 +15,8 @@
       "manifest": "pyproject.toml",
       "registry": "https://pypi.org",
       "repository": "clavenar-python-sdk",
-      "tag": "v1.5.1",
-      "version": "1.5.1"
+      "tag": "v1.5.2",
+      "version": "1.5.2"
     },
     {
       "access": "authenticated-registry-and-anonymous-release",

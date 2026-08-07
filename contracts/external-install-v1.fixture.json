@@ -19,9 +19,9 @@
       "id": "python-sdk",
       "repository": "clavenar-python-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "access": "anonymous",
-      "install": "pip install clavenar-agent-sdk==1.5.1",
+      "install": "pip install clavenar-agent-sdk==1.5.2",
       "registry": "https://pypi.org",
       "verification": ["install", "import", "hello-world"]
     },
