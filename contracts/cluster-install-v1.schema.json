@@ -44,10 +44,10 @@
         "url": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
         "mirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.3.0.sh"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.0.sh"]
         },
         "checksumMirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.3.0.sh.sha256"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.0.sh.sha256"]
         },
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
@@ -72,10 +72,10 @@
         "url": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
         "mirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.0.sh"]
         },
         "checksumMirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh.sha256"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.0.sh.sha256"]
         },
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
@@ -107,7 +107,7 @@
             "default-storage-class",
             "permissions-complete",
             "release-collision-checked",
-            "operator-public-trust",
+            "console-authentication-selected",
             "render-valid",
             "exact-digest-images"
           ]
@@ -153,12 +153,22 @@
       "additionalProperties": false,
       "required": [
         "defaultMode",
+        "authSelectionFlag",
+        "authSelections",
         "anonymousDemoDefault",
         "demoOptInProfile",
+        "bootstrapPolicy",
+        "bootstrapSecretNameTemplate",
+        "bootstrapSecretKey",
+        "bootstrapUrlTemplate",
+        "bootstrapTokenTransport",
+        "bootstrapRole",
+        "bootstrapTokenInReceipt",
+        "mtlsMode",
         "operatorTrustSecretNameTemplate",
         "operatorTrustSecretKeys",
         "operatorTrustInputFlags",
-        "missingTrustPolicy",
+        "mtlsMissingTrustPolicy",
         "operatorBootstrapDirectoryFlag",
         "localBootstrapDefaultRoot",
         "localBootstrapRole",
@@ -168,20 +178,30 @@
         "mutationOriginsDefault"
       ],
       "properties": {
-        "defaultMode": {"const": "operator-mtls"},
+        "defaultMode": {"const": "webauthn"},
+        "authSelectionFlag": {"const": "--console-auth"},
+        "authSelections": {"const": ["passkey", "mtls"]},
         "anonymousDemoDefault": {"const": false},
         "demoOptInProfile": {"const": "evaluation"},
+        "bootstrapPolicy": {"const": "one-time-admin-passkey"},
+        "bootstrapSecretNameTemplate": {"const": "{release}-shared-tokens"},
+        "bootstrapSecretKey": {"const": "hil-bootstrap-token"},
+        "bootstrapUrlTemplate": {"const": "http://localhost:8085/register#bootstrap={token}"},
+        "bootstrapTokenTransport": {"const": "url-fragment"},
+        "bootstrapRole": {"const": "admin"},
+        "bootstrapTokenInReceipt": {"const": false},
+        "mtlsMode": {"const": "operator-mtls"},
         "operatorTrustSecretNameTemplate": {"const": "{release}-operator-public-trust"},
         "operatorTrustSecretKeys": {"const": ["ca.crt", "operators.json"]},
         "operatorTrustInputFlags": {"const": ["--operator-ca", "--operator-registry"]},
-        "missingTrustPolicy": {"const": "local-admin-bootstrap"},
+        "mtlsMissingTrustPolicy": {"const": "local-admin-bootstrap"},
         "operatorBootstrapDirectoryFlag": {"const": "--operator-bootstrap-dir"},
         "localBootstrapDefaultRoot": {"const": "$HOME/.clavenar/operator-bootstrap"},
         "localBootstrapRole": {"const": "admin"},
         "localBootstrapPrivateKeyProjection": {"const": false},
         "browserCredentialFormat": {"const": "PKCS#12"},
         "requiredOperatorRole": {"const": "admin"},
-        "mutationOriginsDefault": {"const": ["https://localhost:8085"]}
+        "mutationOriginsDefault": {"const": ["http://localhost:8085"]}
       }
     },
     "profiles": {
@@ -201,8 +221,7 @@
                   "const": [
                     "workloads-ready",
                     "exact-digest-images",
-                    "operator-admin-ready",
-                    "local-admin-credential",
+                    "passkey-admin-bootstrap-ready",
                     "anonymous-demo-disabled",
                     "tools-list",
                     "ledger-chain-advanced"
@@ -309,6 +328,7 @@
             "retainedResources": {
               "const": [
                 "persistent-volume-claims",
+                "shared-authentication-secret",
                 "operator-public-trust",
                 "namespace"
               ]
@@ -361,6 +381,7 @@
               "exact-digest-images",
               "operator-admin-ready",
               "local-admin-credential",
+              "passkey-admin-bootstrap-ready",
               "anonymous-demo-disabled",
               "tools-list",
               "ledger-chain-advanced"

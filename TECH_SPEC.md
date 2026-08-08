@@ -1951,8 +1951,13 @@ terminal across restart; a new token or pod cannot reactivate it.
 `webauthn_approver_identities` is the canonical identity roster. Its
 `(tenant, normalized_name)` pair and user handle are unique; every new
 credential references one identity while credential IDs retain their global
-primary key. Pre-existing unbound credentials are retained for evidence but
-are not silently promoted. They require explicit controlled re-enrollment.
+primary key. The roster stores the durable closed role `admin | approver`.
+Only completion of the deployment's one lifetime bootstrap creates `admin`;
+invitation enrollment creates `approver`, and credential addition or recovery
+preserves the existing identity's role. Registration and login responses carry
+that stored role so Console never promotes every passkey user by inference.
+Pre-existing unbound credentials are retained for evidence but are not
+silently promoted. They require explicit controlled re-enrollment.
 WebAuthn registration and authentication state is durable rather than
 process-local. HIL serializes the server-side challenge state into SQLite and
 caps starts plus outstanding ceremonies independently by deployment,
@@ -8199,8 +8204,8 @@ component publishers complete. Each package install begins in a clean
 digest-pinned container and must import, compile, or execute its minimal public
 surface. Each advertised archive is downloaded anonymously; binary and chart
 checksums must match before execution or extraction. The Helm check starts a
-new cluster, anonymously pulls chart `0.37.0`, installs its packaged bundled
-values plus `clavenar-images-1.246.0.yaml`, waits for Jobs and workloads, and
+new cluster, anonymously pulls chart `0.38.0`, installs its packaged bundled
+values plus `clavenar-images-1.247.0.yaml`, waits for Jobs and workloads, and
 proves every Clavenar image is an anonymously readable exact digest.
 
 The public bundled values deliberately exclude the optional Exec image because
@@ -8212,7 +8217,7 @@ The strict schema is
 
 ## Existing-cluster installer
 
-**Module status:** **release acceptance in progress for v1.246.0.**
+**Module status:** **release acceptance in progress for v1.247.0.**
 
 [`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
 defines the one-command installation boundary for an existing Kubernetes or
@@ -8222,22 +8227,31 @@ selected context, performs read-only API, version, node, storage, permission,
 collision, render, and exact-image preflight checks, then installs the exact
 public chart and image values with Helm wait and Job completion enabled.
 
-The default `operator` profile is the customer-facing posture. When the target
-does not already hold public operator trust and no public files are supplied,
-the installer creates a local P-256 authority and active Admin identity below
-`~/.clavenar/operator-bootstrap`, including a password-protected PKCS#12 browser
-bundle. It persists those private files only after confirmation. The existing
-Secret path and explicit `--operator-ca` plus `--operator-registry` path remain
-available for externally managed PKI. In every path, the installer projects
-only canonical public CA and registry bytes, enables native operator mTLS,
-rejects an anonymous demo listener, and keeps every signer and operator private
-key outside Kubernetes. The old demo-first bundled posture is available only
-through the explicit `evaluation` profile.
+The default `operator` profile is the customer-facing posture. It enables the
+full WebAuthn Console, rejects anonymous demo access, and prints a localhost
+port-forward command plus a one-time setup URL. The bootstrap token is carried
+only in the URL fragment, which is removed from browser history before the
+ceremony begins and is not sent in an HTTP request. Completing that one
+lifetime deployment bootstrap creates a durable Admin passkey identity; token
+replay and attempts to create a second bootstrap identity fail closed across
+restart. The token is never copied into the non-secret installer receipt.
 
-Both `operator` and `evaluation` execute one authenticated `tools/list` request
-and require the verified Ledger chain to advance. Custom values retain workload
-and image verification, reject an anonymous demo console, and cannot inherit
-that bundled functional claim. Repeated execution verifies or upgrades only an
+`--console-auth mtls` remains the explicit hardened option. It reuses existing
+operator trust or explicit `--operator-ca` plus `--operator-registry`; when
+neither exists, it creates a local P-256 authority and active Admin identity
+below `~/.clavenar/operator-bootstrap`, including a password-protected PKCS#12
+browser bundle. Only public CA and registry bytes reach Kubernetes, and every
+signer and operator private key stays on the invoking workstation. The old
+demo-first bundled posture remains available only through the explicit
+`evaluation` profile.
+
+The default operator install verifies that the one-time Admin passkey ceremony
+is ready and executes the service-level authenticated `tools/list` and Ledger
+chain proof; the Admin-authenticated Console proof follows completion in the
+browser. The `evaluation` profile executes the same bundled service proof.
+Custom values retain workload and image verification, reject an anonymous demo
+console, and cannot inherit either bundled functional claim. Repeated execution
+verifies or upgrades only an
 installer-owned release; the v1.1 legacy `bundled` receipt has a one-way
 migration to either `operator` or `evaluation`. Foreign releases fail closed
 unless the operator explicitly adopts the exact current chart. A non-secret
@@ -8248,10 +8262,12 @@ immutable uninstaller. It accepts only a receipt-owned release or an explicit
 adoption of the exact current chart. The default path removes Helm workloads,
 the installer receipt, and installer smoke resources while retaining all
 chart-created persistent data and the namespace. Data deletion requires the
-separate `--delete-data` flag and an exact `namespace/release` confirmation;
-the public-only operator trust Secret is also retained so uninstall cannot
-silently destroy the customer's authentication registry. It contains no signer
-or client private key. The uninstaller never deletes the namespace. Read-only
+separate `--delete-data` flag and an exact `namespace/release` confirmation.
+The shared authentication Secret is retained even during data deletion so an
+uninstall cannot silently destroy the customer's Admin bootstrap and service
+credentials. The public-only operator trust Secret is retained as well; it
+contains no signer or client private key. The uninstaller never deletes the
+namespace. Read-only
 `--check` prints the target, ownership, release state, and data disposition
 before any mutation.
 

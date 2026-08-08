@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.cluster-install/v1",
   "schemaVersion": 1,
-  "release": "1.246.0",
+  "release": "1.247.0",
   "scope": "existing-kubernetes-cluster",
   "bootstrap": {
     "url": "https://clavenar.ai/install.sh",
@@ -9,16 +9,16 @@
     "command": "curl -fsSL https://clavenar.ai/install.sh | sh"
   },
   "installer": {
-    "version": "1.3.0",
-    "url": "https://clavenar.ai/installers/clavenar-install-1.3.0.sh",
-    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.3.0.sh.sha256",
+    "version": "1.4.0",
+    "url": "https://clavenar.ai/installers/clavenar-install-1.4.0.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.4.0.sh.sha256",
     "mirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.3.0.sh"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.4.0.sh"
     ],
     "checksumMirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.3.0.sh.sha256"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.4.0.sh.sha256"
     ],
-    "sha256": "sha256:63dd3fd8ada62f75d7f2f995cef6ff2c3e1a8be6752ab187250cc899fa981e17",
+    "sha256": "sha256:61f00e840f69a25e47284a3dea1904a762705416b7b0ee3a022ee7443049661f",
     "shell": "bash"
   },
   "uninstallBootstrap": {
@@ -27,16 +27,16 @@
     "command": "curl -fsSL https://clavenar.ai/uninstall.sh | sh"
   },
   "uninstaller": {
-    "version": "1.0.0",
-    "url": "https://clavenar.ai/installers/clavenar-uninstall-1.0.0.sh",
-    "checksumUrl": "https://clavenar.ai/installers/clavenar-uninstall-1.0.0.sh.sha256",
+    "version": "1.1.0",
+    "url": "https://clavenar.ai/installers/clavenar-uninstall-1.1.0.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-uninstall-1.1.0.sh.sha256",
     "mirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh"
+      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.0.sh"
     ],
     "checksumMirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh.sha256"
+      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.0.sh.sha256"
     ],
-    "sha256": "sha256:53988955e8af3a7fb74a7bf24c36877c9b27dae173379d8d12240b09f822b12d",
+    "sha256": "sha256:caa665ab71c5cede5e5804bc0dfb99a5993164ef1c2fe37a39fa7ad06ff55fc9",
     "shell": "bash"
   },
   "clusterAccess": {
@@ -52,19 +52,19 @@
       "default-storage-class",
       "permissions-complete",
       "release-collision-checked",
-      "operator-public-trust",
+      "console-authentication-selected",
       "render-valid",
       "exact-digest-images"
     ]
   },
   "helmInstall": {
     "repository": "clavenar-charts",
-    "version": "0.37.0",
+    "version": "0.38.0",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.37.0",
-    "checksumAsset": "clavenar-0.37.0.tgz.sha256",
-    "valuesAsset": "clavenar-images-1.246.0.yaml",
-    "valuesSha256": "sha256:c7055aab76d456cd7f4b7ffa6737a7a04938a888908c5235febcd3b1b2646a0f",
+    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.38.0",
+    "checksumAsset": "clavenar-0.38.0.tgz.sha256",
+    "valuesAsset": "clavenar-images-1.247.0.yaml",
+    "valuesSha256": "sha256:eca9c51e568faa2b68a16af6d58af3d1593275d0c606d844d9baac2e0bc615d2",
     "packagedValues": "examples/values-bundled.yaml",
     "defaultNamespace": "clavenar",
     "defaultRelease": "clavenar",
@@ -73,20 +73,30 @@
     "waitForJobs": true
   },
   "consoleAccess": {
-    "defaultMode": "operator-mtls",
+    "defaultMode": "webauthn",
+    "authSelectionFlag": "--console-auth",
+    "authSelections": ["passkey", "mtls"],
     "anonymousDemoDefault": false,
     "demoOptInProfile": "evaluation",
+    "bootstrapPolicy": "one-time-admin-passkey",
+    "bootstrapSecretNameTemplate": "{release}-shared-tokens",
+    "bootstrapSecretKey": "hil-bootstrap-token",
+    "bootstrapUrlTemplate": "http://localhost:8085/register#bootstrap={token}",
+    "bootstrapTokenTransport": "url-fragment",
+    "bootstrapRole": "admin",
+    "bootstrapTokenInReceipt": false,
+    "mtlsMode": "operator-mtls",
     "operatorTrustSecretNameTemplate": "{release}-operator-public-trust",
     "operatorTrustSecretKeys": ["ca.crt", "operators.json"],
     "operatorTrustInputFlags": ["--operator-ca", "--operator-registry"],
-    "missingTrustPolicy": "local-admin-bootstrap",
+    "mtlsMissingTrustPolicy": "local-admin-bootstrap",
     "operatorBootstrapDirectoryFlag": "--operator-bootstrap-dir",
     "localBootstrapDefaultRoot": "$HOME/.clavenar/operator-bootstrap",
     "localBootstrapRole": "admin",
     "localBootstrapPrivateKeyProjection": false,
     "browserCredentialFormat": "PKCS#12",
     "requiredOperatorRole": "admin",
-    "mutationOriginsDefault": ["https://localhost:8085"]
+    "mutationOriginsDefault": ["http://localhost:8085"]
   },
   "profiles": [
     {
@@ -96,8 +106,7 @@
       "verification": [
         "workloads-ready",
         "exact-digest-images",
-        "operator-admin-ready",
-        "local-admin-credential",
+        "passkey-admin-bootstrap-ready",
         "anonymous-demo-disabled",
         "tools-list",
         "ledger-chain-advanced"
@@ -144,6 +153,7 @@
       "checkFlag": "--check",
       "retainedResources": [
         "persistent-volume-claims",
+        "shared-authentication-secret",
         "operator-public-trust",
         "namespace"
       ],

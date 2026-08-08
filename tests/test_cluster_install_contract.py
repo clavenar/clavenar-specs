@@ -37,14 +37,14 @@ class ClusterInstallContractTests(unittest.TestCase):
         self.assertEqual(
             [
                 "https://dev.clavenar.ai/installers/"
-                "clavenar-install-1.3.0.sh"
+                "clavenar-install-1.4.0.sh"
             ],
             FIXTURE["installer"]["mirrorUrls"],
         )
         self.assertEqual(
             [
                 "https://dev.clavenar.ai/installers/"
-                "clavenar-uninstall-1.0.0.sh"
+                "clavenar-uninstall-1.1.0.sh"
             ],
             FIXTURE["uninstaller"]["mirrorUrls"],
         )
@@ -55,6 +55,7 @@ class ClusterInstallContractTests(unittest.TestCase):
         self.assertEqual(
             [
                 "persistent-volume-claims",
+                "shared-authentication-secret",
                 "operator-public-trust",
                 "namespace",
             ],
@@ -66,15 +67,24 @@ class ClusterInstallContractTests(unittest.TestCase):
         self.assertTrue(profiles["operator"]["default"])
         self.assertFalse(FIXTURE["consoleAccess"]["anonymousDemoDefault"])
         self.assertEqual(
-            "operator-mtls", FIXTURE["consoleAccess"]["defaultMode"]
+            "webauthn", FIXTURE["consoleAccess"]["defaultMode"]
         )
         self.assertEqual(
             "evaluation", FIXTURE["consoleAccess"]["demoOptInProfile"]
         )
         self.assertEqual(
-            "local-admin-bootstrap",
-            FIXTURE["consoleAccess"]["missingTrustPolicy"],
+            "one-time-admin-passkey",
+            FIXTURE["consoleAccess"]["bootstrapPolicy"],
         )
+        self.assertEqual(
+            ["passkey", "mtls"],
+            FIXTURE["consoleAccess"]["authSelections"],
+        )
+        self.assertEqual(
+            "url-fragment",
+            FIXTURE["consoleAccess"]["bootstrapTokenTransport"],
+        )
+        self.assertFalse(FIXTURE["consoleAccess"]["bootstrapTokenInReceipt"])
         self.assertFalse(
             FIXTURE["consoleAccess"]["localBootstrapPrivateKeyProjection"]
         )
@@ -82,8 +92,7 @@ class ClusterInstallContractTests(unittest.TestCase):
             {
                 "workloads-ready",
                 "exact-digest-images",
-                "operator-admin-ready",
-                "local-admin-credential",
+                "passkey-admin-bootstrap-ready",
                 "anonymous-demo-disabled",
                 "tools-list",
                 "ledger-chain-advanced",

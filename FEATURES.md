@@ -1035,9 +1035,9 @@ CLAVENAR_CONSOLE_AUTH=disabled cargo run -p clavenar-console -- --bind 0.0.0.0
 
 **Concept.** Passkey auth, with HIL as the credential authority. The console proxies the registration and authentication ceremonies but doesn't hold the credentials. The verified principal flows back to HIL on `/decide` so the chain row's `decided_by` matches the credential that actually clicked.
 
-**Implementation.** Console: `/auth/login/begin` and `/auth/login/finish` proxy the ceremonies to HIL. HIL: stores `webauthn_credentials` table; verified principal stamps `decided_by = "webauthn:{name}"` server-side. Session cookie shuttles back to the browser.
+**Implementation.** Console: `/auth/login/begin` and `/auth/login/finish` proxy the ceremonies to HIL. HIL: stores `webauthn_credentials` plus a durable `admin | approver` role on the canonical identity; the one lifetime deployment bootstrap creates Admin while invitation enrollment creates Approver and credential maintenance preserves the role. Registration and login return that stored role to Console, and the verified principal stamps `decided_by = "webauthn:{name}"` server-side. Session cookie shuttles back to the browser.
 
-**Verify.** Console `/login` in WebAuthn mode prompts a passkey ceremony. After auth, approving a HIL pending stamps `webauthn:<name>` on the chain row.
+**Verify.** Console `/login` in WebAuthn mode prompts a passkey ceremony. Complete the one-time bootstrap and confirm the Console session is Admin; enroll an invited identity and confirm it is Approver. After auth, approving a HIL pending stamps `webauthn:<name>` on the chain row.
 
 ### 5.3a Durable accountable-enrollment state
 
@@ -3332,7 +3332,7 @@ binds the advertised npm, PyPI, Maven, NuGet, four-module Go, Rust Git/release,
 Lite, CLI, OCI image, and OCI Helm surfaces to exact immutable versions. The
 protected distribution runs all eight package/binary paths from clean
 containers, downloads eleven anonymous release assets, verifies checksums, and
-installs chart 0.37.0 with the exact 1.246.0 image values in a new Kind
+installs chart 0.38.0 with the exact 1.247.0 image values in a new Kind
 cluster. All workloads must become ready and every Clavenar image must remain
 an anonymously readable digest.
 
@@ -3353,20 +3353,24 @@ functional proof, and writes a non-secret in-cluster receipt. It never creates
 or reconfigures a cluster, node, runtime, firewall, provisioner, or cloud
 resource.
 
-The default profile renders the full native-mTLS operator console and rejects
-anonymous demo access. On a clean cluster it creates a local Admin authority,
-client certificate, and browser PKCS#12 bundle below
-`~/.clavenar/operator-bootstrap`, then projects only public `ca.crt` plus an
-`operators.json` registry containing that active Admin. Existing operator trust
-or explicit `--operator-ca` plus `--operator-registry` remains reusable. Signer
-and operator private keys stay on the invoking workstation and are never
-written to Kubernetes. The curated demo console is an explicit
+The default profile renders the full WebAuthn operator console and rejects
+anonymous demo access. It prints a localhost port-forward command and a setup
+URL whose fragment carries the deployment's one-use bootstrap token. The
+browser removes the fragment before starting the passkey ceremony; successful
+completion creates the deployment's durable Admin identity, and bootstrap
+replay remains terminal across restart. The token is never written to the
+non-secret receipt. Native operator mTLS remains available through explicit
+`--console-auth mtls`; that mode can reuse existing public trust or generate a
+local Admin authority, client certificate, and browser PKCS#12 bundle below
+`~/.clavenar/operator-bootstrap`. Signer and operator private keys remain on the
+invoking workstation. The curated demo console is an explicit
 `--profile evaluation` opt-in, never the default customer installation.
 
 The same contract binds `curl -fsSL https://clavenar.ai/uninstall.sh | sh` to
 a checksum-verified immutable uninstaller. It verifies release ownership and
-shows a read-only plan before removing Helm workloads. Persistent data and the
-public-only operator trust registry are retained by default; data deletion
+shows a read-only plan before removing Helm workloads. Persistent data is
+retained by default. The shared authentication Secret and public-only operator
+trust registry are retained even when explicitly deleting data; data deletion
 requires `--delete-data` plus an exact `namespace/release` confirmation, and
 namespace deletion is never an available action.
 
