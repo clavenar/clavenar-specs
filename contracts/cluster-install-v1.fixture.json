@@ -9,16 +9,16 @@
     "command": "curl -fsSL https://clavenar.ai/install.sh | sh"
   },
   "installer": {
-    "version": "1.4.0",
-    "url": "https://clavenar.ai/installers/clavenar-install-1.4.0.sh",
-    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.4.0.sh.sha256",
+    "version": "1.4.1",
+    "url": "https://clavenar.ai/installers/clavenar-install-1.4.1.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.4.1.sh.sha256",
     "mirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.4.0.sh"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.4.1.sh"
     ],
     "checksumMirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.4.0.sh.sha256"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.4.1.sh.sha256"
     ],
-    "sha256": "sha256:2b4689e492217fda0fe3180b8c2e15ac8312c451e69c3efefcaaddd1630d1c3b",
+    "sha256": "sha256:5f3440bbdce91b2fa73e42bcffa53f176cc7a18d83892af24967dac670fe35f5",
     "shell": "bash"
   },
   "uninstallBootstrap": {
