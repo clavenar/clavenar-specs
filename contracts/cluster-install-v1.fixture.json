@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.cluster-install/v1",
   "schemaVersion": 1,
-  "release": "1.245.16",
+  "release": "1.245.17",
   "scope": "existing-kubernetes-cluster",
   "bootstrap": {
     "url": "https://clavenar.com/install.sh",
@@ -9,10 +9,10 @@
     "command": "curl -fsSL https://clavenar.com/install.sh | sh"
   },
   "installer": {
-    "version": "1.0.0",
-    "url": "https://clavenar.com/installers/clavenar-install-1.0.0.sh",
-    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.0.0.sh.sha256",
-    "sha256": "sha256:91b7f30a790cfee098ea172c7324ca9c9709e0a333c6cb765fc6bcee6a5a8ae9",
+    "version": "1.0.1",
+    "url": "https://clavenar.com/installers/clavenar-install-1.0.1.sh",
+    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.0.1.sh.sha256",
+    "sha256": "sha256:dff1b056a9b04cc40cadbd6499e52f740a4df569b30ce443ff534bdba2948d07",
     "shell": "bash"
   },
   "clusterAccess": {
@@ -34,12 +34,12 @@
   },
   "helmInstall": {
     "repository": "clavenar-charts",
-    "version": "0.36.11",
+    "version": "0.36.12",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.11",
-    "checksumAsset": "clavenar-0.36.11.tgz.sha256",
-    "valuesAsset": "clavenar-images-1.245.16.yaml",
-    "valuesSha256": "sha256:7349c8214e70e6ccae9ef657c877f038af610f174728e820a1137fc32f7fd404",
+    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.12",
+    "checksumAsset": "clavenar-0.36.12.tgz.sha256",
+    "valuesAsset": "clavenar-images-1.245.17.yaml",
+    "valuesSha256": "sha256:c7055aab76d456cd7f4b7ffa6737a7a04938a888908c5235febcd3b1b2646a0f",
     "packagedValues": "examples/values-bundled.yaml",
     "defaultNamespace": "clavenar",
     "defaultRelease": "clavenar",
