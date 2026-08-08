@@ -15,6 +15,7 @@
     "uninstaller",
     "clusterAccess",
     "helmInstall",
+    "consoleAccess",
     "profiles",
     "lifecycle",
     "outOfScope"
@@ -37,11 +38,17 @@
     "installer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "url", "checksumUrl", "sha256", "shell"],
+      "required": ["version", "url", "checksumUrl", "mirrorUrls", "checksumMirrorUrls", "sha256", "shell"],
       "properties": {
         "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
         "url": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
+        "mirrorUrls": {
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.2.0.sh"]
+        },
+        "checksumMirrorUrls": {
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.2.0.sh.sha256"]
+        },
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
       }
@@ -59,11 +66,17 @@
     "uninstaller": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "url", "checksumUrl", "sha256", "shell"],
+      "required": ["version", "url", "checksumUrl", "mirrorUrls", "checksumMirrorUrls", "sha256", "shell"],
       "properties": {
         "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
         "url": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
+        "mirrorUrls": {
+          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh"]
+        },
+        "checksumMirrorUrls": {
+          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh.sha256"]
+        },
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
       }
@@ -94,6 +107,7 @@
             "default-storage-class",
             "permissions-complete",
             "release-collision-checked",
+            "operator-public-trust",
             "render-valid",
             "exact-digest-images"
           ]
@@ -134,18 +148,64 @@
         "waitForJobs": {"const": true}
       }
     },
+    "consoleAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "defaultMode",
+        "anonymousDemoDefault",
+        "demoOptInProfile",
+        "operatorTrustSecretNameTemplate",
+        "operatorTrustSecretKeys",
+        "operatorTrustInputFlags",
+        "requiredOperatorRole",
+        "mutationOriginsDefault"
+      ],
+      "properties": {
+        "defaultMode": {"const": "operator-mtls"},
+        "anonymousDemoDefault": {"const": false},
+        "demoOptInProfile": {"const": "evaluation"},
+        "operatorTrustSecretNameTemplate": {"const": "{release}-operator-public-trust"},
+        "operatorTrustSecretKeys": {"const": ["ca.crt", "operators.json"]},
+        "operatorTrustInputFlags": {"const": ["--operator-ca", "--operator-registry"]},
+        "requiredOperatorRole": {"const": "admin"},
+        "mutationOriginsDefault": {"const": ["https://localhost:8085"]}
+      }
+    },
     "profiles": {
       "type": "array",
-      "minItems": 2,
-      "maxItems": 2,
+      "minItems": 3,
+      "maxItems": 3,
       "prefixItems": [
         {
           "allOf": [
             {"$ref": "#/$defs/profile"},
             {
               "properties": {
-                "name": {"const": "bundled"},
+                "name": {"const": "operator"},
                 "default": {"const": true},
+                "values": {"const": "examples/values-bundled.yaml+installer-operator-overlay"},
+                "verification": {
+                  "const": [
+                    "workloads-ready",
+                    "exact-digest-images",
+                    "operator-admin-ready",
+                    "anonymous-demo-disabled",
+                    "tools-list",
+                    "ledger-chain-advanced"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/profile"},
+            {
+              "properties": {
+                "name": {"const": "evaluation"},
+                "default": {"const": false},
                 "values": {"const": "examples/values-bundled.yaml"},
                 "verification": {
                   "const": [
@@ -168,7 +228,11 @@
                 "default": {"const": false},
                 "values": {"const": "operator-supplied"},
                 "verification": {
-                  "const": ["workloads-ready", "exact-digest-images"]
+                  "const": [
+                    "workloads-ready",
+                    "exact-digest-images",
+                    "anonymous-demo-disabled"
+                  ]
                 }
               }
             }
@@ -230,7 +294,11 @@
             "destructiveConfirmationFlag": {"const": "--confirm-data-deletion"},
             "checkFlag": {"const": "--check"},
             "retainedResources": {
-              "const": ["persistent-volume-claims", "namespace"]
+              "const": [
+                "persistent-volume-claims",
+                "operator-public-trust",
+                "namespace"
+              ]
             },
             "removedResources": {
               "const": [
@@ -250,7 +318,8 @@
         "container-runtime-installation",
         "firewall-configuration",
         "storage-provisioner-installation",
-        "cloud-infrastructure"
+        "cloud-infrastructure",
+        "operator-private-key-custody"
       ]
     }
   },
@@ -260,9 +329,15 @@
       "additionalProperties": false,
       "required": ["name", "default", "values", "verification"],
       "properties": {
-        "name": {"enum": ["bundled", "custom"]},
+        "name": {"enum": ["operator", "evaluation", "custom"]},
         "default": {"type": "boolean"},
-        "values": {"enum": ["examples/values-bundled.yaml", "operator-supplied"]},
+        "values": {
+          "enum": [
+            "examples/values-bundled.yaml+installer-operator-overlay",
+            "examples/values-bundled.yaml",
+            "operator-supplied"
+          ]
+        },
         "verification": {
           "type": "array",
           "minItems": 2,
@@ -271,6 +346,8 @@
             "enum": [
               "workloads-ready",
               "exact-digest-images",
+              "operator-admin-ready",
+              "anonymous-demo-disabled",
               "tools-list",
               "ledger-chain-advanced"
             ]

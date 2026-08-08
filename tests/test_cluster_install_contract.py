@@ -35,28 +35,59 @@ class ClusterInstallContractTests(unittest.TestCase):
             FIXTURE["uninstallBootstrap"]["command"],
         )
         self.assertEqual(
+            [
+                "https://dev.clavenar.ai/installers/"
+                "clavenar-install-1.2.0.sh"
+            ],
+            FIXTURE["installer"]["mirrorUrls"],
+        )
+        self.assertEqual(
+            [
+                "https://dev.clavenar.ai/installers/"
+                "clavenar-uninstall-1.0.0.sh"
+            ],
+            FIXTURE["uninstaller"]["mirrorUrls"],
+        )
+        self.assertEqual(
             "retain",
             FIXTURE["lifecycle"]["uninstall"]["defaultDataDisposition"],
         )
         self.assertEqual(
-            ["persistent-volume-claims", "namespace"],
+            [
+                "persistent-volume-claims",
+                "operator-public-trust",
+                "namespace",
+            ],
             FIXTURE["lifecycle"]["uninstall"]["retainedResources"],
         )
 
-    def test_bundled_profile_owns_functional_proof(self) -> None:
+    def test_operator_is_default_and_demo_requires_explicit_evaluation(self) -> None:
         profiles = {item["name"]: item for item in FIXTURE["profiles"]}
-        self.assertTrue(profiles["bundled"]["default"])
+        self.assertTrue(profiles["operator"]["default"])
+        self.assertFalse(FIXTURE["consoleAccess"]["anonymousDemoDefault"])
+        self.assertEqual(
+            "operator-mtls", FIXTURE["consoleAccess"]["defaultMode"]
+        )
+        self.assertEqual(
+            "evaluation", FIXTURE["consoleAccess"]["demoOptInProfile"]
+        )
         self.assertEqual(
             {
                 "workloads-ready",
                 "exact-digest-images",
+                "operator-admin-ready",
+                "anonymous-demo-disabled",
                 "tools-list",
                 "ledger-chain-advanced",
             },
-            set(profiles["bundled"]["verification"]),
+            set(profiles["operator"]["verification"]),
         )
         self.assertEqual(
-            ["workloads-ready", "exact-digest-images"],
+            [
+                "workloads-ready",
+                "exact-digest-images",
+                "anonymous-demo-disabled",
+            ],
             profiles["custom"]["verification"],
         )
 
@@ -68,7 +99,14 @@ class ClusterInstallContractTests(unittest.TestCase):
             lambda item: item["installer"].update(
                 sha256="sha256:" + "0" * 64
             ),
+            lambda item: item["installer"].update(mirrorUrls=[]),
+            lambda item: item["uninstaller"].update(
+                checksumMirrorUrls=[]
+            ),
             lambda item: item["helmInstall"].update(waitForJobs=False),
+            lambda item: item["consoleAccess"].update(
+                anonymousDemoDefault=True
+            ),
             lambda item: item["lifecycle"].update(
                 collisionPolicy="overwrite"
             ),

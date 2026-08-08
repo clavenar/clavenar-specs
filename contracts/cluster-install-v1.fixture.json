@@ -9,10 +9,16 @@
     "command": "curl -fsSL https://clavenar.com/install.sh | sh"
   },
   "installer": {
-    "version": "1.1.0",
-    "url": "https://clavenar.com/installers/clavenar-install-1.1.0.sh",
-    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.1.0.sh.sha256",
-    "sha256": "sha256:59fbf04383786bad2765de4328f43e03f8bcb7f6d5d477e0f48d56e67602190d",
+    "version": "1.2.0",
+    "url": "https://clavenar.com/installers/clavenar-install-1.2.0.sh",
+    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.2.0.sh.sha256",
+    "mirrorUrls": [
+      "https://dev.clavenar.ai/installers/clavenar-install-1.2.0.sh"
+    ],
+    "checksumMirrorUrls": [
+      "https://dev.clavenar.ai/installers/clavenar-install-1.2.0.sh.sha256"
+    ],
+    "sha256": "sha256:8eb2bf3c46c20ffc8495b0e3b5c397f7fa7fd719ffbc6757b824a81334032ab6",
     "shell": "bash"
   },
   "uninstallBootstrap": {
@@ -24,6 +30,12 @@
     "version": "1.0.0",
     "url": "https://clavenar.com/installers/clavenar-uninstall-1.0.0.sh",
     "checksumUrl": "https://clavenar.com/installers/clavenar-uninstall-1.0.0.sh.sha256",
+    "mirrorUrls": [
+      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh"
+    ],
+    "checksumMirrorUrls": [
+      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh.sha256"
+    ],
     "sha256": "sha256:53988955e8af3a7fb74a7bf24c36877c9b27dae173379d8d12240b09f822b12d",
     "shell": "bash"
   },
@@ -40,6 +52,7 @@
       "default-storage-class",
       "permissions-complete",
       "release-collision-checked",
+      "operator-public-trust",
       "render-valid",
       "exact-digest-images"
     ]
@@ -59,10 +72,33 @@
     "wait": true,
     "waitForJobs": true
   },
+  "consoleAccess": {
+    "defaultMode": "operator-mtls",
+    "anonymousDemoDefault": false,
+    "demoOptInProfile": "evaluation",
+    "operatorTrustSecretNameTemplate": "{release}-operator-public-trust",
+    "operatorTrustSecretKeys": ["ca.crt", "operators.json"],
+    "operatorTrustInputFlags": ["--operator-ca", "--operator-registry"],
+    "requiredOperatorRole": "admin",
+    "mutationOriginsDefault": ["https://localhost:8085"]
+  },
   "profiles": [
     {
-      "name": "bundled",
+      "name": "operator",
       "default": true,
+      "values": "examples/values-bundled.yaml+installer-operator-overlay",
+      "verification": [
+        "workloads-ready",
+        "exact-digest-images",
+        "operator-admin-ready",
+        "anonymous-demo-disabled",
+        "tools-list",
+        "ledger-chain-advanced"
+      ]
+    },
+    {
+      "name": "evaluation",
+      "default": false,
       "values": "examples/values-bundled.yaml",
       "verification": [
         "workloads-ready",
@@ -75,7 +111,11 @@
       "name": "custom",
       "default": false,
       "values": "operator-supplied",
-      "verification": ["workloads-ready", "exact-digest-images"]
+      "verification": [
+        "workloads-ready",
+        "exact-digest-images",
+        "anonymous-demo-disabled"
+      ]
     }
   ],
   "lifecycle": {
@@ -95,7 +135,11 @@
       "destructiveDataFlag": "--delete-data",
       "destructiveConfirmationFlag": "--confirm-data-deletion",
       "checkFlag": "--check",
-      "retainedResources": ["persistent-volume-claims", "namespace"],
+      "retainedResources": [
+        "persistent-volume-claims",
+        "operator-public-trust",
+        "namespace"
+      ],
       "removedResources": [
         "helm-release",
         "installer-receipt",
@@ -109,6 +153,7 @@
     "container-runtime-installation",
     "firewall-configuration",
     "storage-provisioner-installation",
-    "cloud-infrastructure"
+    "cloud-infrastructure",
+    "operator-private-key-custody"
   ]
 }

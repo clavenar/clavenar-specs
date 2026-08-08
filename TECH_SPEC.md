@@ -8222,12 +8222,22 @@ selected context, performs read-only API, version, node, storage, permission,
 collision, render, and exact-image preflight checks, then installs the exact
 public chart and image values with Helm wait and Job completion enabled.
 
-The bundled profile additionally executes one authenticated `tools/list`
-request and requires the verified Ledger chain to advance. Custom values retain
-workload and image verification but cannot inherit that bundled functional
-claim. Repeated execution verifies or upgrades only an installer-owned release;
-foreign releases fail closed unless the operator explicitly adopts the exact
-current chart. A non-secret in-cluster ConfigMap records the receipt.
+The default `operator` profile is the customer-facing posture. It refuses to
+render until the operator supplies a canonical public CA plus an exact registry
+containing an active, unexpired Admin. The installer projects only those public
+bytes, enables native operator mTLS, rejects an anonymous demo listener, and
+keeps every signer and operator private key outside Kubernetes. The old
+demo-first bundled posture is available only through the explicit
+`evaluation` profile.
+
+Both `operator` and `evaluation` execute one authenticated `tools/list` request
+and require the verified Ledger chain to advance. Custom values retain workload
+and image verification, reject an anonymous demo console, and cannot inherit
+that bundled functional claim. Repeated execution verifies or upgrades only an
+installer-owned release; the v1.1 legacy `bundled` receipt has a one-way
+migration to either `operator` or `evaluation`. Foreign releases fail closed
+unless the operator explicitly adopts the exact current chart. A non-secret
+in-cluster ConfigMap records the receipt and selected console posture.
 
 The stable `https://clavenar.com/uninstall.sh` bootstrap likewise verifies one
 immutable uninstaller. It accepts only a receipt-owned release or an explicit
@@ -8235,11 +8245,15 @@ adoption of the exact current chart. The default path removes Helm workloads,
 the installer receipt, and installer smoke resources while retaining all
 chart-created persistent data and the namespace. Data deletion requires the
 separate `--delete-data` flag and an exact `namespace/release` confirmation;
-the uninstaller never deletes the namespace. Read-only `--check` prints the
-target, ownership, release state, and data disposition before any mutation.
+the public-only operator trust Secret is also retained so uninstall cannot
+silently destroy the customer's authentication registry. It contains no signer
+or client private key. The uninstaller never deletes the namespace. Read-only
+`--check` prints the target, ownership, release state, and data disposition
+before any mutation.
 
 Cluster creation, node or firewall configuration, container-runtime and storage
-provisioner installation, and cloud infrastructure are outside this contract.
+provisioner installation, cloud infrastructure, and operator private-key
+custody are outside this contract.
 The strict schema is
 [`contracts/cluster-install-v1.schema.json`](contracts/cluster-install-v1.schema.json).
 
