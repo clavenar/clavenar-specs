@@ -9,10 +9,10 @@
     "command": "curl -fsSL https://clavenar.com/install.sh | sh"
   },
   "installer": {
-    "version": "1.0.1",
-    "url": "https://clavenar.com/installers/clavenar-install-1.0.1.sh",
-    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.0.1.sh.sha256",
-    "sha256": "sha256:dff1b056a9b04cc40cadbd6499e52f740a4df569b30ce443ff534bdba2948d07",
+    "version": "1.1.0",
+    "url": "https://clavenar.com/installers/clavenar-install-1.1.0.sh",
+    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.1.0.sh.sha256",
+    "sha256": "sha256:79437be56f6bfa29078ed5c0ebf2f58bb3ab75748a6985f452f1157d583d0048",
     "shell": "bash"
   },
   "clusterAccess": {
