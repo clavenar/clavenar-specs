@@ -21,7 +21,7 @@ class ClusterInstallContractTests(unittest.TestCase):
         jsonschema.Draft202012Validator(SCHEMA).validate(FIXTURE)
         self.assertEqual("existing-kubernetes-cluster", FIXTURE["scope"])
         self.assertEqual(
-            "curl -fsSL https://clavenar.com/install.sh | sh",
+            "curl -fsSL https://clavenar.ai/install.sh | sh",
             FIXTURE["bootstrap"]["command"],
         )
         self.assertTrue(FIXTURE["helmInstall"]["wait"])
@@ -31,7 +31,7 @@ class ClusterInstallContractTests(unittest.TestCase):
         )
         self.assertFalse(FIXTURE["lifecycle"]["receipt"]["containsSecrets"])
         self.assertEqual(
-            "curl -fsSL https://clavenar.com/uninstall.sh | sh",
+            "curl -fsSL https://clavenar.ai/uninstall.sh | sh",
             FIXTURE["uninstallBootstrap"]["command"],
         )
         self.assertEqual(
@@ -96,6 +96,9 @@ class ClusterInstallContractTests(unittest.TestCase):
     ) -> None:
         for mutate in (
             lambda item: item.update(scope="provision-k3s"),
+            lambda item: item["bootstrap"].update(
+                url="https://clavenar.com/install.sh"
+            ),
             lambda item: item["installer"].update(
                 sha256="sha256:" + "0" * 64
             ),

@@ -4,14 +4,14 @@
   "release": "1.246.0",
   "scope": "existing-kubernetes-cluster",
   "bootstrap": {
-    "url": "https://clavenar.com/install.sh",
+    "url": "https://clavenar.ai/install.sh",
     "shell": "sh",
-    "command": "curl -fsSL https://clavenar.com/install.sh | sh"
+    "command": "curl -fsSL https://clavenar.ai/install.sh | sh"
   },
   "installer": {
     "version": "1.2.0",
-    "url": "https://clavenar.com/installers/clavenar-install-1.2.0.sh",
-    "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.2.0.sh.sha256",
+    "url": "https://clavenar.ai/installers/clavenar-install-1.2.0.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.2.0.sh.sha256",
     "mirrorUrls": [
       "https://dev.clavenar.ai/installers/clavenar-install-1.2.0.sh"
     ],
@@ -22,14 +22,14 @@
     "shell": "bash"
   },
   "uninstallBootstrap": {
-    "url": "https://clavenar.com/uninstall.sh",
+    "url": "https://clavenar.ai/uninstall.sh",
     "shell": "sh",
-    "command": "curl -fsSL https://clavenar.com/uninstall.sh | sh"
+    "command": "curl -fsSL https://clavenar.ai/uninstall.sh | sh"
   },
   "uninstaller": {
     "version": "1.0.0",
-    "url": "https://clavenar.com/installers/clavenar-uninstall-1.0.0.sh",
-    "checksumUrl": "https://clavenar.com/installers/clavenar-uninstall-1.0.0.sh.sha256",
+    "url": "https://clavenar.ai/installers/clavenar-uninstall-1.0.0.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-uninstall-1.0.0.sh.sha256",
     "mirrorUrls": [
       "https://dev.clavenar.ai/installers/clavenar-uninstall-1.0.0.sh"
     ],

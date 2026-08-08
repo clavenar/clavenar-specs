@@ -3345,7 +3345,7 @@ python3 repos/clavenar-e2e/scripts/check_external_install.py \
 ### Existing-cluster operator install
 
 [`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
-binds `curl -fsSL https://clavenar.com/install.sh | sh` to a checksum-verified,
+binds `curl -fsSL https://clavenar.ai/install.sh | sh` to a checksum-verified,
 immutable installer for an existing Kubernetes or K3s API. It confirms the
 context before mutation, verifies cluster permissions and storage, installs the
 exact chart and digest values, waits for Jobs and workloads, runs the bundled
@@ -3359,7 +3359,7 @@ console, and rejects anonymous demo access. Signer and operator private keys
 remain on their owning systems. The curated demo console is an explicit
 `--profile evaluation` opt-in, never the default customer installation.
 
-The same contract binds `curl -fsSL https://clavenar.com/uninstall.sh | sh` to
+The same contract binds `curl -fsSL https://clavenar.ai/uninstall.sh | sh` to
 a checksum-verified immutable uninstaller. It verifies release ownership and
 shows a read-only plan before removing Helm workloads. Persistent data and the
 public-only operator trust registry are retained by default; data deletion

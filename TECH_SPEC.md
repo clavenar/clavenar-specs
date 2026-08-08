@@ -8216,7 +8216,7 @@ The strict schema is
 
 [`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
 defines the one-command installation boundary for an existing Kubernetes or
-K3s cluster. The stable `https://clavenar.com/install.sh` bootstrap verifies
+K3s cluster. The stable `https://clavenar.ai/install.sh` bootstrap verifies
 one immutable versioned installer before execution. The installer confirms the
 selected context, performs read-only API, version, node, storage, permission,
 collision, render, and exact-image preflight checks, then installs the exact
@@ -8239,7 +8239,7 @@ migration to either `operator` or `evaluation`. Foreign releases fail closed
 unless the operator explicitly adopts the exact current chart. A non-secret
 in-cluster ConfigMap records the receipt and selected console posture.
 
-The stable `https://clavenar.com/uninstall.sh` bootstrap likewise verifies one
+The stable `https://clavenar.ai/uninstall.sh` bootstrap likewise verifies one
 immutable uninstaller. It accepts only a receipt-owned release or an explicit
 adoption of the exact current chart. The default path removes Helm workloads,
 the installer receipt, and installer smoke resources while retaining all
