@@ -11,6 +11,8 @@
     "scope",
     "bootstrap",
     "installer",
+    "uninstallBootstrap",
+    "uninstaller",
     "clusterAccess",
     "helmInstall",
     "profiles",
@@ -40,6 +42,28 @@
         "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
         "url": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
+        "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
+        "shell": {"const": "bash"}
+      }
+    },
+    "uninstallBootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "shell", "command"],
+      "properties": {
+        "url": {"const": "https://clavenar.com/uninstall.sh"},
+        "shell": {"const": "sh"},
+        "command": {"const": "curl -fsSL https://clavenar.com/uninstall.sh | sh"}
+      }
+    },
+    "uninstaller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "url", "checksumUrl", "sha256", "shell"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "url": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
+        "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.com/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
       }
@@ -161,7 +185,8 @@
         "collisionPolicy",
         "failurePolicy",
         "adoptionPolicy",
-        "receipt"
+        "receipt",
+        "uninstall"
       ],
       "properties": {
         "states": {
@@ -182,6 +207,38 @@
             "kind": {"const": "ConfigMap"},
             "nameTemplate": {"const": "{release}-cluster-install-receipt"},
             "containsSecrets": {"const": false}
+          }
+        },
+        "uninstall": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "defaultDataDisposition",
+            "namespaceDisposition",
+            "ownershipPolicy",
+            "destructiveDataFlag",
+            "destructiveConfirmationFlag",
+            "checkFlag",
+            "retainedResources",
+            "removedResources"
+          ],
+          "properties": {
+            "defaultDataDisposition": {"const": "retain"},
+            "namespaceDisposition": {"const": "retain"},
+            "ownershipPolicy": {"const": "exact-release-or-explicit-adoption"},
+            "destructiveDataFlag": {"const": "--delete-data"},
+            "destructiveConfirmationFlag": {"const": "--confirm-data-deletion"},
+            "checkFlag": {"const": "--check"},
+            "retainedResources": {
+              "const": ["persistent-volume-claims", "namespace"]
+            },
+            "removedResources": {
+              "const": [
+                "helm-release",
+                "installer-receipt",
+                "installer-smoke-resources"
+              ]
+            }
           }
         }
       }

@@ -3332,7 +3332,7 @@ binds the advertised npm, PyPI, Maven, NuGet, four-module Go, Rust Git/release,
 Lite, CLI, OCI image, and OCI Helm surfaces to exact immutable versions. The
 protected distribution runs all eight package/binary paths from clean
 containers, downloads eleven anonymous release assets, verifies checksums, and
-installs chart 0.36.12 with the exact 1.245.17 image values in a new Kind
+installs chart 0.37.0 with the exact 1.246.0 image values in a new Kind
 cluster. All workloads must become ready and every Clavenar image must remain
 an anonymously readable digest.
 
@@ -3352,6 +3352,13 @@ exact chart and digest values, waits for Jobs and workloads, runs the bundled
 functional proof, and writes a non-secret in-cluster receipt. It never creates
 or reconfigures a cluster, node, runtime, firewall, provisioner, or cloud
 resource.
+
+The same contract binds `curl -fsSL https://clavenar.com/uninstall.sh | sh` to
+a checksum-verified immutable uninstaller. It verifies release ownership and
+shows a read-only plan before removing Helm workloads. Persistent data and the
+namespace are retained by default; data deletion requires `--delete-data` plus
+an exact `namespace/release` confirmation, and namespace deletion is never an
+available action.
 
 ```bash
 python3 -m pytest tests/test_cluster_install_contract.py

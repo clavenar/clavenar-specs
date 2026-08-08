@@ -30,6 +30,18 @@ class ClusterInstallContractTests(unittest.TestCase):
             "fail-closed", FIXTURE["lifecycle"]["collisionPolicy"]
         )
         self.assertFalse(FIXTURE["lifecycle"]["receipt"]["containsSecrets"])
+        self.assertEqual(
+            "curl -fsSL https://clavenar.com/uninstall.sh | sh",
+            FIXTURE["uninstallBootstrap"]["command"],
+        )
+        self.assertEqual(
+            "retain",
+            FIXTURE["lifecycle"]["uninstall"]["defaultDataDisposition"],
+        )
+        self.assertEqual(
+            ["persistent-volume-claims", "namespace"],
+            FIXTURE["lifecycle"]["uninstall"]["retainedResources"],
+        )
 
     def test_bundled_profile_owns_functional_proof(self) -> None:
         profiles = {item["name"]: item for item in FIXTURE["profiles"]}
@@ -60,6 +72,12 @@ class ClusterInstallContractTests(unittest.TestCase):
             lambda item: item["lifecycle"].update(
                 collisionPolicy="overwrite"
             ),
+            lambda item: item["lifecycle"]["uninstall"].update(
+                defaultDataDisposition="delete"
+            ),
+            lambda item: item["lifecycle"]["uninstall"].update(
+                destructiveConfirmationFlag=""
+            ),
             lambda item: item["clusterAccess"]["preflight"].pop(),
             lambda item: item["profiles"].__setitem__(
                 1, copy.deepcopy(item["profiles"][0])
@@ -79,3 +97,5 @@ class ClusterInstallContractTests(unittest.TestCase):
             self.assertIn("clavenar.cluster-install/v1", text)
             self.assertIn("existing Kubernetes", text)
             self.assertIn("install.sh", text)
+            self.assertIn("uninstall.sh", text)
+            self.assertIn("persistent data", text.lower())

@@ -8199,8 +8199,8 @@ component publishers complete. Each package install begins in a clean
 digest-pinned container and must import, compile, or execute its minimal public
 surface. Each advertised archive is downloaded anonymously; binary and chart
 checksums must match before execution or extraction. The Helm check starts a
-new cluster, anonymously pulls chart `0.36.12`, installs its packaged bundled
-values plus `clavenar-images-1.245.17.yaml`, waits for Jobs and workloads, and
+new cluster, anonymously pulls chart `0.37.0`, installs its packaged bundled
+values plus `clavenar-images-1.246.0.yaml`, waits for Jobs and workloads, and
 proves every Clavenar image is an anonymously readable exact digest.
 
 The public bundled values deliberately exclude the optional Exec image because
@@ -8212,7 +8212,7 @@ The strict schema is
 
 ## Existing-cluster installer
 
-**Module status:** **release acceptance in progress for v1.245.17.**
+**Module status:** **release acceptance in progress for v1.246.0.**
 
 [`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
 defines the one-command installation boundary for an existing Kubernetes or
@@ -8228,6 +8228,15 @@ workload and image verification but cannot inherit that bundled functional
 claim. Repeated execution verifies or upgrades only an installer-owned release;
 foreign releases fail closed unless the operator explicitly adopts the exact
 current chart. A non-secret in-cluster ConfigMap records the receipt.
+
+The stable `https://clavenar.com/uninstall.sh` bootstrap likewise verifies one
+immutable uninstaller. It accepts only a receipt-owned release or an explicit
+adoption of the exact current chart. The default path removes Helm workloads,
+the installer receipt, and installer smoke resources while retaining all
+chart-created persistent data and the namespace. Data deletion requires the
+separate `--delete-data` flag and an exact `namespace/release` confirmation;
+the uninstaller never deletes the namespace. Read-only `--check` prints the
+target, ownership, release state, and data disposition before any mutation.
 
 Cluster creation, node or firewall configuration, container-runtime and storage
 provisioner installation, and cloud infrastructure are outside this contract.

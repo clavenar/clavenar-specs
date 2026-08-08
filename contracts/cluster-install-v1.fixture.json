@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.cluster-install/v1",
   "schemaVersion": 1,
-  "release": "1.245.17",
+  "release": "1.246.0",
   "scope": "existing-kubernetes-cluster",
   "bootstrap": {
     "url": "https://clavenar.com/install.sh",
@@ -12,7 +12,19 @@
     "version": "1.1.0",
     "url": "https://clavenar.com/installers/clavenar-install-1.1.0.sh",
     "checksumUrl": "https://clavenar.com/installers/clavenar-install-1.1.0.sh.sha256",
-    "sha256": "sha256:79437be56f6bfa29078ed5c0ebf2f58bb3ab75748a6985f452f1157d583d0048",
+    "sha256": "sha256:59fbf04383786bad2765de4328f43e03f8bcb7f6d5d477e0f48d56e67602190d",
+    "shell": "bash"
+  },
+  "uninstallBootstrap": {
+    "url": "https://clavenar.com/uninstall.sh",
+    "shell": "sh",
+    "command": "curl -fsSL https://clavenar.com/uninstall.sh | sh"
+  },
+  "uninstaller": {
+    "version": "1.0.0",
+    "url": "https://clavenar.com/installers/clavenar-uninstall-1.0.0.sh",
+    "checksumUrl": "https://clavenar.com/installers/clavenar-uninstall-1.0.0.sh.sha256",
+    "sha256": "sha256:53988955e8af3a7fb74a7bf24c36877c9b27dae173379d8d12240b09f822b12d",
     "shell": "bash"
   },
   "clusterAccess": {
@@ -34,11 +46,11 @@
   },
   "helmInstall": {
     "repository": "clavenar-charts",
-    "version": "0.36.12",
+    "version": "0.37.0",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.36.12",
-    "checksumAsset": "clavenar-0.36.12.tgz.sha256",
-    "valuesAsset": "clavenar-images-1.245.17.yaml",
+    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.37.0",
+    "checksumAsset": "clavenar-0.37.0.tgz.sha256",
+    "valuesAsset": "clavenar-images-1.246.0.yaml",
     "valuesSha256": "sha256:c7055aab76d456cd7f4b7ffa6737a7a04938a888908c5235febcd3b1b2646a0f",
     "packagedValues": "examples/values-bundled.yaml",
     "defaultNamespace": "clavenar",
@@ -75,6 +87,20 @@
       "kind": "ConfigMap",
       "nameTemplate": "{release}-cluster-install-receipt",
       "containsSecrets": false
+    },
+    "uninstall": {
+      "defaultDataDisposition": "retain",
+      "namespaceDisposition": "retain",
+      "ownershipPolicy": "exact-release-or-explicit-adoption",
+      "destructiveDataFlag": "--delete-data",
+      "destructiveConfirmationFlag": "--confirm-data-deletion",
+      "checkFlag": "--check",
+      "retainedResources": ["persistent-volume-claims", "namespace"],
+      "removedResources": [
+        "helm-release",
+        "installer-receipt",
+        "installer-smoke-resources"
+      ]
     }
   },
   "outOfScope": [
