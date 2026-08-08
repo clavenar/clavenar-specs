@@ -8204,8 +8204,8 @@ component publishers complete. Each package install begins in a clean
 digest-pinned container and must import, compile, or execute its minimal public
 surface. Each advertised archive is downloaded anonymously; binary and chart
 checksums must match before execution or extraction. The Helm check starts a
-new cluster, anonymously pulls chart `0.38.0`, installs its packaged bundled
-values plus `clavenar-images-1.247.0.yaml`, waits for Jobs and workloads, and
+new cluster, anonymously pulls chart `0.38.1`, installs its packaged bundled
+values plus `clavenar-images-1.247.1.yaml`, waits for Jobs and workloads, and
 proves every Clavenar image is an anonymously readable exact digest.
 
 The public bundled values deliberately exclude the optional Exec image because
@@ -8217,7 +8217,7 @@ The strict schema is
 
 ## Existing-cluster installer
 
-**Module status:** **release acceptance in progress for v1.247.0.**
+**Module status:** **release acceptance in progress for v1.247.1.**
 
 [`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
 defines the one-command installation boundary for an existing Kubernetes or
