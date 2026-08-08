@@ -37,7 +37,7 @@ class ClusterInstallContractTests(unittest.TestCase):
         self.assertEqual(
             [
                 "https://dev.clavenar.ai/installers/"
-                "clavenar-install-1.2.0.sh"
+                "clavenar-install-1.3.0.sh"
             ],
             FIXTURE["installer"]["mirrorUrls"],
         )
@@ -72,10 +72,18 @@ class ClusterInstallContractTests(unittest.TestCase):
             "evaluation", FIXTURE["consoleAccess"]["demoOptInProfile"]
         )
         self.assertEqual(
+            "local-admin-bootstrap",
+            FIXTURE["consoleAccess"]["missingTrustPolicy"],
+        )
+        self.assertFalse(
+            FIXTURE["consoleAccess"]["localBootstrapPrivateKeyProjection"]
+        )
+        self.assertEqual(
             {
                 "workloads-ready",
                 "exact-digest-images",
                 "operator-admin-ready",
+                "local-admin-credential",
                 "anonymous-demo-disabled",
                 "tools-list",
                 "ledger-chain-advanced",
@@ -109,6 +117,9 @@ class ClusterInstallContractTests(unittest.TestCase):
             lambda item: item["helmInstall"].update(waitForJobs=False),
             lambda item: item["consoleAccess"].update(
                 anonymousDemoDefault=True
+            ),
+            lambda item: item["consoleAccess"].update(
+                localBootstrapPrivateKeyProjection=True
             ),
             lambda item: item["lifecycle"].update(
                 collisionPolicy="overwrite"

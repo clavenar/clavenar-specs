@@ -3353,10 +3353,14 @@ functional proof, and writes a non-secret in-cluster receipt. It never creates
 or reconfigures a cluster, node, runtime, firewall, provisioner, or cloud
 resource.
 
-The default profile accepts only public operator trust (`ca.crt` plus
-`operators.json` with an active Admin), renders the full native-mTLS operator
-console, and rejects anonymous demo access. Signer and operator private keys
-remain on their owning systems. The curated demo console is an explicit
+The default profile renders the full native-mTLS operator console and rejects
+anonymous demo access. On a clean cluster it creates a local Admin authority,
+client certificate, and browser PKCS#12 bundle below
+`~/.clavenar/operator-bootstrap`, then projects only public `ca.crt` plus an
+`operators.json` registry containing that active Admin. Existing operator trust
+or explicit `--operator-ca` plus `--operator-registry` remains reusable. Signer
+and operator private keys stay on the invoking workstation and are never
+written to Kubernetes. The curated demo console is an explicit
 `--profile evaluation` opt-in, never the default customer installation.
 
 The same contract binds `curl -fsSL https://clavenar.ai/uninstall.sh | sh` to

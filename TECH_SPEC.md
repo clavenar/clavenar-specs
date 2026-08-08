@@ -8222,13 +8222,17 @@ selected context, performs read-only API, version, node, storage, permission,
 collision, render, and exact-image preflight checks, then installs the exact
 public chart and image values with Helm wait and Job completion enabled.
 
-The default `operator` profile is the customer-facing posture. It refuses to
-render until the operator supplies a canonical public CA plus an exact registry
-containing an active, unexpired Admin. The installer projects only those public
-bytes, enables native operator mTLS, rejects an anonymous demo listener, and
-keeps every signer and operator private key outside Kubernetes. The old
-demo-first bundled posture is available only through the explicit
-`evaluation` profile.
+The default `operator` profile is the customer-facing posture. When the target
+does not already hold public operator trust and no public files are supplied,
+the installer creates a local P-256 authority and active Admin identity below
+`~/.clavenar/operator-bootstrap`, including a password-protected PKCS#12 browser
+bundle. It persists those private files only after confirmation. The existing
+Secret path and explicit `--operator-ca` plus `--operator-registry` path remain
+available for externally managed PKI. In every path, the installer projects
+only canonical public CA and registry bytes, enables native operator mTLS,
+rejects an anonymous demo listener, and keeps every signer and operator private
+key outside Kubernetes. The old demo-first bundled posture is available only
+through the explicit `evaluation` profile.
 
 Both `operator` and `evaluation` execute one authenticated `tools/list` request
 and require the verified Ledger chain to advance. Custom values retain workload
@@ -8252,8 +8256,8 @@ or client private key. The uninstaller never deletes the namespace. Read-only
 before any mutation.
 
 Cluster creation, node or firewall configuration, container-runtime and storage
-provisioner installation, cloud infrastructure, and operator private-key
-custody are outside this contract.
+provisioner installation, cloud infrastructure, and operator-key rotation after
+the local bootstrap are outside this contract.
 The strict schema is
 [`contracts/cluster-install-v1.schema.json`](contracts/cluster-install-v1.schema.json).
 
