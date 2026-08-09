@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.cluster-install/v1",
   "schemaVersion": 1,
-  "release": "1.249.4",
+  "release": "1.249.5",
   "scope": "existing-kubernetes-cluster",
   "bootstrap": {
     "url": "https://clavenar.ai/install.sh",
@@ -9,16 +9,16 @@
     "command": "curl -fsSL https://clavenar.ai/install.sh | sh"
   },
   "installer": {
-    "version": "1.4.5",
-    "url": "https://clavenar.ai/installers/clavenar-install-1.4.5.sh",
-    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.4.5.sh.sha256",
+    "version": "1.4.6",
+    "url": "https://clavenar.ai/installers/clavenar-install-1.4.6.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.4.6.sh.sha256",
     "mirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.4.5.sh"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.4.6.sh"
     ],
     "checksumMirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.4.5.sh.sha256"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.4.6.sh.sha256"
     ],
-    "sha256": "sha256:d93b0d0e4c8fc7afbe7977917393dfb0acd8056a16278af2aeea6fd356a1e0cc",
+    "sha256": "sha256:271ce141feb8093954a6132da802519809610dd7b206c11eb52b4c4ec8b61e40",
     "shell": "bash"
   },
   "uninstallBootstrap": {
@@ -27,16 +27,16 @@
     "command": "curl -fsSL https://clavenar.ai/uninstall.sh | sh"
   },
   "uninstaller": {
-    "version": "1.1.4",
-    "url": "https://clavenar.ai/installers/clavenar-uninstall-1.1.4.sh",
-    "checksumUrl": "https://clavenar.ai/installers/clavenar-uninstall-1.1.4.sh.sha256",
+    "version": "1.1.5",
+    "url": "https://clavenar.ai/installers/clavenar-uninstall-1.1.5.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-uninstall-1.1.5.sh.sha256",
     "mirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.4.sh"
+      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.5.sh"
     ],
     "checksumMirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.4.sh.sha256"
+      "https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.5.sh.sha256"
     ],
-    "sha256": "sha256:6f9b297ea4ac2464334a0ec1248bfc756506794cf53d3143fd3cf2db54905546",
+    "sha256": "sha256:92f00c5abaa28519d5eee3a4cd2195c24bc5c1f104f747dd86896577a487e955",
     "shell": "bash"
   },
   "clusterAccess": {
@@ -59,11 +59,11 @@
   },
   "helmInstall": {
     "repository": "clavenar-charts",
-    "version": "0.38.4",
+    "version": "0.38.5",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.38.4",
-    "checksumAsset": "clavenar-0.38.4.tgz.sha256",
-    "valuesAsset": "clavenar-images-1.249.4.yaml",
+    "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.38.5",
+    "checksumAsset": "clavenar-0.38.5.tgz.sha256",
+    "valuesAsset": "clavenar-images-1.249.5.yaml",
     "valuesSha256": "sha256:78f260381247076be001fa5a1849c6ec3d3ef6e4e20ad7fff5041cbb422ef0fe",
     "packagedValues": "examples/values-bundled.yaml",
     "defaultNamespace": "clavenar",
