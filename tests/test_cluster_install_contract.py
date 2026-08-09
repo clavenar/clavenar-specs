@@ -37,14 +37,14 @@ class ClusterInstallContractTests(unittest.TestCase):
         self.assertEqual(
             [
                 "https://dev.clavenar.ai/installers/"
-                "clavenar-install-1.4.2.sh"
+                "clavenar-install-1.4.3.sh"
             ],
             FIXTURE["installer"]["mirrorUrls"],
         )
         self.assertEqual(
             [
                 "https://dev.clavenar.ai/installers/"
-                "clavenar-uninstall-1.1.1.sh"
+                "clavenar-uninstall-1.1.2.sh"
             ],
             FIXTURE["uninstaller"]["mirrorUrls"],
         )
