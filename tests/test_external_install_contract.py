@@ -40,7 +40,7 @@ def test_every_package_owner_and_install_is_unique_and_versioned():
 
 def test_fresh_helm_install_is_exact_and_anonymous():
     helm = FIXTURE["helmInstall"]
-    assert helm["version"] == "0.38.1"
+    assert helm["version"] == "0.38.2"
     assert helm["registry"] == "oci://ghcr.io/clavenar/charts/clavenar"
     assert helm["valuesAsset"] == "clavenar-images-1.249.1.yaml"
     assert helm["packagedValues"] == "examples/values-bundled.yaml"
