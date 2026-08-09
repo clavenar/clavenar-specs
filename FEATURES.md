@@ -89,7 +89,7 @@ The proxy returns 403, and the upstream stub log shows zero invocations for that
 
 **Concept.** Brain is the semantic-evaluation layer. It runs three signals against every request: an **intent classifier** (a pluggable inspector LLM — Claude Haiku 4.5 by default) that maps the JSON-RPC body to a category, a **persona-drift** detector (numeric cosine distance against a golden embedding, not an LLM opinion) that flags when an agent's behaviour diverges from its baseline, and an **indirect-injection scanner** (inspector LLM + heuristic) that catches prompt-injection payloads embedded in tool inputs. Every LLM-backed detector funnels through a single `LlmProvider` trait; each `(provider, model)` pair is read from `CLAVENAR_BRAIN_MODELS_FILE`, so a single Brain can mix Anthropic, OpenAI, Google, Bedrock, Vertex, and Ollama — Haiku ships as the default, never as a hardcoded dependency. The deliberate choice is that Brain's model is **separate from any agent's primary LLM** — the "Zero-Knowledge Bonus" — so a compromised agent model can't influence its own inspector. **Multi-turn context:** the proxy threads a bounded `prior_requests` window (recent method/tool tuples from its `HistoryStore`) into the inspect request, so the always-recomputed detectors reason over the request *sequence*. Two consumers use it: the injection scanner prepends a recent-sequence summary to its prompt, and a structural **sequence-escalation** signal — a second drift axis, distinct from the embedding persona-drift — fires (surfaced as `sequence_escalation_score`) when a *novel* high-blast-radius tool (write / exec / bulk-exfil shape) follows a benign-read window, the rapport-then-strike shape. Because it reads method/tool shape alone (never an embedding), it fires in mock mode too; Yellow-tier tools are deliberately excluded — they already route to HIL on every call regardless of sequence. The window field is additive (`#[serde(default)]`) and excluded from the verdict cache key, so the cached classifier stays history-independent.
 
-**Implementation.** `clavenar-brain:8081`. Wire surface: `POST /inspect`, body `BrainRequest { agent_id, correlation_id, jsonrpc fields... }`, response `{ authorized, intent_category, reason }`. Mock mode triggered by `CLAVENAR_BRAIN_MOCK_MODE=true` (or the legacy `ANTHROPIC_API_KEY=mock-key` sentinel) — used by e2e to avoid burning provider tokens; falls back to regex injection detection + bigram embedding similarity. Per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`) + Voyage embedding fallback prevent latency cascades.
+**Implementation.** `clavenar-brain:8081`. Wire surface: `POST /inspect`, body `BrainRequest { agent_id, correlation_id, jsonrpc fields... }`, response `{ authorized, intent_category, reason }`. Mock mode triggered by `CLAVENAR_BRAIN_MOCK_MODE=true` (or the legacy `ANTHROPIC_API_KEY=mock-key` sentinel) — used by e2e to avoid burning provider tokens; LLM-backed detectors use deterministic local fail-closed behavior and persona drift is explicitly unavailable. Per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`) and the separately bounded Voyage embedding path prevent latency cascades.
 
 **Versioned provider routing.** `clavenar.brain-provider-routing/v2` separates
 credential references, provider targets, named models, and workload
@@ -99,8 +99,14 @@ timeouts and fallback fan-out, and makes disabled versus transient-only
 fallback explicit. Brain normalizes v2 and historical unversioned files into
 one runtime type; partial or unknown version markers fail closed. The fixed
 `ANTHROPIC_API_KEY` compatibility alias remains available during the documented
-migration window. Enabled automatic fallback remains startup-rejected until
-the safe-routing phase implements and qualifies its execution semantics.
+migration window. An enabled `transient_only` route tries at most two declared
+alternates and only after replay-safe pre-dispatch/local availability, rate
+limit, HTTP 408/425, or exact HTTP 503. Ambiguous/post-dispatch transport,
+authentication, invalid request, unsupported capability, parse, malformed
+detector output, refusal, truncation, incomplete/empty output, and policy
+results remain fail-closed without provider fallback. Named completion targets
+have independent bulkheads and circuits; every attempted provider/model and
+bounded fallback decision is observable without prompt or credential data.
 
 **Verify.** In `clavenar-specs`, run `python3 -m unittest -v
 tests.test_brain_provider_routing_contract`; then run `python3

@@ -126,7 +126,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped through apps v0.8.3, NATS v0.8.4, the named website edge v1.99.0, and generated route capabilities v1.124.0 | v0.8.3, v0.8.4, v1.99.0, v1.124.0 | every backend plus the website edge — every internal application hop is mTLS-gated; Ledger, Policy Engine, HIL, and Identity additionally enforce one digest-bound exact-caller/method/template policy; any CA-valid client certificate may reach merged `/verify`, while the exact website SPIFFE identity alone enables forwarded-source trust; NATS transport is TLS+mTLS |
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
-| 12a | [Brain provider routing configuration](#brain-provider-routing-configuration) | v2 contract, loader, legacy migration path, and drift gate implemented; automatic fallback execution pending | current source | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e` |
+| 12a | [Brain provider routing configuration](#brain-provider-routing-configuration) | v2 contract, loader, legacy migration path, drift gate, and transient-only safe routing implemented | current source | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e` |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
 | 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
 
@@ -6277,11 +6277,11 @@ claim that it configured them.
 
 ## Brain provider routing configuration
 
-**Module status:** the v2 machine contract, Brain loader, packaged default, and
-cross-repository drift gate are implemented. Automatic fallback attempts remain
-disabled until the separately tested routing behavior lands; a configuration
-that requests `transient_only` fallback is contract-valid but Brain currently
-refuses it at startup with the affected workload names.
+**Module status:** the v2 machine contract, Brain loader, packaged default,
+cross-repository drift gate, and separately tested safe-routing loop are
+implemented. A configuration that requests `transient_only` fallback is
+validated at startup and may execute only the bounded replay-safe failure
+classes below.
 
 The canonical machine-readable configuration contract is
 [`contracts/brain-provider-routing-v2.schema.json`](contracts/brain-provider-routing-v2.schema.json),
@@ -6317,11 +6317,23 @@ fallback:
   models: [alternate-one, alternate-two]
 ```
 
-`transient_only` is the only future automatic policy admitted by v2. It never
-means fallback after authentication failure, invalid input, policy denial,
-malformed detector output, refusal, truncation, incomplete completion, or
-empty output. Those execution rules belong to the safe-routing phase and must
-be implemented before Brain accepts an enabled fallback at startup.
+`transient_only` is the only automatic policy admitted by v2. A route executes
+its primary followed by at most two declared alternates, in order. Automatic
+fallback is permitted only for a direct connection failure before any HTTP
+exchange, local pre-dispatch circuit/bulkhead unavailability, HTTP 429, HTTP
+408/425, or exact HTTP 503. A generic or post-dispatch transport failure, HTTP
+500/502/504, authentication or credential failure, invalid input, unsupported
+model/capability, policy denial, response parse failure, malformed detector
+output, refusal, truncation, incomplete completion, or empty output stops the
+route immediately and follows the detector's existing fail-closed degradation
+path. A fallback target must pass the same declared capability gate before
+dispatch.
+
+Each named completion provider target owns an independent concurrency
+bulkhead and availability circuit; embeddings use a separate bulkhead. Every
+attempt is accounted against its actual configured provider/model. Bounded
+fallback diagnostics expose only logical workload, decision, and normalized
+reason, never prompts, credentials, response bodies, or unusable output.
 
 The image's `config/models.default.yaml` is a v2 document with every fallback
 disabled. Its primary provider alias remains `anthropic`, preserving existing
@@ -7095,7 +7107,7 @@ defense-in-depth behind it.
 | Threat | Defense |
 |---|---|
 | An agent floods `handle_mcp` to exhaust upstream quota. | `clavenar-policy-engine`'s velocity tracker (`InProcessTracker` or `NatsKvTracker`) breaks the circuit per-agent on configurable thresholds. |
-| Brain inspector-LLM call latency cascades. | Brain has a per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`) + Voyage embedding fallback. Policy verdict resolves even if Brain is slow (`authorized=false` defaults to `intent_score=0.5`, which fails the policy gate — fail-closed). |
+| Brain inspector-LLM call latency cascades. | Brain has a per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`), independently bounded completion targets, and a separate Voyage embedding bulkhead. Policy verdict resolves even if Brain is slow (`authorized=false` defaults to `intent_score=0.5`, which fails the policy gate — fail-closed). |
 | Slowloris on the mTLS handshake. | axum's hyper backend has connection-level read timeouts. |
 
 #### Elevation of privilege

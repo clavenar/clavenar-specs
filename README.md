@@ -292,7 +292,11 @@ strict [`clavenar.brain-provider-routing/v2`](contracts/brain-provider-routing-v
 contract: credential references, provider targets with timeouts, named models,
 and explicit per-workload fallback declarations. Credential values are not
 legal fields. Historical unversioned files remain accepted during the
-documented migration window. The brain routes per payload: ordinary
+documented migration window. An explicitly enabled route may try at most two
+ordered alternates, but only for replay-safe transient availability; ambiguous
+transport, authentication, invalid requests, malformed or incomplete output,
+and policy results remain fail-closed without provider fallback. The brain
+routes per payload: ordinary
 `call_tool` and read methods → a fast tier
 (**Claude Haiku 4.5** by default, jailbreak-resistant); `call_tool` whose params
 carry destructive verbs (`delete` / `drop` / `plan`) → a heavier tier (**Claude
