@@ -25,7 +25,7 @@ class RepositoryDocumentationContractTests(unittest.TestCase):
                 "repositories": 30,
                 "publicRepositories": 29,
                 "restrictedRepositories": 1,
-                "markdownFiles": 279,
+                "markdownFiles": 280,
                 "workspaceInputs": 2,
                 "checks": 9,
                 "claimStates": 4,
@@ -42,7 +42,7 @@ class RepositoryDocumentationContractTests(unittest.TestCase):
         self.assertEqual(len(names), 30)
         self.assertEqual(
             sum(item["markdownFiles"] for item in repositories),
-            279,
+            280,
         )
         self.assertEqual(
             [item["name"] for item in repositories if item["visibility"] == "restricted"],
