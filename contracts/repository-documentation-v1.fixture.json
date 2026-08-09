@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "release": "1.237.0",
   "repositories": [
-    {"name": "clavenar-brain", "visibility": "public", "markdownFiles": 23},
+    {"name": "clavenar-brain", "visibility": "public", "markdownFiles": 24},
     {"name": "clavenar-chaos-catalog", "visibility": "public", "markdownFiles": 4},
     {"name": "clavenar-chaos-monkey", "visibility": "public", "markdownFiles": 6},
     {"name": "clavenar-charts", "visibility": "public", "markdownFiles": 7},
@@ -215,7 +215,7 @@
     "repositories": 30,
     "publicRepositories": 29,
     "restrictedRepositories": 1,
-    "markdownFiles": 278,
+    "markdownFiles": 279,
     "workspaceInputs": 2,
     "checks": 9,
     "claimStates": 4,
