@@ -91,6 +91,21 @@ The proxy returns 403, and the upstream stub log shows zero invocations for that
 
 **Implementation.** `clavenar-brain:8081`. Wire surface: `POST /inspect`, body `BrainRequest { agent_id, correlation_id, jsonrpc fields... }`, response `{ authorized, intent_category, reason }`. Mock mode triggered by `CLAVENAR_BRAIN_MOCK_MODE=true` (or the legacy `ANTHROPIC_API_KEY=mock-key` sentinel) — used by e2e to avoid burning provider tokens; falls back to regex injection detection + bigram embedding similarity. Per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`) + Voyage embedding fallback prevent latency cascades.
 
+**Versioned provider routing.** `clavenar.brain-provider-routing/v2` separates
+credential references, provider targets, named models, and workload
+assignments. The schema forbids inline credential values, requires exact
+reference closure and provider/credential compatibility, bounds target
+timeouts and fallback fan-out, and makes disabled versus transient-only
+fallback explicit. Brain normalizes v2 and historical unversioned files into
+one runtime type; partial or unknown version markers fail closed. The fixed
+`ANTHROPIC_API_KEY` compatibility alias remains available during the documented
+migration window. Enabled automatic fallback remains startup-rejected until
+the safe-routing phase implements and qualifies its execution semantics.
+
+**Verify.** In `clavenar-specs`, run `python3 -m unittest -v
+tests.test_brain_provider_routing_contract`; then run `python3
+scripts/check_brain_provider_routing.py` in `clavenar-e2e`.
+
 The same mTLS application port carries three auxiliary reads/operations with
 exact caller identities: policy-engine alone may `POST /explain-pattern`, and
 console alone may `POST /narrate-decision` or `GET /model-snapshot`. The

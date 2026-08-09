@@ -53,6 +53,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Fleet posture score](#fleet-posture-score) — single 0–100 landing-page health heuristic composed client-side from ledger rows + the assurance lane; no wire / chain change
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
 - [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (shipped — `clavenar-workload-identity`, hot-reload via ArcSwap + peer-SPIFFE SAN check)
+- [Brain provider routing configuration](#brain-provider-routing-configuration) — versioned credential references, provider targets, named models, workload routes, and bounded fallback declarations
 - [Agent-facing error envelope](#agent-facing-error-envelope) — the shared JSON 403/429/503 body the data plane returns to callers
 - [Kill-chain breaker](#kill-chain-breaker) — cross-replica multi-step attack detection over a shared NATS-KV behavioral-history bucket
 - [Threat model](#threat-model) — STRIDE-organized, layer-by-layer
@@ -125,6 +126,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 11 | [Internal service mTLS](#internal-service-mtls) | shipped through apps v0.8.3, NATS v0.8.4, the named website edge v1.99.0, and generated route capabilities v1.124.0 | v0.8.3, v0.8.4, v1.99.0, v1.124.0 | every backend plus the website edge — every internal application hop is mTLS-gated; Ledger, Policy Engine, HIL, and Identity additionally enforce one digest-bound exact-caller/method/template policy; any CA-valid client certificate may reach merged `/verify`, while the exact website SPIFFE identity alone enables forwarded-source trust; NATS transport is TLS+mTLS |
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
+| 12a | [Brain provider routing configuration](#brain-provider-routing-configuration) | v2 contract, loader, legacy migration path, and drift gate implemented; automatic fallback execution pending | current source | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e` |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
 | 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
 
@@ -6270,6 +6272,93 @@ selectors equal the fixture client set. An external broker is an operator
 boundary: the chart requires an explicit assertion that equivalent identity,
 authorization, persistence, backup, and restore controls exist and makes no
 claim that it configured them.
+
+---
+
+## Brain provider routing configuration
+
+**Module status:** the v2 machine contract, Brain loader, packaged default, and
+cross-repository drift gate are implemented. Automatic fallback attempts remain
+disabled until the separately tested routing behavior lands; a configuration
+that requests `transient_only` fallback is contract-valid but Brain currently
+refuses it at startup with the affected workload names.
+
+The canonical machine-readable configuration contract is
+[`contracts/brain-provider-routing-v2.schema.json`](contracts/brain-provider-routing-v2.schema.json),
+with a six-adapter shape example (not a model-qualification claim) in
+[`contracts/brain-provider-routing-v2.fixture.json`](contracts/brain-provider-routing-v2.fixture.json).
+It governs the YAML/JSON document selected by
+`CLAVENAR_BRAIN_MODELS_FILE`.
+
+### v2 document
+
+The top-level markers are exactly
+`contract: clavenar.brain-provider-routing/v2` and `schemaVersion: 2`.
+Unknown fields fail validation. The four routing layers are disjoint:
+
+| Layer | Purpose | Security boundary |
+|---|---|---|
+| `credentials` | Named references to an environment variable, AWS default chain, Google Application Default Credentials, or no credential | Values are never legal configuration fields. Environment references are restricted to `CLAVENAR_BRAIN_*`. |
+| `providers` | Named adapter targets with `kind`, credential reference, exact timeout, and provider-specific location/base URL | Every reference must resolve and its credential source must match the adapter kind. Timeouts are 100–120,000 ms. |
+| `models` | Named `(provider, model)` targets with optional output cap and required Brain capabilities | Provider references must resolve; v2 requires exactly `prompted_json_text`, the currently qualified normalized request surface. |
+| `workloads` | Required verdict workloads plus optional auxiliary workloads, each naming a primary model and explicit fallback object | Every model reference must resolve. A primary cannot repeat as fallback; targets are unique and capped at two. |
+
+Every workload carries one of these explicit fallback forms:
+
+```yaml
+fallback: { policy: disabled, models: [] }
+```
+
+or:
+
+```yaml
+fallback:
+  policy: transient_only
+  models: [alternate-one, alternate-two]
+```
+
+`transient_only` is the only future automatic policy admitted by v2. It never
+means fallback after authentication failure, invalid input, policy denial,
+malformed detector output, refusal, truncation, incomplete completion, or
+empty output. Those execution rules belong to the safe-routing phase and must
+be implemented before Brain accepts an enabled fallback at startup.
+
+The image's `config/models.default.yaml` is a v2 document with every fallback
+disabled. Its primary provider alias remains `anthropic`, preserving existing
+`provider:model` evidence strings. Named-model aliases are configuration-only;
+verdict evidence continues to commit the resolved primary provider alias and
+native model identifier, not the model alias or inactive fallback list.
+
+### Migration compatibility
+
+A document with neither version marker follows the historical unversioned
+`providers` + `detectors` parser. A document with one marker missing, an unknown
+contract, or another schema version fails closed; it never falls through to
+the legacy parser. Historical files retain their provider/model references,
+per-detector `max_tokens`, optional auxiliary slots, global provider timeout,
+and credential behavior.
+
+For Anthropic, both legacy files and the canonical v2
+`CLAVENAR_BRAIN_ANTHROPIC_API_KEY` reference retain the fixed
+`ANTHROPIC_API_KEY` fallback. The provider-scoped variable takes precedence,
+and the old variable remains the mock-mode sentinel. No other unscoped
+environment variable is readable through v2; new references remain restricted
+to the `CLAVENAR_BRAIN_*` namespace.
+
+The minimum migration window is the first release line that promotes v2 as the
+default plus the next two product minor lines. Removing the unversioned parser
+or the fixed Anthropic alias requires a separately reviewed contract/release
+note and cannot occur inside that window.
+
+Verification:
+
+```bash
+cd repos/clavenar-specs
+python3 -m unittest -v tests.test_brain_provider_routing_contract
+
+cd ../clavenar-e2e
+python3 scripts/check_brain_provider_routing.py
+```
 
 ---
 

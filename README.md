@@ -286,9 +286,14 @@ Analysing meta-reasoning is the strategic edge: Clavenar can detect an agent
 ### Model routing
 
 The inspector LLM is pluggable behind a single provider trait — each detector's
-`(provider, model)` pair is read from `CLAVENAR_BRAIN_MODELS_FILE`, so a single
-Brain can mix Anthropic, OpenAI, Google, Bedrock, Vertex, and Ollama models. The
-brain routes per payload: ordinary `call_tool` and read methods → a fast tier
+route is read from `CLAVENAR_BRAIN_MODELS_FILE`, so a single Brain can mix
+Anthropic, OpenAI, Google, Bedrock, Vertex, and Ollama models. New files use the
+strict [`clavenar.brain-provider-routing/v2`](contracts/brain-provider-routing-v2.schema.json)
+contract: credential references, provider targets with timeouts, named models,
+and explicit per-workload fallback declarations. Credential values are not
+legal fields. Historical unversioned files remain accepted during the
+documented migration window. The brain routes per payload: ordinary
+`call_tool` and read methods → a fast tier
 (**Claude Haiku 4.5** by default, jailbreak-resistant); `call_tool` whose params
 carry destructive verbs (`delete` / `drop` / `plan`) → a heavier tier (**Claude
 Opus 4.x** by default). Haiku/Opus are the shipped defaults, not a hardcoded
