@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.external-install/v1",
   "schemaVersion": 1,
-  "release": "1.249.3",
+  "release": "1.249.4",
   "network": "public",
   "isolation": "clean-container-and-fresh-kind",
   "packageInstalls": [
@@ -9,9 +9,9 @@
       "id": "typescript-sdk",
       "repository": "clavenar-typescript-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.1",
+      "version": "1.6.2",
       "access": "anonymous",
-      "install": "pnpm add @clavenar/agent-sdk@1.6.1",
+      "install": "pnpm add @clavenar/agent-sdk@1.6.2",
       "registry": "https://registry.npmjs.org",
       "verification": ["install", "import", "hello-world"]
     },
@@ -29,12 +29,12 @@
       "id": "java-sdk",
       "repository": "clavenar-java-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.3",
+      "version": "1.5.4",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "com.clavenar:agent-sdk:1.5.3",
+      "install": "com.clavenar:agent-sdk:1.5.4",
       "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
       "releaseAssets": [
-        "agent-sdk-1.5.3.jar",
+        "agent-sdk-1.5.4.jar",
         "pom.xml",
         "bom.json",
         "bom.xml"
@@ -45,13 +45,13 @@
       "id": "dotnet-sdk",
       "repository": "clavenar-dotnet-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.3",
+      "version": "1.6.4",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.3",
+      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.4",
       "registry": "https://nuget.pkg.github.com/clavenar/index.json",
       "releaseAssets": [
-        "Clavenar.AgentSdk.1.6.3.nupkg",
-        "Clavenar.AgentSdk.1.6.3.snupkg"
+        "Clavenar.AgentSdk.1.6.4.nupkg",
+        "Clavenar.AgentSdk.1.6.4.snupkg"
       ],
       "verification": ["authenticated-install", "compile", "anonymous-download"]
     },
@@ -59,15 +59,15 @@
       "id": "go-sdk",
       "repository": "clavenar-go-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "access": "anonymous",
-      "install": "go get github.com/clavenar/clavenar-go-sdk@v1.5.0",
+      "install": "go get github.com/clavenar/clavenar-go-sdk@v1.5.1",
       "registry": "https://proxy.golang.org",
       "moduleTags": [
-        "v1.5.0",
-        "adapters/anthropic/v1.5.0",
-        "adapters/openai/v1.5.0",
-        "examples/v1.5.0"
+        "v1.5.1",
+        "adapters/anthropic/v1.5.1",
+        "adapters/openai/v1.5.1",
+        "examples/v1.5.1"
       ],
       "verification": ["four-module-install", "compile", "hello-world"]
     },
@@ -112,13 +112,13 @@
       "id": "cli",
       "repository": "clavenar-ctl",
       "sourcePath": "README.md",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "access": "anonymous",
-      "install": "curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.2/clavenarctl-0.3.2-x86_64-linux-musl.tar.gz",
+      "install": "curl -fsSLO https://github.com/clavenar/clavenar-ctl/releases/download/v0.3.3/clavenarctl-0.3.3-x86_64-linux-musl.tar.gz",
       "registry": "https://github.com/clavenar/clavenar-ctl/releases",
       "releaseAssets": [
-        "clavenarctl-0.3.2-x86_64-linux-musl.tar.gz",
-        "clavenarctl-0.3.2-x86_64-linux-musl.tar.gz.sha256"
+        "clavenarctl-0.3.3-x86_64-linux-musl.tar.gz",
+        "clavenarctl-0.3.3-x86_64-linux-musl.tar.gz.sha256"
       ],
       "verification": ["anonymous-download", "checksum", "help"]
     }
@@ -126,10 +126,10 @@
   "helmInstall": {
     "repository": "clavenar-charts",
     "sourcePath": "README.md",
-    "version": "0.38.3",
+    "version": "0.38.4",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
-    "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.38.3",
-    "valuesAsset": "clavenar-images-1.249.3.yaml",
+    "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.38.4",
+    "valuesAsset": "clavenar-images-1.249.4.yaml",
     "packagedValues": "examples/values-bundled.yaml",
     "cluster": "fresh-kind",
     "imagePolicy": "anonymous-exact-digest-only",

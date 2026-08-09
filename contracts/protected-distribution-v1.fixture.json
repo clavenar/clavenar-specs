@@ -6,8 +6,8 @@
       "manifest": "package.json",
       "registry": "https://registry.npmjs.org",
       "repository": "clavenar-typescript-sdk",
-      "tag": "v1.6.1",
-      "version": "1.6.1"
+      "tag": "v1.6.2",
+      "version": "1.6.2"
     },
     {
       "access": "anonymous",
@@ -24,8 +24,8 @@
       "manifest": "pom.xml",
       "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
       "repository": "clavenar-java-sdk",
-      "tag": "v1.5.3",
-      "version": "1.5.3"
+      "tag": "v1.5.4",
+      "version": "1.5.4"
     },
     {
       "access": "authenticated-registry-and-anonymous-release",
@@ -33,8 +33,8 @@
       "manifest": "src/Clavenar.AgentSdk/Clavenar.AgentSdk.csproj",
       "registry": "https://nuget.pkg.github.com/clavenar/index.json",
       "repository": "clavenar-dotnet-sdk",
-      "tag": "v1.6.3",
-      "version": "1.6.3"
+      "tag": "v1.6.4",
+      "version": "1.6.4"
     },
     {
       "access": "anonymous",
@@ -42,8 +42,8 @@
       "manifest": "VERSION",
       "registry": "https://proxy.golang.org",
       "repository": "clavenar-go-sdk",
-      "tag": "v1.5.0",
-      "version": "1.5.0"
+      "tag": "v1.5.1",
+      "version": "1.5.1"
     },
     {
       "access": "anonymous",
@@ -69,8 +69,8 @@
       "manifest": "Cargo.toml",
       "registry": "https://github.com/clavenar/clavenar-ctl/releases",
       "repository": "clavenar-ctl",
-      "tag": "v0.3.2",
-      "version": "0.3.2"
+      "tag": "v0.3.3",
+      "version": "0.3.3"
     },
     {
       "access": "anonymous",
@@ -78,16 +78,16 @@
       "manifest": "charts/clavenar/Chart.yaml",
       "registry": "oci://ghcr.io/clavenar/charts/clavenar",
       "repository": "clavenar-charts",
-      "tag": "v0.38.3",
-      "version": "0.38.3"
+      "tag": "v0.38.4",
+      "version": "0.38.4"
     }
   ],
   "contract": "clavenar.protected-distribution/v1",
   "goModuleTags": [
-    "v1.5.0",
-    "adapters/anthropic/v1.5.0",
-    "adapters/openai/v1.5.0",
-    "examples/v1.5.0"
+    "v1.5.1",
+    "adapters/anthropic/v1.5.1",
+    "adapters/openai/v1.5.1",
+    "examples/v1.5.1"
   ],
   "imagePublication": {
     "access": "anonymous",
@@ -112,5 +112,5 @@
   "publicationEvent": "clavenar-protected-publication",
   "requiredActor": "vanteguardlabs",
   "schemaVersion": 1,
-  "stackRelease": "1.249.3"
+  "stackRelease": "1.249.4"
 }
