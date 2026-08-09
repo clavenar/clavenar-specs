@@ -60,8 +60,8 @@
       "manifest": "Cargo.toml",
       "registry": "https://ghcr.io/clavenar/clavenar-lite",
       "repository": "clavenar-lite",
-      "tag": "v0.12.2",
-      "version": "0.12.2"
+      "tag": "v0.13.0",
+      "version": "0.13.0"
     },
     {
       "access": "anonymous",
@@ -112,5 +112,5 @@
   "publicationEvent": "clavenar-protected-publication",
   "requiredActor": "vanteguardlabs",
   "schemaVersion": 1,
-  "stackRelease": "1.247.1"
+  "stackRelease": "1.249.1"
 }

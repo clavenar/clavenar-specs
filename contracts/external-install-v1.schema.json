@@ -53,7 +53,7 @@
       "properties": {
         "packageInstalls": {"const": 8},
         "goModuleTags": {"const": 4},
-        "releaseAssets": {"const": 11},
+        "releaseAssets": {"const": 17},
         "helmInstalls": {"const": 1},
         "protectedImageRepositories": {"const": 12},
         "protectedImageSubjects": {"const": 13}

@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.external-install/v1",
   "schemaVersion": 1,
-  "release": "1.247.1",
+  "release": "1.249.1",
   "network": "public",
   "isolation": "clean-container-and-fresh-kind",
   "packageInstalls": [
@@ -86,15 +86,27 @@
       "id": "lite",
       "repository": "clavenar-lite",
       "sourcePath": "README.md",
-      "version": "0.12.2",
+      "version": "0.13.0",
       "access": "anonymous",
-      "install": "curl -fsSLO https://github.com/clavenar/clavenar-lite/releases/download/v0.12.2/clavenar-lite-0.12.2-x86_64-linux-musl.tar.gz",
+      "install": "curl -fsSL https://github.com/clavenar/clavenar-lite/releases/download/v0.13.0/install.sh | sudo sh",
       "registry": "https://ghcr.io/clavenar/clavenar-lite",
       "releaseAssets": [
-        "clavenar-lite-0.12.2-x86_64-linux-musl.tar.gz",
-        "clavenar-lite-0.12.2-x86_64-linux-musl.tar.gz.sha256"
+        "clavenar-lite-0.13.0-x86_64-linux-musl.tar.gz",
+        "clavenar-lite-0.13.0-x86_64-linux-musl.tar.gz.sha256",
+        "clavenar-lite-0.13.0-aarch64-linux-musl.tar.gz",
+        "clavenar-lite-0.13.0-aarch64-linux-musl.tar.gz.sha256",
+        "install.sh",
+        "install.sh.sha256",
+        "uninstall.sh",
+        "uninstall.sh.sha256"
       ],
-      "verification": ["anonymous-download", "checksum", "help", "anonymous-oci"]
+      "verification": [
+        "anonymous-download",
+        "checksum",
+        "native-lifecycle",
+        "dual-architecture-assets",
+        "anonymous-oci"
+      ]
     },
     {
       "id": "cli",
@@ -117,7 +129,7 @@
     "version": "0.38.1",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
     "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.38.1",
-    "valuesAsset": "clavenar-images-1.247.1.yaml",
+    "valuesAsset": "clavenar-images-1.249.1.yaml",
     "packagedValues": "examples/values-bundled.yaml",
     "cluster": "fresh-kind",
     "imagePolicy": "anonymous-exact-digest-only",
@@ -139,7 +151,7 @@
   "totals": {
     "packageInstalls": 8,
     "goModuleTags": 4,
-    "releaseAssets": 11,
+    "releaseAssets": 17,
     "helmInstalls": 1,
     "protectedImageRepositories": 12,
     "protectedImageSubjects": 13

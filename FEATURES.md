@@ -3331,8 +3331,8 @@ DOCKER="sudo -n docker" \
 binds the advertised npm, PyPI, Maven, NuGet, four-module Go, Rust Git/release,
 Lite, CLI, OCI image, and OCI Helm surfaces to exact immutable versions. The
 protected distribution runs all eight package/binary paths from clean
-containers, downloads eleven anonymous release assets, verifies checksums, and
-installs chart 0.38.1 with the exact 1.247.1 image values in a new Kind
+containers, downloads seventeen anonymous release assets, verifies checksums,
+and installs chart 0.38.1 with the exact 1.249.1 image values in a new Kind
 cluster. All workloads must become ready and every Clavenar image must remain
 an anonymously readable digest.
 

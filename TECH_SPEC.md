@@ -8194,7 +8194,7 @@ The strict schema is
 
 [`clavenar.external-install/v1`](contracts/external-install-v1.fixture.json)
 is the complete advertised public-install authority. It binds eight SDK,
-binary, and client-package installs; four nested Go module tags; eleven
+binary, and client-package installs; four nested Go module tags; seventeen
 anonymous release assets; the authenticated Maven and NuGet registries; the
 anonymous npm, PyPI, Go, GitHub Release, OCI image, and OCI Helm surfaces; and
 one clean Kind cluster install of the exact chart and protected image values.
@@ -8205,7 +8205,7 @@ digest-pinned container and must import, compile, or execute its minimal public
 surface. Each advertised archive is downloaded anonymously; binary and chart
 checksums must match before execution or extraction. The Helm check starts a
 new cluster, anonymously pulls chart `0.38.1`, installs its packaged bundled
-values plus `clavenar-images-1.247.1.yaml`, waits for Jobs and workloads, and
+values plus `clavenar-images-1.249.1.yaml`, waits for Jobs and workloads, and
 proves every Clavenar image is an anonymously readable exact digest.
 
 The public bundled values deliberately exclude the optional Exec image because
