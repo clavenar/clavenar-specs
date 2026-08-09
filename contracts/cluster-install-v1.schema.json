@@ -44,10 +44,10 @@
         "url": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
         "mirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.3.sh"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.4.sh"]
         },
         "checksumMirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.3.sh.sha256"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.4.sh.sha256"]
         },
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
@@ -72,10 +72,10 @@
         "url": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-uninstall-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
         "mirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.2.sh"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.3.sh"]
         },
         "checksumMirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.2.sh.sha256"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.3.sh.sha256"]
         },
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
