@@ -3367,7 +3367,7 @@ binds the advertised npm, PyPI, Maven, NuGet, four-module Go, Rust Git/release,
 Lite, CLI, OCI image, and OCI Helm surfaces to exact immutable versions. The
 protected distribution runs all eight package/binary paths from clean
 containers, downloads seventeen anonymous release assets, verifies checksums,
-and installs chart 0.38.5 with the exact 1.249.5 image values in a new Kind
+and installs chart 0.39.0 with the exact 1.250.0 image values in a new Kind
 cluster. All workloads must become ready and every Clavenar image must remain
 an anonymously readable digest.
 
