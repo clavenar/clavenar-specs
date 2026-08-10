@@ -8328,6 +8328,19 @@ selected context, performs read-only API, version, node, storage, permission,
 collision, render, and exact-image preflight checks, then installs the exact
 public chart and image values with Helm wait and Job completion enabled.
 
+Generation and embedding configuration is explicit and independent. The
+credential-free default is deterministic mock mode. `--brain-provider`
+selects Anthropic, OpenAI, Google AI, or Ollama plus provider-specific fast and
+deep model identifiers; `--embedding-provider` independently selects disabled,
+Voyage, OpenAI, or Ollama embeddings. Hosted selections reference an existing
+Kubernetes Secret and preflight checks only the Secret key needed by the
+selected providers. API-key bytes are never accepted as Helm values, written
+to the installer receipt, or printed by the installer. Missing credentials
+fail before mutation with the exact namespace, Secret, and key to provision.
+Advanced Bedrock, Vertex AI, and multi-target fallback routing remains
+available through the versioned Helm routing configuration rather than the
+opinionated installer flags.
+
 The default `operator` profile is the customer-facing posture. It enables the
 full WebAuthn Console, rejects anonymous demo access, and prints a localhost
 port-forward command plus a one-time setup URL. The bootstrap token is carried

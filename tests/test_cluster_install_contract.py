@@ -37,7 +37,7 @@ class ClusterInstallContractTests(unittest.TestCase):
         self.assertEqual(
             [
                 "https://dev.clavenar.ai/installers/"
-                "clavenar-install-1.4.6.sh"
+                "clavenar-install-1.5.0.sh"
             ],
             FIXTURE["installer"]["mirrorUrls"],
         )
@@ -61,6 +61,14 @@ class ClusterInstallContractTests(unittest.TestCase):
             ],
             FIXTURE["lifecycle"]["uninstall"]["retainedResources"],
         )
+        model = FIXTURE["modelConfiguration"]
+        self.assertEqual("mock", model["defaultGenerationProvider"])
+        self.assertEqual("disabled", model["defaultEmbeddingProvider"])
+        self.assertEqual(
+            "selected-providers-only", model["secretPreflight"]
+        )
+        self.assertFalse(model["inlineCredentialsAllowed"])
+        self.assertFalse(model["receiptContainsSecretMaterial"])
 
     def test_operator_is_default_and_demo_requires_explicit_evaluation(self) -> None:
         profiles = {item["name"]: item for item in FIXTURE["profiles"]}
@@ -140,6 +148,12 @@ class ClusterInstallContractTests(unittest.TestCase):
                 destructiveConfirmationFlag=""
             ),
             lambda item: item["clusterAccess"]["preflight"].pop(),
+            lambda item: item["modelConfiguration"].update(
+                inlineCredentialsAllowed=True
+            ),
+            lambda item: item["modelConfiguration"].update(
+                secretPreflight="all-known-providers"
+            ),
             lambda item: item["profiles"].__setitem__(
                 1, copy.deepcopy(item["profiles"][0])
             ),

@@ -3374,6 +3374,14 @@ functional proof, and writes a non-secret in-cluster receipt. It never creates
 or reconfigures a cluster, node, runtime, firewall, provisioner, or cloud
 resource.
 
+Model setup uses non-secret provider/model values plus Kubernetes Secret
+references. The credential-free default is mock mode. Operators can select
+Anthropic, OpenAI, Google AI, or Ollama generation independently from disabled,
+Voyage, OpenAI, or Ollama embeddings. The installer performs a read-only check
+of only the Secret keys required by those selections and reports the exact
+missing reference before mutation; it never accepts an inline API key or
+writes credential material to its receipt.
+
 The default profile renders the full WebAuthn operator console and rejects
 anonymous demo access. It prints a localhost port-forward command and a setup
 URL whose fragment carries the deployment's one-use bootstrap token. The

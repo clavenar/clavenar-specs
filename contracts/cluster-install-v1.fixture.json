@@ -9,16 +9,16 @@
     "command": "curl -fsSL https://clavenar.ai/install.sh | sh"
   },
   "installer": {
-    "version": "1.4.6",
-    "url": "https://clavenar.ai/installers/clavenar-install-1.4.6.sh",
-    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.4.6.sh.sha256",
+    "version": "1.5.0",
+    "url": "https://clavenar.ai/installers/clavenar-install-1.5.0.sh",
+    "checksumUrl": "https://clavenar.ai/installers/clavenar-install-1.5.0.sh.sha256",
     "mirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.4.6.sh"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.5.0.sh"
     ],
     "checksumMirrorUrls": [
-      "https://dev.clavenar.ai/installers/clavenar-install-1.4.6.sh.sha256"
+      "https://dev.clavenar.ai/installers/clavenar-install-1.5.0.sh.sha256"
     ],
-    "sha256": "sha256:271ce141feb8093954a6132da802519809610dd7b206c11eb52b4c4ec8b61e40",
+    "sha256": "sha256:7c1d6f4ea61a3c86b253b515454fc34e4d215e6221861564be65b850e111099b",
     "shell": "bash"
   },
   "uninstallBootstrap": {
@@ -53,6 +53,7 @@
       "permissions-complete",
       "release-collision-checked",
       "console-authentication-selected",
+      "selected-model-credentials",
       "render-valid",
       "exact-digest-images"
     ]
@@ -97,6 +98,30 @@
     "browserCredentialFormat": "PKCS#12",
     "requiredOperatorRole": "admin",
     "mutationOriginsDefault": ["http://localhost:8085"]
+  },
+  "modelConfiguration": {
+    "defaultGenerationProvider": "mock",
+    "generationProviderFlag": "--brain-provider",
+    "generationProviders": ["mock", "anthropic", "openai", "google", "ollama"],
+    "fastModelFlag": "--brain-fast-model",
+    "deepModelFlag": "--brain-deep-model",
+    "generationBaseUrlFlag": "--brain-base-url",
+    "providerSecretNameFlag": "--brain-provider-secret",
+    "providerSecretKeyFlag": "--brain-provider-secret-key",
+    "hostedGenerationProviders": ["anthropic", "openai", "google"],
+    "defaultEmbeddingProvider": "disabled",
+    "embeddingProviderFlag": "--embedding-provider",
+    "embeddingProviders": ["disabled", "voyage", "openai", "ollama"],
+    "embeddingModelFlag": "--embedding-model",
+    "embeddingDimensionsFlag": "--embedding-dimensions",
+    "embeddingBaseUrlFlag": "--embedding-base-url",
+    "embeddingSecretNameFlag": "--embedding-secret",
+    "embeddingSecretKeyFlag": "--embedding-secret-key",
+    "hostedEmbeddingProviders": ["voyage", "openai"],
+    "credentialPolicy": "existing-kubernetes-secret",
+    "secretPreflight": "selected-providers-only",
+    "inlineCredentialsAllowed": false,
+    "receiptContainsSecretMaterial": false
   },
   "profiles": [
     {

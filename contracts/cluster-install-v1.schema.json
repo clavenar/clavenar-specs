@@ -16,6 +16,7 @@
     "clusterAccess",
     "helmInstall",
     "consoleAccess",
+    "modelConfiguration",
     "profiles",
     "lifecycle",
     "outOfScope"
@@ -44,10 +45,10 @@
         "url": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh$"},
         "checksumUrl": {"type": "string", "pattern": "^https://clavenar\\.ai/installers/clavenar-install-[0-9]+\\.[0-9]+\\.[0-9]+\\.sh\\.sha256$"},
         "mirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.6.sh"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.5.0.sh"]
         },
         "checksumMirrorUrls": {
-          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.4.6.sh.sha256"]
+          "const": ["https://dev.clavenar.ai/installers/clavenar-install-1.5.0.sh.sha256"]
         },
         "sha256": {"type": "string", "pattern": "^sha256:(?!0{64})[0-9a-f]{64}$"},
         "shell": {"const": "bash"}
@@ -108,6 +109,7 @@
             "permissions-complete",
             "release-collision-checked",
             "console-authentication-selected",
+            "selected-model-credentials",
             "render-valid",
             "exact-digest-images"
           ]
@@ -202,6 +204,64 @@
         "browserCredentialFormat": {"const": "PKCS#12"},
         "requiredOperatorRole": {"const": "admin"},
         "mutationOriginsDefault": {"const": ["http://localhost:8085"]}
+      }
+    },
+    "modelConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "defaultGenerationProvider",
+        "generationProviderFlag",
+        "generationProviders",
+        "fastModelFlag",
+        "deepModelFlag",
+        "generationBaseUrlFlag",
+        "providerSecretNameFlag",
+        "providerSecretKeyFlag",
+        "hostedGenerationProviders",
+        "defaultEmbeddingProvider",
+        "embeddingProviderFlag",
+        "embeddingProviders",
+        "embeddingModelFlag",
+        "embeddingDimensionsFlag",
+        "embeddingBaseUrlFlag",
+        "embeddingSecretNameFlag",
+        "embeddingSecretKeyFlag",
+        "hostedEmbeddingProviders",
+        "credentialPolicy",
+        "secretPreflight",
+        "inlineCredentialsAllowed",
+        "receiptContainsSecretMaterial"
+      ],
+      "properties": {
+        "defaultGenerationProvider": {"const": "mock"},
+        "generationProviderFlag": {"const": "--brain-provider"},
+        "generationProviders": {
+          "const": ["mock", "anthropic", "openai", "google", "ollama"]
+        },
+        "fastModelFlag": {"const": "--brain-fast-model"},
+        "deepModelFlag": {"const": "--brain-deep-model"},
+        "generationBaseUrlFlag": {"const": "--brain-base-url"},
+        "providerSecretNameFlag": {"const": "--brain-provider-secret"},
+        "providerSecretKeyFlag": {"const": "--brain-provider-secret-key"},
+        "hostedGenerationProviders": {
+          "const": ["anthropic", "openai", "google"]
+        },
+        "defaultEmbeddingProvider": {"const": "disabled"},
+        "embeddingProviderFlag": {"const": "--embedding-provider"},
+        "embeddingProviders": {
+          "const": ["disabled", "voyage", "openai", "ollama"]
+        },
+        "embeddingModelFlag": {"const": "--embedding-model"},
+        "embeddingDimensionsFlag": {"const": "--embedding-dimensions"},
+        "embeddingBaseUrlFlag": {"const": "--embedding-base-url"},
+        "embeddingSecretNameFlag": {"const": "--embedding-secret"},
+        "embeddingSecretKeyFlag": {"const": "--embedding-secret-key"},
+        "hostedEmbeddingProviders": {"const": ["voyage", "openai"]},
+        "credentialPolicy": {"const": "existing-kubernetes-secret"},
+        "secretPreflight": {"const": "selected-providers-only"},
+        "inlineCredentialsAllowed": {"const": false},
+        "receiptContainsSecretMaterial": {"const": false}
       }
     },
     "profiles": {
