@@ -16,7 +16,7 @@ FIXTURE = json.loads(
 
 def test_inventory_is_strict_complete_and_public():
     jsonschema.Draft202012Validator(SCHEMA).validate(FIXTURE)
-    assert FIXTURE["release"] == "1.250.0"
+    assert FIXTURE["release"] == "1.250.1"
     assert FIXTURE["network"] == "public"
     assert FIXTURE["isolation"] == "clean-container-and-fresh-kind"
     assert FIXTURE["totals"] == {
@@ -42,7 +42,7 @@ def test_fresh_helm_install_is_exact_and_anonymous():
     helm = FIXTURE["helmInstall"]
     assert helm["version"] == "0.39.0"
     assert helm["registry"] == "oci://ghcr.io/clavenar/charts/clavenar"
-    assert helm["valuesAsset"] == "clavenar-images-1.250.0.yaml"
+    assert helm["valuesAsset"] == "clavenar-images-1.250.1.yaml"
     assert helm["packagedValues"] == "examples/values-bundled.yaml"
     assert helm["cluster"] == "fresh-kind"
     assert helm["imagePolicy"] == "anonymous-exact-digest-only"
