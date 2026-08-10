@@ -54,6 +54,7 @@ Consolidated technical record for Clavenar. Each major section below was previou
 - [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
 - [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (shipped — `clavenar-workload-identity`, hot-reload via ArcSwap + peer-SPIFFE SAN check)
 - [Brain provider routing configuration](#brain-provider-routing-configuration) — versioned credential references, provider targets, named models, workload routes, and bounded fallback declarations
+- [Brain model qualification](#brain-model-qualification) — executable conformance scenarios, pinned security corpus, release thresholds, receipts, and an evidence-derived support matrix
 - [Agent-facing error envelope](#agent-facing-error-envelope) — the shared JSON 403/429/503 body the data plane returns to callers
 - [Kill-chain breaker](#kill-chain-breaker) — cross-replica multi-step attack detection over a shared NATS-KV behavioral-history bucket
 - [Threat model](#threat-model) — STRIDE-organized, layer-by-layer
@@ -127,6 +128,7 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
 | 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
 | 12a | [Brain provider routing configuration](#brain-provider-routing-configuration) | v2 contract, loader, legacy migration path, drift gate, and transient-only safe routing implemented | current source | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e` |
+| 12b | [Brain model qualification](#brain-model-qualification) | v1 policy, receipt, harness, and honest experimental matrix implemented; GA gate remains unmet until live receipts cover two hosted and one local provider | current source | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e`, `clavenar-website` |
 | 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
 | 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
 
@@ -6370,6 +6372,68 @@ python3 -m unittest -v tests.test_brain_provider_routing_contract
 
 cd ../clavenar-e2e
 python3 scripts/check_brain_provider_routing.py
+```
+
+## Brain model qualification
+
+Adapter compatibility is not a support claim. A provider/model becomes
+qualified only through a current, live
+`clavenar.brain-model-qualification-receipt/v1` produced against the exact
+policy, model routing, price table, and security corpus identified by digest.
+The canonical policy and public support matrix are
+[`contracts/brain-model-qualification-v1.fixture.json`](contracts/brain-model-qualification-v1.fixture.json),
+validated by
+[`contracts/brain-model-qualification-v1.schema.json`](contracts/brain-model-qualification-v1.schema.json).
+The receipt shape is separately fail-closed in
+[`contracts/brain-model-qualification-receipt-v1.schema.json`](contracts/brain-model-qualification-receipt-v1.schema.json).
+
+`policySha256` is the canonical compact-JSON digest of the immutable
+qualification controls: contract/schema markers, corpus, conformance suite,
+thresholds, minimum GA gate, and static target identities. It deliberately
+excludes `statusAsOf`, receipt-derived gate counters, and each target's
+status/receipt/date/reason. Publishing a passing receipt can therefore promote
+the same target without invalidating that receipt, while any change to a
+security, quality, cost, latency, or target control changes the digest.
+
+The provider-neutral conformance suite covers a complete response,
+pre-dispatch connection unavailability, authentication rejection, malformed
+output, refusal, truncation, an ambiguous post-dispatch timeout, and rate
+limiting. It asserts the same normalized failure class and fallback decision
+independently of adapter-native wire shapes. Adapter fixtures remain
+responsible for proving that all six native protocols normalize into those
+shared outcomes.
+
+Every qualification target then runs the pinned 92-case Brain security corpus
+at least three times in live mode. Each run must have complete Brain response
+schema, model-evidence, and completion-cost telemetry coverage; zero degraded
+or execution-failure responses; 100% deterministic accuracy; at least 95%
+overall accuracy; at least 98% deny precision and 95% deny recall; at most one
+false positive; every category-specific floor; and the declared latency and
+completion-cost ceilings. Completion cost excludes embeddings, which use an
+independent provider and price surface. A hosted target must have an explicit
+price-table entry; an Ollama target uses an explicit zero API-fee entry rather
+than an unknown-model zero.
+
+The matrix status is evidence-derived. `qualified` requires a non-expired live
+receipt with no violation. `experimental` means the adapter can be configured
+but no current receipt proves the security and operating thresholds. The GA
+gate requires distinct passing receipts from at least two hosted provider kinds
+and one local provider kind. As of 2026-08-10 no live receipt is published, all
+listed targets remain experimental, and the GA gate is false. A hermetic mock
+receipt may exercise the tooling but can never make a support claim.
+The protected cross-repository gate resolves every qualified row's canonical
+receipt, validates its schema, target, corpus, policy digest, unique run hashes,
+conformance results, thresholds, and age, and derives the hosted/local counts;
+a path-only or stale matrix claim fails closed.
+
+Verification:
+
+```bash
+cd repos/clavenar-specs
+python3 -m unittest -v tests.test_brain_model_qualification_contract
+
+cd ../clavenar-e2e
+python3 scripts/check_brain_model_qualification.py
 ```
 
 ---

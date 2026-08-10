@@ -1,0 +1,56 @@
+{
+  "contract": "clavenar.brain-model-qualification-receipt/v1",
+  "schemaVersion": 1,
+  "qualificationId": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "capturedAt": "2026-08-10",
+  "environment": "hermetic_mock",
+  "target": {
+    "targetId": "fixture-mock",
+    "providerKind": "mock",
+    "providerAlias": "mock",
+    "model": "fixture"
+  },
+  "corpus": {
+    "id": "clavenar-brain-security-regression",
+    "version": "0.2",
+    "sha256": "sha256:0972a62b972f9e88754ba21c7097a02cee6dd48ec3fac4c08ab148e1be2a5e2b",
+    "totalCases": 92
+  },
+  "policySha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "runCount": 1,
+  "reportSha256": [
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  ],
+  "conformance": [
+    {"id": "available_complete", "passed": true},
+    {"id": "connection_unavailable", "passed": true},
+    {"id": "authentication_rejected", "passed": true},
+    {"id": "malformed_output", "passed": true},
+    {"id": "refusal", "passed": true},
+    {"id": "truncation", "passed": true},
+    {"id": "post_dispatch_timeout", "passed": true},
+    {"id": "rate_limited", "passed": true}
+  ],
+  "measurements": {
+    "minimumSchemaAdherence": 1.0,
+    "minimumModelEvidenceCoverage": 1.0,
+    "minimumCostTelemetryCoverage": 1.0,
+    "minimumDeterministicAccuracy": 1.0,
+    "minimumOverallAccuracy": 0.8695652173913043,
+    "minimumDenyPrecision": 1.0,
+    "minimumDenyRecall": 0.8253968253968254,
+    "maximumFalsePositives": 0,
+    "maximumDegradedResponses": 0,
+    "maximumExecutionFailures": 0,
+    "maximumP95LatencyMs": 1.0,
+    "maximumP99LatencyMs": 1.0,
+    "maximumMeanCompletionCostMicros": 0,
+    "maximumP95CompletionCostMicros": 0,
+    "maximumRunCompletionCostMicros": 0
+  },
+  "violations": [
+    "hermetic mock runs are never eligible for a support claim"
+  ],
+  "result": "fail",
+  "eligibleForSupport": false
+}

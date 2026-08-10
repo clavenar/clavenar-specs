@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.ai/contracts/brain-model-qualification-v1.schema.json",
+  "title": "Clavenar Brain model qualification policy and support matrix v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "statusAsOf",
+    "corpus",
+    "conformance",
+    "thresholds",
+    "supportGate",
+    "models"
+  ],
+  "properties": {
+    "contract": {"const": "clavenar.brain-model-qualification/v1"},
+    "schemaVersion": {"const": 1},
+    "statusAsOf": {"type": "string", "format": "date"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "conformance": {"$ref": "#/$defs/conformance"},
+    "thresholds": {"$ref": "#/$defs/thresholds"},
+    "supportGate": {"$ref": "#/$defs/supportGate"},
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/model"}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "categoryMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benign_authorized",
+        "benign_meta",
+        "compromised_package",
+        "credit_card_drift",
+        "malicious_code_write",
+        "meta_reasoning",
+        "multi_turn_window_drift",
+        "persona_drift_stretch",
+        "privileged_action",
+        "prompt_injection_direct"
+      ],
+      "properties": {
+        "benign_authorized": {},
+        "benign_meta": {},
+        "compromised_package": {},
+        "credit_card_drift": {},
+        "malicious_code_write": {},
+        "meta_reasoning": {},
+        "multi_turn_window_drift": {},
+        "persona_drift_stretch": {},
+        "privileged_action": {},
+        "prompt_injection_direct": {}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "sha256",
+        "totalCases",
+        "deterministicCases",
+        "categoryCounts"
+      ],
+      "properties": {
+        "id": {"const": "clavenar-brain-security-regression"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "totalCases": {"type": "integer", "minimum": 1},
+        "deterministicCases": {"type": "integer", "minimum": 1},
+        "categoryCounts": {
+          "allOf": [
+            {"$ref": "#/$defs/categoryMap"},
+            {"additionalProperties": {"type": "integer", "minimum": 1}}
+          ]
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "expectedFailureClass", "fallbackEligible"],
+      "properties": {
+        "id": {
+          "enum": [
+            "available_complete",
+            "connection_unavailable",
+            "authentication_rejected",
+            "malformed_output",
+            "refusal",
+            "truncation",
+            "post_dispatch_timeout",
+            "rate_limited"
+          ]
+        },
+        "expectedFailureClass": {
+          "type": ["string", "null"],
+          "enum": [
+            null,
+            "connect",
+            "authentication",
+            "parse",
+            "refused",
+            "truncated",
+            "ambiguous_transport",
+            "rate_limited"
+          ]
+        },
+        "fallbackEligible": {"type": "boolean"}
+      }
+    },
+    "conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite", "requiredScenarios"],
+      "properties": {
+        "suite": {"const": "clavenar.brain-provider-conformance/v1"},
+        "requiredScenarios": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/scenario"}
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimumIndependentRuns",
+        "schemaAdherenceMin",
+        "modelEvidenceCoverageMin",
+        "costTelemetryCoverageMin",
+        "deterministicAccuracyMin",
+        "overallAccuracyMin",
+        "denyPrecisionMin",
+        "denyRecallMin",
+        "maxFalsePositives",
+        "maxDegradedResponses",
+        "maxExecutionFailures",
+        "maxP95LatencyMs",
+        "maxP99LatencyMs",
+        "maxMeanCompletionCostMicros",
+        "maxP95CompletionCostMicros",
+        "maxRunCompletionCostMicros",
+        "categoryAccuracyMin",
+        "receiptMaxAgeDays"
+      ],
+      "properties": {
+        "minimumIndependentRuns": {"type": "integer", "minimum": 3},
+        "schemaAdherenceMin": {"$ref": "#/$defs/ratio"},
+        "modelEvidenceCoverageMin": {"$ref": "#/$defs/ratio"},
+        "costTelemetryCoverageMin": {"$ref": "#/$defs/ratio"},
+        "deterministicAccuracyMin": {"$ref": "#/$defs/ratio"},
+        "overallAccuracyMin": {"$ref": "#/$defs/ratio"},
+        "denyPrecisionMin": {"$ref": "#/$defs/ratio"},
+        "denyRecallMin": {"$ref": "#/$defs/ratio"},
+        "maxFalsePositives": {"type": "integer", "minimum": 0},
+        "maxDegradedResponses": {"const": 0},
+        "maxExecutionFailures": {"const": 0},
+        "maxP95LatencyMs": {"type": "number", "exclusiveMinimum": 0},
+        "maxP99LatencyMs": {"type": "number", "exclusiveMinimum": 0},
+        "maxMeanCompletionCostMicros": {"type": "integer", "minimum": 0},
+        "maxP95CompletionCostMicros": {"type": "integer", "minimum": 0},
+        "maxRunCompletionCostMicros": {"type": "integer", "minimum": 0},
+        "categoryAccuracyMin": {
+          "allOf": [
+            {"$ref": "#/$defs/categoryMap"},
+            {"additionalProperties": {"$ref": "#/$defs/ratio"}}
+          ]
+        },
+        "receiptMaxAgeDays": {"type": "integer", "minimum": 1, "maximum": 90}
+      }
+    },
+    "supportGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimumQualifiedHostedProviders",
+        "minimumQualifiedLocalProviders",
+        "qualifiedHostedProviders",
+        "qualifiedLocalProviders",
+        "eligible"
+      ],
+      "properties": {
+        "minimumQualifiedHostedProviders": {"type": "integer", "minimum": 2},
+        "minimumQualifiedLocalProviders": {"type": "integer", "minimum": 1},
+        "qualifiedHostedProviders": {"type": "integer", "minimum": 0},
+        "qualifiedLocalProviders": {"type": "integer", "minimum": 0},
+        "eligible": {"type": "boolean"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetId",
+        "providerKind",
+        "providerClass",
+        "providerAlias",
+        "model",
+        "status",
+        "qualificationReceipt",
+        "lastQualifiedAt",
+        "statusReason"
+      ],
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "maxLength": 96
+        },
+        "providerKind": {
+          "enum": ["anthropic", "openai", "google", "bedrock", "vertex", "ollama"]
+        },
+        "providerClass": {"enum": ["hosted", "local"]},
+        "providerAlias": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "maxLength": 64
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\s]+$"
+        },
+        "status": {"enum": ["qualified", "experimental", "blocked", "retired"]},
+        "qualificationReceipt": {
+          "type": ["string", "null"],
+          "pattern": "^receipts/brain-model-qualification/[a-z0-9._-]+\\.json$"
+        },
+        "lastQualifiedAt": {"type": ["string", "null"], "format": "date"},
+        "statusReason": {"type": "string", "minLength": 1, "maxLength": 240}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "qualified"}}},
+          "then": {
+            "properties": {
+              "qualificationReceipt": {"type": "string"},
+              "lastQualifiedAt": {"type": "string", "format": "date"}
+            }
+          },
+          "else": {
+            "properties": {
+              "qualificationReceipt": {"type": "null"},
+              "lastQualifiedAt": {"type": "null"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

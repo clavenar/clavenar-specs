@@ -112,6 +112,20 @@ bounded fallback decision is observable without prompt or credential data.
 tests.test_brain_provider_routing_contract`; then run `python3
 scripts/check_brain_provider_routing.py` in `clavenar-e2e`.
 
+**Model qualification.** Configurable does not mean supported. The canonical
+`clavenar.brain-model-qualification/v1` policy pins the 92-case regression
+corpus by digest, exercises eight provider-neutral completion/failure
+scenarios, and requires three live runs to meet schema, model-evidence, cost,
+quality, category, latency, and degradation gates. Passing runs emit a
+`clavenar.brain-model-qualification-receipt/v1`; matrix entries cannot become
+`qualified` without a current receipt. The current matrix honestly lists all
+six adapter candidates as `experimental`, with zero hosted and zero local
+qualified providers, so the two-hosted-plus-one-local GA gate remains false.
+
+**Verify.** Run `python3 -m unittest -v
+tests.test_brain_model_qualification_contract` in `clavenar-specs`, then
+`python3 scripts/check_brain_model_qualification.py` in `clavenar-e2e`.
+
 The same mTLS application port carries three auxiliary reads/operations with
 exact caller identities: policy-engine alone may `POST /explain-pattern`, and
 console alone may `POST /narrate-decision` or `GET /model-snapshot`. The

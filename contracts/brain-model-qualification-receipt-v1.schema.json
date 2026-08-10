@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clavenar.ai/contracts/brain-model-qualification-receipt-v1.schema.json",
+  "title": "Clavenar Brain model qualification receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "schemaVersion",
+    "qualificationId",
+    "capturedAt",
+    "environment",
+    "target",
+    "corpus",
+    "policySha256",
+    "runCount",
+    "reportSha256",
+    "conformance",
+    "measurements",
+    "violations",
+    "result",
+    "eligibleForSupport"
+  ],
+  "properties": {
+    "contract": {"const": "clavenar.brain-model-qualification-receipt/v1"},
+    "schemaVersion": {"const": 1},
+    "qualificationId": {"$ref": "#/$defs/sha256"},
+    "capturedAt": {"type": "string", "format": "date"},
+    "environment": {"enum": ["live", "hermetic_mock"]},
+    "target": {"$ref": "#/$defs/target"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "policySha256": {"$ref": "#/$defs/sha256"},
+    "runCount": {"type": "integer", "minimum": 1},
+    "reportSha256": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sha256"}
+    },
+    "conformance": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/conformanceResult"}
+    },
+    "measurements": {"$ref": "#/$defs/measurements"},
+    "violations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 240}
+    },
+    "result": {"enum": ["pass", "fail"]},
+    "eligibleForSupport": {"type": "boolean"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"eligibleForSupport": {"const": true}}},
+      "then": {
+        "properties": {
+          "environment": {"const": "live"},
+          "result": {"const": "pass"},
+          "violations": {"maxItems": 0},
+          "runCount": {"minimum": 3}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetId", "providerKind", "providerAlias", "model"],
+      "properties": {
+        "targetId": {"type": "string", "minLength": 1, "maxLength": 96},
+        "providerKind": {"type": "string", "minLength": 1, "maxLength": 32},
+        "providerAlias": {"type": "string", "minLength": 1, "maxLength": 64},
+        "model": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256", "totalCases"],
+      "properties": {
+        "id": {"const": "clavenar-brain-security-regression"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 32},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "totalCases": {"type": "integer", "minimum": 1}
+      }
+    },
+    "conformanceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "passed"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "passed": {"type": "boolean"}
+      }
+    },
+    "measurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimumSchemaAdherence",
+        "minimumModelEvidenceCoverage",
+        "minimumCostTelemetryCoverage",
+        "minimumDeterministicAccuracy",
+        "minimumOverallAccuracy",
+        "minimumDenyPrecision",
+        "minimumDenyRecall",
+        "maximumFalsePositives",
+        "maximumDegradedResponses",
+        "maximumExecutionFailures",
+        "maximumP95LatencyMs",
+        "maximumP99LatencyMs",
+        "maximumMeanCompletionCostMicros",
+        "maximumP95CompletionCostMicros",
+        "maximumRunCompletionCostMicros"
+      ],
+      "properties": {
+        "minimumSchemaAdherence": {"$ref": "#/$defs/ratio"},
+        "minimumModelEvidenceCoverage": {"$ref": "#/$defs/ratio"},
+        "minimumCostTelemetryCoverage": {"$ref": "#/$defs/ratio"},
+        "minimumDeterministicAccuracy": {"$ref": "#/$defs/ratio"},
+        "minimumOverallAccuracy": {"$ref": "#/$defs/ratio"},
+        "minimumDenyPrecision": {"$ref": "#/$defs/ratio"},
+        "minimumDenyRecall": {"$ref": "#/$defs/ratio"},
+        "maximumFalsePositives": {"type": "integer", "minimum": 0},
+        "maximumDegradedResponses": {"type": "integer", "minimum": 0},
+        "maximumExecutionFailures": {"type": "integer", "minimum": 0},
+        "maximumP95LatencyMs": {"type": "number", "minimum": 0},
+        "maximumP99LatencyMs": {"type": "number", "minimum": 0},
+        "maximumMeanCompletionCostMicros": {"type": "number", "minimum": 0},
+        "maximumP95CompletionCostMicros": {"type": "integer", "minimum": 0},
+        "maximumRunCompletionCostMicros": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}
