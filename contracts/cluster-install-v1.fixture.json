@@ -18,7 +18,7 @@
     "checksumMirrorUrls": [
       "https://dev.clavenar.ai/installers/clavenar-install-1.5.3.sh.sha256"
     ],
-    "sha256": "sha256:2789f8e2193eb734f79cf2459ebdf13f9480232e1bcedfdd68dc038a98866359",
+    "sha256": "sha256:6e20e95d330cdd8f57ed1f0291a05e3492159ef1012a69e185f0328bd11e2382",
     "shell": "bash"
   },
   "uninstallBootstrap": {
@@ -65,7 +65,7 @@
     "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v0.39.1",
     "checksumAsset": "clavenar-0.39.1.tgz.sha256",
     "valuesAsset": "clavenar-images-1.250.2.yaml",
-    "valuesSha256": "sha256:1764c319c01b69780ebaee00a3a3b64ae19b041a8894042080cc46b40ce5a5cb",
+    "valuesSha256": "sha256:79011a9bea5e5117d60af7e3302af9ebf5652b4f113c4ad28c523da87bf7dca5",
     "packagedValues": "examples/values-bundled.yaml",
     "defaultNamespace": "clavenar",
     "defaultRelease": "clavenar",
