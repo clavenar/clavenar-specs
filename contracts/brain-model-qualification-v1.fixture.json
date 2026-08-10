@@ -128,11 +128,11 @@
       "statusReason": "Adapter-compatible candidate; no current live qualification receipt is published."
     },
     {
-      "targetId": "google-gemini-2-0-flash",
+      "targetId": "google-gemini-3-5-flash-lite",
       "providerKind": "google",
       "providerClass": "hosted",
       "providerAlias": "google",
-      "model": "gemini-2.0-flash",
+      "model": "gemini-3.5-flash-lite",
       "status": "experimental",
       "qualificationReceipt": null,
       "lastQualifiedAt": null,

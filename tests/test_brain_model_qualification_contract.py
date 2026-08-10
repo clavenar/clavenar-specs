@@ -155,7 +155,7 @@ class BrainModelQualificationContractTests(unittest.TestCase):
     def test_policy_digest_excludes_only_receipt_derived_matrix_state(self) -> None:
         digest = qualification_policy_sha256(POLICY)
         self.assertEqual(
-            "sha256:cd8f3218b415ad2d901a188089d1b8ca2b0efe3a80ca7bcc874798317e5f1c47",
+            "sha256:039117e5c683bb544ed64fe784c6c24317ffd8025bbee6b3d6c5c2b233cf633c",
             digest,
         )
         candidate = copy.deepcopy(POLICY)
