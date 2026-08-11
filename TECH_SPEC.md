@@ -4,61 +4,78 @@ Consolidated technical record for Clavenar. Each major section below was previou
 
 `SECURITY.md` (RFC 9116-style disclosure policy) remains a separate file at the repo root by convention — it is referenced by `security.txt` and surfaced in the GitHub Security tab.
 
+Current contract language and linked machine-readable schemas and fixtures are
+normative. Blocks explicitly labeled historical, roadmap, future, deferred, or
+out of scope are retained as design provenance; they do not override a module's
+current status or contract.
+
 ## Contents
 
-- [Identity service](#identity-service) — SVID issuance, OIDC delegation, action signing, attestation, federation
-- [Agent onboarding (WAO)](#agent-onboarding-wao) — registration, capability envelope, lifecycle, chain v3
-- [Tenancy scope](#tenancy-scope) — demo + operator tenant isolation: what's live, what's capability-only, what's still deployment-wide
-- [Console config page](#console-config-page) — `/config` diagnostic surface
-- [Operator authentication](#operator-authentication) — console + HIL human auth, RBAC, cross-channel identity
-- [Production federated identity](#production-federated-identity) — strict OIDC and signed SAML tenant, role, MFA, rotation, and logout rules
-- [CLI device authorization](#cli-device-authorization) — bounded RFC 8628 operator login and disjoint operator/agent authority
-- [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundle
-- [Continuous compliance evidence](#continuous-compliance-evidence) — auto-derived EU AI Act Article 14/15 + SOC 2 / ISO 27001 evidence register
-- [Compliance derivation boundaries](#compliance-derivation-boundaries) — configured authorities, bounded key freshness, explicit degraded modes, and status limitations
-- [Retention claim boundaries](#retention-claim-boundaries) — configured duration, exact technical controls, recovery-point scope, and fixed-duration promotion evidence
-- [Route and schema release inventory](#route-and-schema-release-inventory) — generated route authority, source-bound types, and executable examples
-- [Executable documentation release inventory](#executable-documentation-release-inventory) — two-phase clean execution of install, quickstart, website, and Helm paths
-- [External install verification](#external-install-verification) — public registries, release assets, immutable images, and a fresh-cluster Helm install
-- [Pilot privacy and intake](#pilot-privacy-and-intake) — minimized enum-only qualification, bounded deletion, and reviewed processor inventory
-- [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) — exact agreement templates and local dual-recipient authenticated encryption
-- [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) — exact playbook paths, private-input aliases, owned next actions, and external-evidence-only gate advancement
-- [Commercial offer and private validation](#commercial-offer-and-private-validation) — one exact price/term/billing schedule with private financial and live-conversation evidence
-- [Public operational information boundary](#public-operational-information-boundary) — sanitized product architecture, private deployment operations, and reviewed exceptions
-- [Demo experience](#demo-experience) — public-facing demo design
-- [Console policy management](#console-policy-management) — read + CRUD + activate/deactivate of `*.rego` and `*.json` policies from the console
-- [Policy catalog](#policy-catalog) — browseable on-disk library of starter policies with frontmatter-driven metadata, one-click install, and a CLI scaffolder
-- [Policy exchange](#policy-exchange) — signed, versioned Rego packs gated by a mandatory local attack-catalog backtest before install
-- [Forensic event envelope](#forensic-event-envelope) — stable producer/event/stage identity, payload commitments, and explicit causal predecessors
-- [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) — immutable complete row evidence plus verified head and length
-- [Distributed control state](#distributed-control-state) — mandatory/advisory classification, durable authority, and replicated enforcement projections
-- [State recovery inventory](#state-recovery-inventory) — complete state ownership, recovery objectives, lifecycle, protection, and restore dependencies
+- [Module status by release](#0-module-status-by-release) — landed versions and evidence-scoped status for each tracked module
 - [Tenant-qualified identity keys](#tenant-qualified-identity-keys) — canonical typed tenant, agent, and composite storage identity
 - [Tenant-qualified state migration](#tenant-qualified-state-migration) — exact state inventory, cutover, and collision rules
 - [State namespace isolation](#state-namespace-isolation) — explicit demo/operator ownership and bounded cleanup
 - [Tenant route authorization](#tenant-route-authorization) — tenant-bearing production identity and object/collection route confinement
 - [Tenant lifecycle sagas](#tenant-lifecycle-sagas) — durable idempotent provisioning and authority-first offboarding
-- [HIL legal hold and erasure](#hil-legal-hold-and-erasure) — deadline purge, tenant erasure, legal holds, and minimized deletion evidence
-- [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) — complete trigger/update/resolve fan-out, readiness, and durable operator routing
-- [Active-agent subscription meter](#active-agent-subscription-meter) — tenant-safe rolling qualification, late-event finalization, immutable adjustments, and invoice reconstruction
-- [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) — immutable feature-enabled image, verified TLS, exact route scope, and explicit non-HA boundary
-- [Supported failure model](#supported-failure-model) — tested recovery boundaries, component failure behavior, explicit unmet objectives, and exact HA non-claims
-- [Residual product dispositions](#residual-product-dispositions) — exact shipped/deferred status and evidence boundary for every remaining G-20 claim
-- [Scheduled backup sets](#scheduled-backup-sets) — application-consistent capture, authenticated encryption, offsite object identity, and backup telemetry
-- [Isolated complete restore](#isolated-complete-restore) — authenticated offsite-chain reconstruction, production isolation, state validation, and recovery objectives
-- [Passive failover and failback](#passive-failover-and-failback) — encrypted recovery points, monotonic writer fencing, timed promotion, and reverse continuity
-- [Forensic-tier deep review](#forensic-tier-deep-review) — async heavy-LLM auditor running against a sampled slice of the audit stream
-- [Deception layer](#deception-layer) — identity-owned decoy registry; proxy splices bait into `tools/list` and hard-denies any call naming a decoy (zero-false-positive tripwire → containment)
-- [Continuous assurance](#continuous-assurance) — scheduled breach-and-attack daemon firing the catalog at the live proxy; per-category coverage scorecard on chain
-- [Fleet posture score](#fleet-posture-score) — single 0–100 landing-page health heuristic composed client-side from ledger rows + the assurance lane; no wire / chain change
-- [Internal service mTLS](#internal-service-mtls) — agreed substrate for proxy↔backend hops (shipped v0.8.3 — application hops; v0.8.4 — NATS transport)
-- [Workload SVID refresh](#workload-svid-refresh) — short-lived per-service SVIDs minted on top of the bootstrap cert (shipped — `clavenar-workload-identity`, hot-reload via ArcSwap + peer-SPIFFE SAN check)
-- [Brain provider routing configuration](#brain-provider-routing-configuration) — versioned credential references, provider targets, named models, workload routes, and bounded fallback declarations
-- [Brain model qualification](#brain-model-qualification) — executable conformance scenarios, pinned security corpus, release thresholds, receipts, and an evidence-derived support matrix
-- [Agent-facing error envelope](#agent-facing-error-envelope) — the shared JSON 403/429/503 body the data plane returns to callers
-- [Kill-chain breaker](#kill-chain-breaker) — cross-replica multi-step attack detection over a shared NATS-KV behavioral-history bucket
-- [Threat model](#threat-model) — STRIDE-organized, layer-by-layer
-- [Runbooks](#runbooks) — operational; maintained privately
+- [Identity service](#identity-service) — SVID issuance, delegation, action signing, attestation, and federation
+- [Agent onboarding (WAO)](#agent-onboarding-wao) — registration, capability envelope, lifecycle, and chain v3
+- [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) — complete immutable row evidence plus verified head and length
+- [Tenancy scope](#tenancy-scope) — demo and operator isolation, capability-only boundaries, and deployment-wide state
+- [Console config page](#console-config-page) — the `/config` diagnostic surface
+- [Operator authentication](#operator-authentication) — Console and HIL human authentication, RBAC, and cross-channel identity
+- [Regulatory export](#regulatory-export) — EU AI Act Article 11/12 audit bundles
+- [Continuous compliance evidence](#continuous-compliance-evidence) — derived regulatory and control evidence
+- [Public operational information boundary](#public-operational-information-boundary) — public architecture, private operations, and reviewed exceptions
+- [Demo experience](#demo-experience) — the isolated public demonstration posture
+- [Console policy management](#console-policy-management) — policy read, mutation, activation, and audit surfaces
+- [Policy catalog](#policy-catalog) — metadata-driven starter policies, preview, install, and scaffolding
+- [Policy exchange](#policy-exchange) — signed Rego packs with mandatory local backtesting
+- [Forensic event envelope](#forensic-event-envelope) — stable event identity, payload commitments, and causal predecessors
+- [Distributed control state](#distributed-control-state) — durable authority and replicated enforcement projections
+- [State recovery inventory](#state-recovery-inventory) — state ownership, objectives, protection, and restore dependencies
+- [Scheduled backup sets](#scheduled-backup-sets) — consistent encrypted capture and backup telemetry
+- [Isolated complete restore](#isolated-complete-restore) — isolated authenticated reconstruction and validation
+- [Passive failover and failback](#passive-failover-and-failback) — fenced promotion and reverse continuity
+- [Dependency-aware readiness](#dependency-aware-readiness) — dependency classes, degraded modes, and readiness gates
+- [Transactional deployment promotion](#transactional-deployment-promotion) — immutable staged rollout and atomic promotion
+- [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) — trigger, update, resolve, readiness, and durable routing
+- [Active-agent subscription meter](#active-agent-subscription-meter) — tenant-safe qualification, correction, and invoice reconstruction
+- [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) — verified staged PostgreSQL without an HA claim
+- [Supported failure model](#supported-failure-model) — tested recovery boundaries and explicit unmet objectives
+- [Residual product dispositions](#residual-product-dispositions) — shipped, deferred, and evidence-limited residual claims
+- [Production alert delivery lifecycle](#production-alert-delivery-lifecycle) — durable external alert delivery and health
+- [Stateful upgrade safety](#stateful-upgrade-safety) — backup, migration, rollback, and writer-exclusion contract
+- [Forensic-tier deep review](#forensic-tier-deep-review) — asynchronous sampled heavy-model review
+- [Deception layer](#deception-layer) — decoy identity, advertisement, detection, and containment
+- [Continuous assurance](#continuous-assurance) — scheduled live attack-catalog execution and evidence
+- [Fleet posture score](#fleet-posture-score) — client-composed operational health heuristic
+- [Internal service mTLS](#internal-service-mtls) — authenticated internal application and NATS transport
+- [Workload SVID refresh](#workload-svid-refresh) — short-lived caller-held workload identity and hot reload
+- [Least-privilege NATS authorization](#10-least-privilege-nats-authorization-clavenarnats-authorizationv1) — exact broker identities, subjects, persistence, and network membership
+- [Brain provider routing configuration](#brain-provider-routing-configuration) — provider-neutral targets, models, credentials, and bounded fallback
+- [Brain model qualification](#brain-model-qualification) — executable qualification policy, receipts, and support matrix
+- [Egress Inspector](#egress-inspector) — response inspection, redaction, and fail-closed handling
+- [Agent-facing error envelope](#agent-facing-error-envelope) — shared data-plane 403/429/503 responses
+- [Kill-chain breaker](#kill-chain-breaker) — cross-replica multi-step attack detection
+- [Threat model](#threat-model) — layer-by-layer STRIDE analysis
+- [HIL legal hold and erasure](#hil-legal-hold-and-erasure) — deadline purge, tenant erasure, legal hold, and deletion evidence
+- [HIL backup and restore erasure](#hil-backup-and-restore-erasure) — erasure propagation into recoverable state
+- [Production federated identity](#production-federated-identity) — strict OIDC and signed SAML projection
+- [CLI device authorization](#cli-device-authorization) — bounded RFC 8628 operator login
+- [Secure client transport profile](#secure-client-transport-profile) — verified authority, name, redirect, and proxy handling
+- [Runbooks](#runbooks) — private operational procedures boundary
+- [Documentation claim boundaries](#documentation-claim-boundaries) — executable wording and evidence authority
+- [Compliance derivation boundaries](#compliance-derivation-boundaries) — authority freshness, degraded modes, and status limits
+- [Retention claim boundaries](#retention-claim-boundaries) — configured controls and fixed-duration promotion evidence
+- [Route and schema release inventory](#route-and-schema-release-inventory) — generated routes, source-bound types, and examples
+- [Executable documentation release inventory](#executable-documentation-release-inventory) — staged and public execution of user-facing paths
+- [External install verification](#external-install-verification) — public registries, immutable assets, and fresh-cluster Helm installation
+- [Existing-cluster installer](#existing-cluster-installer) — verified one-command Helm lifecycle for an existing cluster
+- [Pilot privacy and intake](#pilot-privacy-and-intake) — minimized qualification data and bounded deletion
+- [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) — exact legal artifacts and authenticated local encryption
+- [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) — private evidence references and external-validation gates
+- [Commercial offer and private validation](#commercial-offer-and-private-validation) — exact public offer and private approval boundary
+- [Rooted file and outbound target boundary](#rooted-file-and-outbound-target-boundary) — descriptor-rooted files and pinned public network targets
 
 ---
 
@@ -67,8 +84,12 @@ Consolidated technical record for Clavenar. Each major section below was previou
 One-glance reference for *what shipped when* and *which services
 each module landed on*. Each row mirrors a section below; the
 authoritative wire-contract detail still lives in those sections.
-**Status legend:** **shipped** = protected release evidence exists for the
-module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
+**Status vocabulary:** **shipped** means protected release evidence exists;
+**implemented** or **current source** means the contract and implementation are
+on `main` without a single landed release pinned here; **contract defined** or
+**designed** means the reviewed boundary exists without implementation
+acceptance. Other row-specific phrases are literal evidence limits, not
+synonyms for shipped.
 
 | § | Module | Status | Landed | Services touched |
 |---|---|---|---|---|
@@ -85,12 +106,13 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 6c | [Retention claim boundaries](#retention-claim-boundaries) | shipped | v1.231.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
 | 6d | [Public operational information boundary](#public-operational-information-boundary) | shipped | v1.232.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | shipped | v1.234.0 | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
-| 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | release acceptance in progress | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
+| 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | shipped | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 6g | [External install verification](#external-install-verification) | shipped | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
 | 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | shipped | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
 | 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | shipped | v1.243.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 6j | [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) | source delivered; external validation not performed | v1.244.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
 | 6k | [Commercial offer and private validation](#commercial-offer-and-private-validation) | source delivered under owner scope reduction; financial/pricing validation not performed | v1.245.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6l | [Existing-cluster installer](#existing-cluster-installer) | shipped | v1.250.2 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
 | 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
 | 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
 | 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
@@ -108,9 +130,9 @@ module; **designed** = TECH_SPEC entry exists but no compose / chart shipment.
 | 9l | [Stateful upgrade safety](#stateful-upgrade-safety) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | shipped | v1.203.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
 | 9n | [Tenant-qualified state migration](#tenant-qualified-state-migration) | shipped | v1.204.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-identity`, `clavenar-simulator`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
-| 9o | [State namespace isolation](#state-namespace-isolation) | contract shipped; release acceptance in progress | — | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
+| 9o | [State namespace isolation](#state-namespace-isolation) | shipped | v1.206.2 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9p | [Tenant route authorization](#tenant-route-authorization) | shipped | v1.206.2 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
-| 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
 | 9r | [HIL legal hold and erasure](#hil-legal-hold-and-erasure) | shipped | v1.209.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
 | 9s | [HIL backup and restore erasure](#hil-backup-and-restore-erasure) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
 | 9t | [Production federated identity](#production-federated-identity) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
@@ -236,7 +258,7 @@ state.
 
 ## Tenant route authorization
 
-**Module status:** contract shipped; release acceptance in progress. The exact
+**Module status:** **shipped in v1.206.2.** The exact
 identity, route, and denial invariants are frozen by
 [`contracts/tenant-route-authorization-v1.fixture.json`](contracts/tenant-route-authorization-v1.fixture.json)
 and its deny-unknown
@@ -6233,7 +6255,9 @@ chain v3 emission, warn-mode `ServerCertVerifier` in the
 client side of the helper, NATS-client `add_client_certificate`
 sourced from `current.load()`.
 
-### 10. Least-privilege NATS authorization (`clavenar.nats-authorization/v1`)
+---
+
+## 10. Least-privilege NATS authorization (`clavenar.nats-authorization/v1`)
 
 The canonical machine contract is
 [`contracts/nats-authorization-v1.schema.json`](contracts/nats-authorization-v1.schema.json),
@@ -8073,7 +8097,7 @@ The frozen contract is
 
 ## Production federated identity
 
-**Module status:** contract defined; implementation acceptance in progress.
+**Module status:** **shipped in v1.213.0.**
 
 The exact `clavenar.production-federated-identity/v1` boundary applies before
 either OIDC or SAML may create an operator session. Both protocols use one
@@ -8333,7 +8357,7 @@ Readable endpoint and example guidance is in
 
 ## Executable documentation release inventory
 
-**Module status:** **release acceptance in progress for v1.235.0.**
+**Module status:** **shipped in v1.235.0.**
 
 [`clavenar.executable-documentation/v1`](contracts/executable-documentation-v1.fixture.json)
 is the release authority for user-executable documentation. It inventories
@@ -8382,7 +8406,7 @@ The strict schema is
 
 ## Existing-cluster installer
 
-**Module status:** **release acceptance in progress for v1.250.2.**
+**Module status:** **shipped in v1.250.2.**
 
 [`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
 defines the one-command installation boundary for an existing Kubernetes or
@@ -8602,7 +8626,9 @@ Cash/burn/runway remain pending, pricing-conversation count remains zero, and
 the changed pack bytes have no current exact Legal/Security approval. None of
 those missing states is represented as validation or release evidence.
 
-### Rooted file and outbound target boundary
+---
+
+## Rooted file and outbound target boundary
 
 The exact
 [`clavenar.rooted-path-target-validation/v1`](contracts/rooted-path-target-validation-v1.schema.json)
