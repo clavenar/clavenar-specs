@@ -21,6 +21,9 @@ Per-repo behavior diagrams live in each service's own `docs/SEQUENCES.md`.
 
 ```mermaid
 flowchart LR
+  accTitle: Clavenar system context
+  accDescr: Visitors, operators, and AI agents enter Clavenar through browser, operator, and mTLS interfaces; the platform reaches an upstream MCP target and its configured messaging, secret, model, challenge, recovery, and PKI dependencies.
+
   Visitor[Visitor — browser]
   Operator[Operator — console, clavenarctl]
   Agent[AI Agent — any LLM]
@@ -69,6 +72,9 @@ deep-review samples forensic rows.
 
 ```mermaid
 flowchart TD
+  accTitle: Clavenar container view
+  accDescr: The proxy runs the Brain and Policy security path before forwarding to an MCP target, coordinates HIL and Identity, publishes forensic events through NATS to Ledger and Deep Review, and exposes browser surfaces through the edge.
+
   Agent[AI Agent]
   Upstream[Upstream MCP target]
   Browser[Browser — visitor or operator]
@@ -162,6 +168,9 @@ destination and lifecycle, destructive reset procedures, and operator access.
 
 ```mermaid
 flowchart LR
+  accTitle: Sanitized deployment boundary
+  accDescr: Browser, operator, and agent edges route into website, demo, console, and the governed request pipeline, which depends on evidence storage, identity and secret custody, and encrypted recovery storage.
+
   Browser[Visitor browser] -->|HTTPS| PublicEdge[Public browser edge]
   Operator[Authenticated operator] -->|approved control channel| OperatorEdge[Operator edge]
   Agent[AI agent] -->|mTLS MCP| AgentEdge[Agent edge]
@@ -187,6 +196,9 @@ to the visitor's own traffic.
 
 ```mermaid
 sequenceDiagram
+  accTitle: Demo-prefix end-to-end flow
+  accDescr: A visitor solves a browser challenge, exchanges a one-use token for an isolated demo session, fires a scenario through the proxy and HIL, and reads only ledger rows bearing the session's correlation prefix.
+
   participant Visitor
   participant Challenge as Browser challenge provider
   participant Mint as demo-mint
@@ -229,6 +241,9 @@ sole verifier.
 
 ```mermaid
 flowchart TD
+  accTitle: Clavenar credential trust chain
+  accDescr: The mTLS CA and Vault signing key root bootstrap credentials, workload and agent SVIDs, delegation grants, actor tokens, and per-action signatures whose public verification material and previous hashes bind ledger rows.
+
   CA[mTLS CA root — clavenar-proxy/certs/ca.crt]
   Vault[Vault transit key — clavenar-identity ed25519]
 

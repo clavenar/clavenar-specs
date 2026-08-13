@@ -371,17 +371,19 @@ The existing `MtlsIdentity.cn` becomes a *projection* of this SPIFFE ID for back
 
 #### 3.2 Principals and delegation
 
-```
-Human (OIDC subject)
-   │  delegates capabilities via signed grant
-   ▼
-Agent root identity (SPIFFE, long-lived, in attestation policy)
-   │  mints
-   ▼
-Agent instance SVID (≤1h TTL, hardware-attested)
-   │  on A→B call, mints
-   ▼
-Actor token (audience-bound, ≤60s TTL, single-use)
+```mermaid
+flowchart TD
+  accTitle: Principal delegation chain
+  accDescr: A human delegates capabilities to an agent root identity, which mints a hardware-attested instance SVID that can mint one audience-bound actor token for an agent-to-agent call.
+
+  Human["Human<br/>OIDC subject"]
+  Root["Agent root identity<br/>SPIFFE · long-lived · bound in attestation policy"]
+  SVID["Agent instance SVID<br/>hardware-attested · TTL up to 1 hour"]
+  Token["Actor token<br/>audience-bound · single-use · TTL up to 60 seconds"]
+
+  Human -->|delegates capabilities through a signed grant| Root
+  Root -->|mints| SVID
+  SVID -->|on an A-to-B call, mints| Token
 ```
 
 Actor tokens use RFC 7515 compact JWS. The protected header is exactly the
@@ -564,6 +566,9 @@ This is the highest-value bullet — non-repudiation is what unlocks the §15 "t
 
 ```mermaid
 flowchart LR
+  accTitle: Ledger action signing and verification
+  accDescr: A ledger row is canonicalized and hashed into the next row's previous hash, while Identity signs the resolved row through Vault and public JWKS material supports verification.
+
   Row[Ledger row N — id, timestamp, agent_id, agent_spiffe, method, intent_category, authorized, reasoning, policy_decision, signature, key_id, seq, prev_hash]
   Hashable[Canonical JSON — hashable subset, dispatched by chain_version v1 through v5]
   Hash[SHA-256]
@@ -909,18 +914,18 @@ Field rationale:
 
 Three states. Two reversible transitions, one terminal:
 
-```
-       agents:create                 owner-team or admin
-            │                                │
-            ▼                                ▼
-        ┌──────┐  suspend     ┌────────────┐  decommission   ┌─────────────────┐
-   ───▶ │Active│ ───────────▶ │ Suspended  │ ──────────────▶ │ Decommissioned  │
-        └──────┘              └────────────┘                 └─────────────────┘
-            ▲                       │                                ▲
-            └─────── unsuspend ─────┘                                │
-                       (admin only)                                  │
-                                                                     │
-                            decommission (admin only) ───────────────┘
+```mermaid
+stateDiagram-v2
+  direction LR
+  accTitle: Agent lifecycle state machine
+  accDescr: Agent creation enters Active. An owner-team member or administrator can suspend an active agent, only an administrator can reactivate it, and only an administrator can permanently decommission an active or suspended agent.
+
+  [*] --> Active: agents:create
+  Active --> Suspended: suspend — owner-team or admin
+  Suspended --> Active: unsuspend — admin only
+  Active --> Decommissioned: decommission — admin only
+  Suspended --> Decommissioned: decommission — admin only
+  Decommissioned --> [*]
 ```
 
 - **Active → Suspended** is reachable by any owner-team member or any tenant admin. One-click pause for incident response.
@@ -4996,18 +5001,24 @@ Two former non-goals — *auto-quarantine via identity on Red findings* and *pre
 
 ### 3. Architecture
 
-```
-                 strict + retained legacy publishers
-                                ↓
-                 clavenar-forensic JetStream (file)
-                      ↓ durable           ↓ durable
-              clavenar-ledger       clavenar-deep-review
-              (chain append)        (normalize → sample → review)
-                                             ↓
-                              clavenar_deep_review_jobs KV
-                              (budget + exact output outbox)
-                                             ↓ acknowledged
-                              clavenar.forensic strict output
+```mermaid
+flowchart TD
+  accTitle: Deep-review forensic fan-out
+  accDescr: Strict and retained legacy publishers feed a file-backed JetStream. Independent durable consumers append to the ledger and run deep review, whose retained job outbox publishes one acknowledged strict observation back to the stream.
+
+  Publishers["Strict + retained legacy publishers"]
+  Bus["clavenar-forensic JetStream<br/>file-backed"]
+  Ledger["clavenar-ledger<br/>chain append"]
+  Review["clavenar-deep-review<br/>normalize → sample → review"]
+  Jobs["clavenar_deep_review_jobs KV<br/>budget + exact-output outbox"]
+  Output["clavenar.forensic<br/>strict observation envelope"]
+
+  Publishers --> Bus
+  Bus -->|independent durable consumer| Ledger
+  Bus -->|independent durable consumer| Review
+  Review --> Jobs
+  Jobs -->|acknowledged publish with stable Nats-Msg-Id| Output
+  Output --> Bus
 ```
 
 Deep-review and ledger attach independent durable consumers to the same persistent stream. Deep-review emits strict observation envelopes back to the captured subject with stable `Nats-Msg-Id` values. Producer identity, rather than attacker-controlled domain `method`, is the self-emission guard. The exact output bytes and delivery phase are retained before publish, so a crash or lost acknowledgement replays the same evidence rather than generating a contradictory finding.
@@ -6915,6 +6926,9 @@ each one's mitigation lives. STRIDE per-layer detail follows below.
 
 ```mermaid
 flowchart LR
+  accTitle: System-wide threat mitigations
+  accDescr: Five system threats map to their defending proxy, Identity, Policy, and Ledger controls, including short-lived attested credentials, actor-token binding, capability attestation, signed chain rows, and authenticated human provenance.
+
   T1[T1 — Stolen client cert replayed from a different host]
   T2[T2 — Agent A impersonates Agent B in an A-to-B call]
   T3[T3 — Compromised supply chain — agent binary swapped post-deploy]
@@ -7107,37 +7121,33 @@ wins.
 
 ### Trust boundaries
 
-```
-                            ┌────────────────────────┐
-                            │   Operator             │  human, browser, mTLS
-                            │  (console / clavenarctl) │
-                            └────────────┬───────────┘
-                                         │ HTTPS + bearer (OIDC)
-                                         ▼
-┌───────────────┐   mTLS    ┌────────────────────────┐
-│   AI agent    │──────────▶│  clavenar-proxy (L1)     │
-│  (any LLM)    │   SVID    │  port 8443             │
-└───────────────┘           │  • mTLS termination    │
-                            │  • SPIFFE SAN parse    │
-                            │  • Brain → Policy      │
-                            │  • HIL gate (Yellow)   │
-                            │  • A2A mint/redeem     │
-                            │  • upstream forward    │
-                            └─┬───┬──────┬──────┬────┘
-                              │   │      │      │
-              ┌───────────────┘   │      │      └───────────────┐
-              ▼                   ▼      ▼                      ▼
-    ┌─────────────┐   ┌──────────────────┐   ┌──────────────┐  ┌─────────────┐
-    │ clavenar-brain│   │ clavenar-policy    │   │ clavenar-hil   │  │clavenar-      │
-    │ (L2, 8081)  │   │ -engine (L3,8082)│   │ (8084)       │  │ identity    │
-    └──────┬──────┘   └────────┬─────────┘   └──────┬───────┘  │ (8086)      │
-           │                   │                    │          └──────┬──────┘
-           │   NATS (clavenar.forensic) ─────────────────────────────────┤
-           ▼                   ▼                    ▼                  ▼
-                       ┌────────────────────────────────────┐
-                       │         clavenar-ledger (L4, 8083)    │
-                       │ SQLite + hash chain v1/v2/v3        │
-                       └────────────────────────────────────┘
+```mermaid
+flowchart TD
+  accTitle: Clavenar trust boundaries
+  accDescr: Operators and AI agents enter through authenticated boundaries at the proxy. The proxy calls Brain, Policy, HIL, and Identity, while those services publish forensic events through NATS for durable storage in the ledger.
+
+  Operator["Operator<br/>console or clavenarctl"]
+  Agent["AI agent<br/>any LLM"]
+  Proxy["clavenar-proxy — Layer 1<br/>port 8443<br/>mTLS termination · SPIFFE SAN parse<br/>Brain → Policy · HIL gate<br/>A2A mint/redeem · upstream forward"]
+  Brain["clavenar-brain<br/>Layer 2 · port 8081"]
+  Policy["clavenar-policy-engine<br/>Layer 3 · port 8082"]
+  HIL["clavenar-hil<br/>port 8084"]
+  Identity["clavenar-identity<br/>port 8086"]
+  Bus["NATS<br/>clavenar.forensic"]
+  Ledger["clavenar-ledger — Layer 4<br/>port 8083<br/>SQLite · hash chain v1/v2/v3"]
+
+  Operator -->|HTTPS + OIDC bearer| Proxy
+  Agent -->|mTLS + SVID| Proxy
+  Proxy -->|mTLS inspect| Brain
+  Proxy -->|mTLS evaluate| Policy
+  Proxy -->|mTLS pending and decision| HIL
+  Proxy -->|mTLS identity APIs| Identity
+  Proxy -->|forensic event| Bus
+  Brain -->|forensic event| Bus
+  Policy -->|forensic event| Bus
+  HIL -->|forensic event| Bus
+  Identity -->|forensic event| Bus
+  Bus -->|durable consume| Ledger
 ```
 
 Every arrow above is a trust boundary. The threats below are organized

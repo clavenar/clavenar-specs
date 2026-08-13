@@ -137,29 +137,25 @@ Clavenar is a distributed control plane in which each layer serves a specific
 cryptographic or semantic function. The proxy runs the security pipeline to
 completion **before** any upstream call — security-first, not race-to-veto.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Layer 1 — Ingress proxy (data plane)                        │
-│  Rust, Tokio, Axum, mTLS, Vault, MCP/JSON-RPC                │
-└────────────────────┬─────────────────────────────────────────┘
-                     │ security-first: verdict resolved first
-        ┌────────────┴────────────┐
-        ▼                         ▼
-┌───────────────────┐    ┌──────────────────────┐
-│  Layer 2 — Brain  │    │  Layer 3 — Policy    │
-│  pluggable LLM    │    │  regorus (embedded   │
-│  (Haiku 4.5 dflt) │    │  Rego), deterministic│
-│  intent, persona, │    │  rules, circuit      │
-│  injection scan   │    │  breakers            │
-└─────────┬─────────┘    └──────────┬───────────┘
-          │                          │
-          └──────────┬───────────────┘
-                     ▼ only on Authorized / HIL-Approved → upstream
-┌──────────────────────────────────────────────────────────────┐
-│  Layer 4 — Forensic compliance ledger                        │
-│  SHA-256 hash-chained, SQLite, NATS subscriber,              │
-│  Iceberg v2 cold tier (LocalFS / S3)                         │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  accTitle: Four-layer Clavenar request path
+  accDescr: An AI agent enters through the proxy, which calls the Brain and then Policy. Only authorized or HIL-approved requests reach the upstream MCP target, while forensic events are persisted in the ledger.
+
+  Agent["AI agent"]
+  Proxy["Layer 1 — Ingress proxy<br/>Rust · Tokio · Axum<br/>mTLS · Vault · MCP/JSON-RPC"]
+  Brain["Layer 2 — Brain<br/>pluggable LLM<br/>intent · persona · injection"]
+  Policy["Layer 3 — Policy<br/>embedded Rego<br/>deterministic rules · circuit breakers"]
+  Upstream["Upstream MCP target"]
+  Ledger["Layer 4 — Forensic compliance ledger<br/>SHA-256 hash chain · SQLite · NATS<br/>Iceberg v2 cold tier"]
+
+  Agent -->|mTLS MCP| Proxy
+  Proxy -->|POST /inspect| Brain
+  Brain -->|intent verdict| Proxy
+  Proxy -->|POST /evaluate| Policy
+  Policy -->|security verdict| Proxy
+  Proxy -->|Authorized or HIL-approved only| Upstream
+  Proxy -->|forensic event| Ledger
 ```
 
 **Layer 1 — ingress proxy (data plane).** The "steel door," built in Rust on Axum

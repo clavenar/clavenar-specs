@@ -51,6 +51,10 @@
   the `§0` status table. If you rename a `## ` heading, fix every link to it.
 - Markdown voice is terse and technical; tables over prose where a table fits.
   Don't reformat untouched sections in an edit — keep diffs tight.
+- Use fenced Mermaid for relationship, flow, and sequence diagrams, with an
+  `accTitle` and `accDescr` in every diagram. Use Markdown tables for exact
+  mappings. Do not add box-drawing or ASCII-art diagrams, or checked-in rendered
+  diagram assets where Mermaid can express the same view.
 - Commit subjects must start with a lowercase letter.
 
 ## Pointers
