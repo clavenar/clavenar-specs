@@ -5,7 +5,7 @@
   "policyVersion": "1.0.0",
   "effectiveDate": "2026-07-27",
   "canonicalPath": "clavenar-specs/SECURITY.md",
-  "canonicalSha256": "sha256:720e58fca68ef711f1f69d4746339ce9b2b1753bcf4f25213cd484931e506c35",
+  "canonicalSha256": "sha256:fab4c20f9fab14594d7ab4b9861266840486fc4e3d8cc800efb6e3282658a2fd",
   "contact": "vanteguardlabs@gmail.com",
   "repositories": [
     "clavenar-brain",

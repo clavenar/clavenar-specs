@@ -40,7 +40,7 @@
       "const": "clavenar-specs/SECURITY.md"
     },
     "canonicalSha256": {
-      "const": "sha256:720e58fca68ef711f1f69d4746339ce9b2b1753bcf4f25213cd484931e506c35"
+      "const": "sha256:fab4c20f9fab14594d7ab4b9861266840486fc4e3d8cc800efb6e3282658a2fd"
     },
     "contact": {
       "const": "vanteguardlabs@gmail.com"
