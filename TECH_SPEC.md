@@ -11,7 +11,7 @@ current status or contract.
 
 ## Contents
 
-- [Module status by release](#0-module-status-by-release) — landed versions and evidence-scoped status for each tracked module
+- [Module service map](#0-module-service-map) — service impact for each tracked module
 - [Tenant-qualified identity keys](#tenant-qualified-identity-keys) — canonical typed tenant, agent, and composite storage identity
 - [Tenant-qualified state migration](#tenant-qualified-state-migration) — exact state inventory, cutover, and collision rules
 - [State namespace isolation](#state-namespace-isolation) — explicit demo/operator ownership and bounded cleanup
@@ -79,86 +79,74 @@ current status or contract.
 
 ---
 
-## §0. Module status by release
+## §0. Module service map
 
-One-glance reference for *what shipped when* and *which services
-each module landed on*. Each row mirrors a section below; the
-authoritative wire-contract detail still lives in those sections.
-**Status vocabulary:** **shipped** means protected release evidence exists;
-**implemented** or **current source** means the contract and implementation are
-on `main` without a single landed release pinned here; **contract defined** or
-**designed** means the reviewed boundary exists without implementation
-acceptance. Other row-specific phrases are literal evidence limits, not
-synonyms for shipped.
+One-glance map of which services each module touches. Each row mirrors a
+section below; its contract, implementation status, and release evidence remain
+in that authoritative section.
 
-| § | Module | Status | Landed | Services touched |
-|---|---|---|---|---|
-| 1 | [Identity service](#identity-service) | shipped | — | `clavenar-identity` (new, port 8086 / 8186), `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil` |
-| 1a | [Workload attestation verifier contract](#6-capability-attestation) | real `k8s-key-bound` and `tpm2-quote` verifiers implemented; production refuses mock evidence | v1.131.0 + current source | `clavenar-proxy`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-e2e`, `clavenar-charts` |
-| 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | shipped | chain v3 | `clavenar-identity`, `clavenar-ctl` (new binary `clavenarctl`), `clavenar-console`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-chaos-monkey` |
-| 2a | [Pre-flight certification](#agent-onboarding-wao) | shipped | v1.22.0 | `clavenar-ctl` (`agents certify`), `clavenar-identity` (`/agents/{id}/certification` + `CertificationMode` gate + `certified_at_version`), `clavenar-chaos-catalog` (`agent_cert` family), `clavenar-ledger` (no change — v3 `agent.certified` rows), `clavenar-console` (cert badge) |
-| 3 | [Tenancy scope](#tenancy-scope) | described | — | (semantics, no new service) |
-| 4 | [Console config page](#console-config-page) | shipped | — | `clavenar-console`, `clavenar-sdk` (+3 public getters) |
-| 5 | [Operator authentication](#operator-authentication) | shipped | — | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
-| 6 | [Regulatory export](#regulatory-export) | shipped (manifest v8; tenant-bound export in v1.216.0) | v1.216.0 | `clavenar-ledger` (chain v4 evidence rows; backend-agnostic core), `clavenar-identity` (`POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl`, `clavenar-console` |
-| 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | shipped | v1.3.0 | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, backend-agnostic with required signing when Identity is configured), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
-| 6b | [Compliance derivation boundaries](#compliance-derivation-boundaries) | shipped | v1.230.0 | `clavenar-specs`, `clavenar-proxy`, `clavenar-identity`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
-| 6c | [Retention claim boundaries](#retention-claim-boundaries) | shipped | v1.231.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
-| 6d | [Public operational information boundary](#public-operational-information-boundary) | shipped | v1.232.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
-| 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | shipped | v1.234.0 | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
-| 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | shipped | v1.235.0 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
-| 6g | [External install verification](#external-install-verification) | shipped | v1.241.5 | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
-| 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | shipped | v1.242.0 | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
-| 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | shipped | v1.243.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
-| 6j | [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) | source delivered; external validation not performed | v1.244.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
-| 6k | [Commercial offer and private validation](#commercial-offer-and-private-validation) | source delivered under owner scope reduction; financial/pricing validation not performed | v1.245.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
-| 6l | [Existing-cluster installer](#existing-cluster-installer) | shipped | v1.250.2 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
-| 7 | [Demo experience](#demo-experience) | shipped | — | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
-| 8 | [Console policy management](#console-policy-management) | shipped | — | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
-| 9 | [Policy catalog](#policy-catalog) | shipped | — | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
-| 9a | [Policy exchange](#policy-exchange) | install/verify shipped; production issuance redesign required | v1.3.0 | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
-| 9b | [Forensic event envelope](#forensic-event-envelope) | contract, producer custody, acknowledged delivery, transactional Ledger uniqueness, and crash reconciliation/telemetry shipped | v1.163.0–v1.171.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
-| 9c | [Distributed control state](#distributed-control-state) | inventory shipped; fail-closed readiness and outage policy specified | v1.173.0–v1.174.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
-| 9d | [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) | contract shipped; Ledger implementation pending | v1.175.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e` |
-| 9e | [State recovery inventory](#state-recovery-inventory) | inventory, scheduled encrypted offsite backup, isolated complete restore, and passive DR shipped; upgrade execution pending | v1.181.0–v1.184.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
-| 9f | [Scheduled backup sets](#scheduled-backup-sets) | scheduled encrypted offsite backup shipped | v1.182.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
-| 9g | [Isolated complete restore](#isolated-complete-restore) | authenticated isolated restore shipped | v1.183.0 | `clavenar-specs`, `clavenar-e2e` |
-| 9h | [Passive failover and failback](#passive-failover-and-failback) | monitored encrypted passive synchronization and fenced failover/failback shipped | v1.184.0 | `clavenar-specs`, `clavenar-e2e` |
-| 9i | [Dependency-aware readiness](#dependency-aware-readiness) | shipped | v1.196.0 | `clavenar-specs`, `clavenar-shared`, all 11 governed application images, `clavenar-e2e`, `clavenar-charts` |
-| 9j | [Transactional deployment promotion](#transactional-deployment-promotion) | shipped | v1.197.1 | `clavenar-specs`, `clavenar-e2e` |
-| 9k | [Production alert delivery lifecycle](#production-alert-delivery-lifecycle) | shipped | v1.200.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
-| 9l | [Stateful upgrade safety](#stateful-upgrade-safety) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
-| 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | shipped | v1.203.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
-| 9n | [Tenant-qualified state migration](#tenant-qualified-state-migration) | shipped | v1.204.0 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-identity`, `clavenar-simulator`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
-| 9o | [State namespace isolation](#state-namespace-isolation) | shipped | v1.206.2 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
-| 9p | [Tenant route authorization](#tenant-route-authorization) | shipped | v1.206.2 | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
-| 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
-| 9r | [HIL legal hold and erasure](#hil-legal-hold-and-erasure) | shipped | v1.209.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
-| 9s | [HIL backup and restore erasure](#hil-backup-and-restore-erasure) | contract defined; implementation acceptance in progress | — | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
-| 9t | [Production federated identity](#production-federated-identity) | shipped | v1.213.0 | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
-| 9u | [CLI device authorization](#cli-device-authorization) | shipped | v1.214.0 | `clavenar-specs`, `clavenar-ctl`, `clavenar-e2e`, `clavenar-charts` |
-| 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | shipped | v1.217.0 | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
-| 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | shipped | v1.219.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
-| 9x | [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) | staged image and chart boundary shipped; PostgreSQL not promoted | v1.220.0 | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
-| 9y | [Supported failure model](#supported-failure-model) | shipped; weekly cadence explicitly does not meet the critical-state RPO | v1.221.0 | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
-| 9z | [Residual product dispositions](#residual-product-dispositions) | shipped in v1.222.0 | 1.222.0 | `clavenar-specs`, `clavenar-sandbox`, `clavenar-e2e`, `clavenar-charts` |
-| 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | shipped 2026-05-13 | v0.6.0 | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
-| 10a | [Continuous assurance](#continuous-assurance) | shipped | v1.21.0 | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
-| 10b | [Fleet posture score](#fleet-posture-score) | shipped | v1.24.0 | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
-| 10c | [Deception layer](#deception-layer) | shipped | v1.78.0 | `clavenar-identity` (`decoys` table + `/decoys` API + `clavenar_decoys` KV + curated seed), `clavenar-proxy` (KV mirror, `tools/list` splice, deterministic deny gate, containment publish), `clavenar-ledger` (no change — v3 `decoy.registered`/`decoy.retired` rows) |
-| 11 | [Internal service mTLS](#internal-service-mtls) | shipped through apps v0.8.3, NATS v0.8.4, the named website edge v1.99.0, and generated route capabilities v1.124.0 | v0.8.3, v0.8.4, v1.99.0, v1.124.0 | every backend plus the website edge — every internal application hop is mTLS-gated; Ledger, Policy Engine, HIL, and Identity additionally enforce one digest-bound exact-caller/method/template policy; any CA-valid client certificate may reach merged `/verify`, while the exact website SPIFFE identity alone enables forwarded-source trust; NATS transport is TLS+mTLS |
-| 11a | [Kill-chain breaker](#kill-chain-breaker) | shipped | v1.3.0 | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
-| 12 | [Workload SVID refresh](#workload-svid-refresh) | **shipped** | `clavenar-workload-identity` | `clavenar-identity` (issuer), every internal service (consumer) |
-| 12a | [Brain provider routing configuration](#brain-provider-routing-configuration) | v2 contract, loader, legacy migration path, drift gate, and transient-only safe routing implemented | current source | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e` |
-| 12b | [Brain model qualification](#brain-model-qualification) | v1 policy, receipt, harness, and honest experimental matrix implemented; GA gate remains unmet until live receipts cover two hosted and one local provider | current source | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e`, `clavenar-website` |
-| 13 | [Threat model](#threat-model) | reference | — | (STRIDE table, no new service) |
-| 14 | [Runbooks](#runbooks) | reference | — | (on-call procedures; maintained in clavenar-internal-specs) |
-
-Versions in the **Landed** column reference the protected product release
-version or chain versions where the wire schema moved. Modules without a
-single landed version were rolled in over
-several patches and the per-section "Module status" line carries the
-detail.
+| § | Module | Services touched |
+|---|---|---|
+| 1 | [Identity service](#identity-service) | `clavenar-identity` (new, port 8086 / 8186), `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil` |
+| 1a | [Workload attestation verifier contract](#6-capability-attestation) | `clavenar-proxy`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-e2e`, `clavenar-charts` |
+| 2 | [Agent onboarding (WAO)](#agent-onboarding-wao) | `clavenar-identity`, `clavenar-ctl` (new binary `clavenarctl`), `clavenar-console`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-chaos-monkey` |
+| 2a | [Pre-flight certification](#agent-onboarding-wao) | `clavenar-ctl` (`agents certify`), `clavenar-identity` (`/agents/{id}/certification` + `CertificationMode` gate + `certified_at_version`), `clavenar-chaos-catalog` (`agent_cert` family), `clavenar-ledger` (no change — v3 `agent.certified` rows), `clavenar-console` (cert badge) |
+| 3 | [Tenancy scope](#tenancy-scope) | (semantics, no new service) |
+| 4 | [Console config page](#console-config-page) | `clavenar-console`, `clavenar-sdk` (+3 public getters) |
+| 5 | [Operator authentication](#operator-authentication) | `clavenar-hil` (passkey + session), `clavenar-console` (auth-mode + viewer/approver gates) |
+| 6 | [Regulatory export](#regulatory-export) | `clavenar-ledger` (chain v4 evidence rows; backend-agnostic core), `clavenar-identity` (`POST /sign/blob`), `clavenar-sdk`, `clavenar-ctl`, `clavenar-console` |
+| 6a | [Continuous compliance evidence](#continuous-compliance-evidence) | `clavenar-ledger` (`POST /compliance/evidence`, current manifest v8, backend-agnostic with required signing when Identity is configured), `clavenar-sdk`, `clavenar-console` (`/compliance`), `clavenar-ctl` (`--include-compliance`) |
+| 6b | [Compliance derivation boundaries](#compliance-derivation-boundaries) | `clavenar-specs`, `clavenar-proxy`, `clavenar-identity`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
+| 6c | [Retention claim boundaries](#retention-claim-boundaries) | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-website` |
+| 6d | [Public operational information boundary](#public-operational-information-boundary) | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6e | [Route and schema release inventory](#route-and-schema-release-inventory) | `clavenar-specs`, service owners, `clavenar-e2e`, `clavenar-website` |
+| 6f | [Executable documentation release inventory](#executable-documentation-release-inventory) | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
+| 6g | [External install verification](#external-install-verification) | `clavenar-specs`, SDK/Lite/CLI/Chart owners, `clavenar-e2e`, `clavenar-website` |
+| 6h | [Pilot privacy and intake](#pilot-privacy-and-intake) | `clavenar-specs`, `clavenar-demo-mint`, `clavenar-e2e`, `clavenar-website` |
+| 6i | [Customer legal pack and secure exchange](#customer-legal-pack-and-secure-exchange) | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6j | [Onboarding and prospect evidence](#onboarding-and-prospect-evidence) | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6k | [Commercial offer and private validation](#commercial-offer-and-private-validation) | `clavenar-specs`, `clavenar-e2e`, `clavenar-website` |
+| 6l | [Existing-cluster installer](#existing-cluster-installer) | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
+| 7 | [Demo experience](#demo-experience) | `clavenar-website`, `clavenar-demo-mint` (new), `clavenar-console`, `clavenar-proxy`, `clavenar-hil`, `clavenar-ledger`, `clavenar-chaos-catalog` (new), `clavenar-simulator` |
+| 8 | [Console policy management](#console-policy-management) | `clavenar-policy-engine` (SQLite store + write API), `clavenar-console`, `clavenar-sdk`, `clavenar-ledger` (consumes `policy.*` event kinds — chain v3 is event-kind-polymorphic, no schema bump) |
+| 9 | [Policy catalog](#policy-catalog) | `clavenar-policy-engine` (frontmatter + 4 endpoints), `clavenar-console` (`/policies/library`), `clavenar-sdk`, `clavenar-ctl` (`policy scaffold` + `policy library`) |
+| 9a | [Policy exchange](#policy-exchange) | `clavenar-sdk` (pack manifest + verify), `clavenar-chaos-catalog` (`policy_input` corpus), `clavenar-ctl` (`policy exchange install`); direct `/sign/blob` issuance retired by endpoint-capability hardening |
+| 9b | [Forensic event envelope](#forensic-event-envelope) | `clavenar-specs`, `clavenar-e2e`, `clavenar-ledger`, `clavenar-hil`, `clavenar-identity`, `clavenar-proxy`, `clavenar-policy-engine`, `clavenar-lite`, `clavenar-charts`, `clavenar-shared` |
+| 9c | [Distributed control state](#distributed-control-state) | `clavenar-specs`, `clavenar-shared`, `clavenar-identity`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
+| 9d | [Ledger chain v5](#74-chain-v5--complete-evidence-commitment) | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e` |
+| 9e | [State recovery inventory](#state-recovery-inventory) | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9f | [Scheduled backup sets](#scheduled-backup-sets) | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9g | [Isolated complete restore](#isolated-complete-restore) | `clavenar-specs`, `clavenar-e2e` |
+| 9h | [Passive failover and failback](#passive-failover-and-failback) | `clavenar-specs`, `clavenar-e2e` |
+| 9i | [Dependency-aware readiness](#dependency-aware-readiness) | `clavenar-specs`, `clavenar-shared`, all 11 governed application images, `clavenar-e2e`, `clavenar-charts` |
+| 9j | [Transactional deployment promotion](#transactional-deployment-promotion) | `clavenar-specs`, `clavenar-e2e` |
+| 9k | [Production alert delivery lifecycle](#production-alert-delivery-lifecycle) | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9l | [Stateful upgrade safety](#stateful-upgrade-safety) | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9m | [Tenant-qualified identity keys](#tenant-qualified-identity-keys) | `clavenar-specs`, `clavenar-shared`, `clavenar-e2e` |
+| 9n | [Tenant-qualified state migration](#tenant-qualified-state-migration) | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-identity`, `clavenar-simulator`, `clavenar-policy-engine`, `clavenar-ledger`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
+| 9o | [State namespace isolation](#state-namespace-isolation) | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-ledger`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
+| 9p | [Tenant route authorization](#tenant-route-authorization) | `clavenar-specs`, `clavenar-shared`, `clavenar-proxy`, `clavenar-hil`, `clavenar-lite`, `clavenar-e2e`, `clavenar-charts` |
+| 9q | [Tenant lifecycle sagas](#tenant-lifecycle-sagas) | `clavenar-specs`, `clavenar-identity`, `clavenar-policy-engine`, `clavenar-hil`, `clavenar-ledger`, `clavenar-proxy`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9r | [HIL legal hold and erasure](#hil-legal-hold-and-erasure) | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
+| 9s | [HIL backup and restore erasure](#hil-backup-and-restore-erasure) | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts` |
+| 9t | [Production federated identity](#production-federated-identity) | `clavenar-specs`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9u | [CLI device authorization](#cli-device-authorization) | `clavenar-specs`, `clavenar-ctl`, `clavenar-e2e`, `clavenar-charts` |
+| 9v | [HIL notification delivery lifecycle](#hil-notification-delivery-lifecycle) | `clavenar-specs`, `clavenar-hil`, `clavenar-e2e`, `clavenar-charts` |
+| 9w | [Active-agent subscription meter](#active-agent-subscription-meter) | `clavenar-specs`, `clavenar-ledger`, `clavenar-sdk`, `clavenar-console`, `clavenar-e2e`, `clavenar-charts` |
+| 9x | [Staged PostgreSQL Ledger topology](#staged-postgresql-ledger-topology) | `clavenar-specs`, `clavenar-ledger`, `clavenar-e2e`, `clavenar-charts` |
+| 9y | [Supported failure model](#supported-failure-model) | `clavenar-specs`, `clavenar-e2e`, `clavenar-charts`, `clavenar-website` |
+| 9z | [Residual product dispositions](#residual-product-dispositions) | `clavenar-specs`, `clavenar-sandbox`, `clavenar-e2e`, `clavenar-charts` |
+| 10 | [Forensic-tier deep review](#forensic-tier-deep-review) | `clavenar-deep-review` (new repo), `clavenar-e2e`, `clavenar-charts` (chart 0.7.0 — eight-service stack, shipped 2026-05-14) |
+| 10a | [Continuous assurance](#continuous-assurance) | `clavenar-chaos-monkey` (new `clavenar-assurance-daemon` bin), `clavenar-e2e`, `clavenar-console` (`/assurance`), `clavenar-ctl` (`assurance diff`), `clavenar-ledger` (no change — v1 `assurance_run` rows) |
+| 10b | [Fleet posture score](#fleet-posture-score) | `clavenar-console` only (landing-page `GET /_partials/posture`) — composed client-side from existing ledger rows + the assurance lane; no wire / chain / ledger change |
+| 10c | [Deception layer](#deception-layer) | `clavenar-identity` (`decoys` table + `/decoys` API + `clavenar_decoys` KV + curated seed), `clavenar-proxy` (KV mirror, `tools/list` splice, deterministic deny gate, containment publish), `clavenar-ledger` (no change — v3 `decoy.registered`/`decoy.retired` rows) |
+| 11 | [Internal service mTLS](#internal-service-mtls) | every backend plus the website edge — every internal application hop is mTLS-gated; Ledger, Policy Engine, HIL, and Identity additionally enforce one digest-bound exact-caller/method/template policy; any CA-valid client certificate may reach merged `/verify`, while the exact website SPIFFE identity alone enables forwarded-source trust; NATS transport is TLS+mTLS |
+| 11a | [Kill-chain breaker](#kill-chain-breaker) | `clavenar-proxy` (NATS-KV shared history store), `clavenar-policy-engine` (`recent_sequence` + governance.rego rule), `clavenar-e2e` (JetStream + `run-killchain.sh`) |
+| 12 | [Workload SVID refresh](#workload-svid-refresh) | `clavenar-identity` (issuer), every internal service (consumer) |
+| 12a | [Brain provider routing configuration](#brain-provider-routing-configuration) | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e` |
+| 12b | [Brain model qualification](#brain-model-qualification) | `clavenar-specs`, `clavenar-brain`, `clavenar-e2e`, `clavenar-website` |
+| 13 | [Threat model](#threat-model) | (STRIDE table, no new service) |
+| 14 | [Runbooks](#runbooks) | (on-call procedures; maintained in clavenar-internal-specs) |
 
 ---
 

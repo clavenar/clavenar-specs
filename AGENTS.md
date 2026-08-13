@@ -11,8 +11,8 @@
 ## Layout
 - `TECH_SPEC.md` — the consolidated wire-contract spec; **source of truth**. Each
   `## ` section was once a standalone spec file; legacy cross-refs resolve to its
-  anchors. After a `## Contents` TOC, opens with `§0. Module status by release`
-  (what shipped when, which services each module touched).
+  anchors. After a `## Contents` TOC, opens with `§0. Module service map`
+  (which services each module touches).
 - `README.md` — system overview: problem space, four-layer architecture
   (Layer 1 proxy / 2 brain / 3 policy-engine / 4 ledger), per-layer behaviour,
   glossary (MCP, SPIFFE/SVID, A2A, PBAC, HIL, WAO).
@@ -48,7 +48,7 @@
 - **`SECURITY.md` stays a separate root file** — do not fold it into `TECH_SPEC.md`;
   the GitHub Security tab points at the root path.
 - **Anchors are load-bearing.** Section renames break inbound cross-references and
-  the `§0` status table. If you rename a `## ` heading, fix every link to it.
+  the `§0` service map. If you rename a `## ` heading, fix every link to it.
 - Markdown voice is terse and technical; tables over prose where a table fits.
   Don't reformat untouched sections in an edit — keep diffs tight.
 - Use fenced Mermaid for relationship, flow, and sequence diagrams, with an
