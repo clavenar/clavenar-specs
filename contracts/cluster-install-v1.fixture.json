@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.cluster-install/v1",
   "schemaVersion": 1,
-  "release": "1.250.4",
+  "release": "1.250.5",
   "scope": "existing-kubernetes-cluster",
   "bootstrap": {
     "url": "https://clavenar.ai/install.sh",
@@ -18,7 +18,7 @@
     "checksumMirrorUrls": [
       "https://dev.clavenar.ai/installers/clavenar-install-1.5.5.sh.sha256"
     ],
-    "sha256": "sha256:8018d39935e752cdd9cf5540c494b10fb44c795464c370e27d7f2c9a20be7b8f",
+    "sha256": "sha256:755c5d718400b1c6810c6ae633b417d378425b4a21be5d5ca2939cc3d352884a",
     "shell": "bash"
   },
   "uninstallBootstrap": {
@@ -36,11 +36,14 @@
     "checksumMirrorUrls": [
       "https://dev.clavenar.ai/installers/clavenar-uninstall-1.1.10.sh.sha256"
     ],
-    "sha256": "sha256:9630e4f56d95771ff756c62455d7ea34c90dc118699e8d1654fa4b3b3aba46df",
+    "sha256": "sha256:bcfc771fd325e61c3c0127cd08267f416278778e0f6f0e566f85463611c76706",
     "shell": "bash"
   },
   "clusterAccess": {
-    "clients": ["kubectl", "k3s-kubectl"],
+    "clients": [
+      "kubectl",
+      "k3s-kubectl"
+    ],
     "contextPolicy": "explicit-or-confirmed-current-context",
     "minimumKubernetesMinor": 30,
     "maximumKubernetesMinor": 36,
@@ -64,8 +67,8 @@
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
     "releaseUrl": "https://github.com/clavenar/clavenar-charts/releases/tag/v1.0.0",
     "checksumAsset": "clavenar-1.0.0.tgz.sha256",
-    "valuesAsset": "clavenar-images-1.250.4.yaml",
-    "valuesSha256": "sha256:4f88d119bd07b3bee9e68d1e1015e1ff2be9c3cb7585f8679fbf6d9513717d10",
+    "valuesAsset": "clavenar-images-1.250.5.yaml",
+    "valuesSha256": "sha256:2f2c6f171f904f243065860d1ec9b83513f536378f6b052e16a28122f07f5f42",
     "packagedValues": "examples/values-bundled.yaml",
     "defaultNamespace": "clavenar",
     "defaultRelease": "clavenar",
@@ -76,7 +79,10 @@
   "consoleAccess": {
     "defaultMode": "webauthn",
     "authSelectionFlag": "--console-auth",
-    "authSelections": ["passkey", "mtls"],
+    "authSelections": [
+      "passkey",
+      "mtls"
+    ],
     "anonymousDemoDefault": false,
     "demoOptInProfile": "evaluation",
     "bootstrapPolicy": "one-time-admin-passkey",
@@ -88,8 +94,14 @@
     "bootstrapTokenInReceipt": false,
     "mtlsMode": "operator-mtls",
     "operatorTrustSecretNameTemplate": "{release}-operator-public-trust",
-    "operatorTrustSecretKeys": ["ca.crt", "operators.json"],
-    "operatorTrustInputFlags": ["--operator-ca", "--operator-registry"],
+    "operatorTrustSecretKeys": [
+      "ca.crt",
+      "operators.json"
+    ],
+    "operatorTrustInputFlags": [
+      "--operator-ca",
+      "--operator-registry"
+    ],
     "mtlsMissingTrustPolicy": "local-admin-bootstrap",
     "operatorBootstrapDirectoryFlag": "--operator-bootstrap-dir",
     "localBootstrapDefaultRoot": "$HOME/.clavenar/operator-bootstrap",
@@ -97,27 +109,47 @@
     "localBootstrapPrivateKeyProjection": false,
     "browserCredentialFormat": "PKCS#12",
     "requiredOperatorRole": "admin",
-    "mutationOriginsDefault": ["http://localhost:8085"]
+    "mutationOriginsDefault": [
+      "http://localhost:8085"
+    ]
   },
   "modelConfiguration": {
     "defaultGenerationProvider": "mock",
     "generationProviderFlag": "--brain-provider",
-    "generationProviders": ["mock", "anthropic", "openai", "google", "ollama"],
+    "generationProviders": [
+      "mock",
+      "anthropic",
+      "openai",
+      "google",
+      "ollama"
+    ],
     "fastModelFlag": "--brain-fast-model",
     "deepModelFlag": "--brain-deep-model",
     "generationBaseUrlFlag": "--brain-base-url",
     "providerSecretNameFlag": "--brain-provider-secret",
     "providerSecretKeyFlag": "--brain-provider-secret-key",
-    "hostedGenerationProviders": ["anthropic", "openai", "google"],
+    "hostedGenerationProviders": [
+      "anthropic",
+      "openai",
+      "google"
+    ],
     "defaultEmbeddingProvider": "disabled",
     "embeddingProviderFlag": "--embedding-provider",
-    "embeddingProviders": ["disabled", "voyage", "openai", "ollama"],
+    "embeddingProviders": [
+      "disabled",
+      "voyage",
+      "openai",
+      "ollama"
+    ],
     "embeddingModelFlag": "--embedding-model",
     "embeddingDimensionsFlag": "--embedding-dimensions",
     "embeddingBaseUrlFlag": "--embedding-base-url",
     "embeddingSecretNameFlag": "--embedding-secret",
     "embeddingSecretKeyFlag": "--embedding-secret-key",
-    "hostedEmbeddingProviders": ["voyage", "openai"],
+    "hostedEmbeddingProviders": [
+      "voyage",
+      "openai"
+    ],
     "credentialPolicy": "existing-kubernetes-secret",
     "secretPreflight": "selected-providers-only",
     "inlineCredentialsAllowed": false,
@@ -160,7 +192,13 @@
     }
   ],
   "lifecycle": {
-    "states": ["absent", "current", "upgrade", "failed", "foreign"],
+    "states": [
+      "absent",
+      "current",
+      "upgrade",
+      "failed",
+      "foreign"
+    ],
     "collisionPolicy": "fail-closed",
     "failurePolicy": "preserve-release-and-state",
     "adoptionPolicy": "explicit-exact-release-only",

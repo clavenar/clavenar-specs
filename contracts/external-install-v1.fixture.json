@@ -1,7 +1,7 @@
 {
   "contract": "clavenar.external-install/v1",
   "schemaVersion": 1,
-  "release": "1.250.4",
+  "release": "1.250.5",
   "network": "public",
   "isolation": "clean-container-and-fresh-kind",
   "packageInstalls": [
@@ -13,7 +13,11 @@
       "access": "anonymous",
       "install": "pnpm add @clavenar/agent-sdk@1.6.3",
       "registry": "https://registry.npmjs.org",
-      "verification": ["install", "import", "hello-world"]
+      "verification": [
+        "install",
+        "import",
+        "hello-world"
+      ]
     },
     {
       "id": "python-sdk",
@@ -23,7 +27,11 @@
       "access": "anonymous",
       "install": "pip install clavenar-agent-sdk==1.5.3",
       "registry": "https://pypi.org",
-      "verification": ["install", "import", "hello-world"]
+      "verification": [
+        "install",
+        "import",
+        "hello-world"
+      ]
     },
     {
       "id": "java-sdk",
@@ -39,7 +47,11 @@
         "bom.json",
         "bom.xml"
       ],
-      "verification": ["authenticated-install", "compile", "anonymous-download"]
+      "verification": [
+        "authenticated-install",
+        "compile",
+        "anonymous-download"
+      ]
     },
     {
       "id": "dotnet-sdk",
@@ -53,7 +65,11 @@
         "Clavenar.AgentSdk.1.6.5.nupkg",
         "Clavenar.AgentSdk.1.6.5.snupkg"
       ],
-      "verification": ["authenticated-install", "compile", "anonymous-download"]
+      "verification": [
+        "authenticated-install",
+        "compile",
+        "anonymous-download"
+      ]
     },
     {
       "id": "go-sdk",
@@ -69,7 +85,11 @@
         "adapters/openai/v1.5.2",
         "examples/v1.5.2"
       ],
-      "verification": ["four-module-install", "compile", "hello-world"]
+      "verification": [
+        "four-module-install",
+        "compile",
+        "hello-world"
+      ]
     },
     {
       "id": "rust-sdk",
@@ -79,8 +99,14 @@
       "access": "anonymous",
       "install": "cargo add clavenar-sdk --git https://github.com/clavenar/clavenar-sdk --tag v1.0.0",
       "registry": "https://github.com/clavenar/clavenar-sdk/releases",
-      "releaseAssets": ["clavenar-sdk-1.0.0.crate"],
-      "verification": ["git-tag-install", "compile", "anonymous-download"]
+      "releaseAssets": [
+        "clavenar-sdk-1.0.0.crate"
+      ],
+      "verification": [
+        "git-tag-install",
+        "compile",
+        "anonymous-download"
+      ]
     },
     {
       "id": "lite",
@@ -120,7 +146,11 @@
         "clavenarctl-1.0.0-x86_64-linux-musl.tar.gz",
         "clavenarctl-1.0.0-x86_64-linux-musl.tar.gz.sha256"
       ],
-      "verification": ["anonymous-download", "checksum", "help"]
+      "verification": [
+        "anonymous-download",
+        "checksum",
+        "help"
+      ]
     }
   ],
   "helmInstall": {
@@ -129,7 +159,7 @@
     "version": "1.0.0",
     "registry": "oci://ghcr.io/clavenar/charts/clavenar",
     "release": "https://github.com/clavenar/clavenar-charts/releases/tag/v1.0.0",
-    "valuesAsset": "clavenar-images-1.250.4.yaml",
+    "valuesAsset": "clavenar-images-1.250.5.yaml",
     "packagedValues": "examples/values-bundled.yaml",
     "cluster": "fresh-kind",
     "imagePolicy": "anonymous-exact-digest-only",
