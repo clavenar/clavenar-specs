@@ -6,7 +6,7 @@ execution boundary. The machine-readable authority is
 validated by
 [`client-migration-v1.schema.json`](../contracts/client-migration-v1.schema.json).
 
-Proxy 0.5.0 and Lite 0.9.0 require every effect-capable `POST /mcp` request to
+Proxy 1.0.0 and Lite 1.0.0 require every effect-capable `POST /mcp` request to
 select exactly one execution model. An unselected tool call returns HTTP 426
 with `error: "client_contract_required"` and `executable: false` before
 authentication-side mutation, rate limiting, policy evaluation, HIL, Ledger,
@@ -19,9 +19,9 @@ tool: `initialize`, `initialized`, `notifications/*`, `ping`, and `tools/list`.
 
 | Surface | Minimum version | Decision entry point |
 |---|---:|---|
-| Proxy | 0.5.0 | Gateway contract enforcement |
-| Lite | 0.9.0 | Gateway contract enforcement |
-| Rust `clavenar-sdk` | 0.3.0 | `ClavenarClient` prepared/governed execution APIs |
+| Proxy | 1.0.0 | Gateway contract enforcement |
+| Lite | 1.0.0 | Gateway contract enforcement |
+| Rust `clavenar-sdk` | 1.0.0 | `ClavenarClient` prepared/governed execution APIs |
 | TypeScript `@clavenar/agent-sdk` | 1.5.0 | `clavenarWrap` |
 | Python `clavenar-agent-sdk` | 1.4.0 | `clavenar_wrap` |
 | Go SDK | 1.3.0 | `Inspect` / `InspectAll` |
