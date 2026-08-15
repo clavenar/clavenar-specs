@@ -6,8 +6,8 @@
       "manifest": "package.json",
       "registry": "https://registry.npmjs.org",
       "repository": "clavenar-typescript-sdk",
-      "tag": "v1.6.2",
-      "version": "1.6.2"
+      "tag": "v1.6.3",
+      "version": "1.6.3"
     },
     {
       "access": "anonymous",
@@ -15,8 +15,8 @@
       "manifest": "pyproject.toml",
       "registry": "https://pypi.org",
       "repository": "clavenar-python-sdk",
-      "tag": "v1.5.2",
-      "version": "1.5.2"
+      "tag": "v1.5.3",
+      "version": "1.5.3"
     },
     {
       "access": "authenticated-registry-and-anonymous-release",
@@ -24,8 +24,8 @@
       "manifest": "pom.xml",
       "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
       "repository": "clavenar-java-sdk",
-      "tag": "v1.5.4",
-      "version": "1.5.4"
+      "tag": "v1.5.5",
+      "version": "1.5.5"
     },
     {
       "access": "authenticated-registry-and-anonymous-release",
@@ -33,8 +33,8 @@
       "manifest": "src/Clavenar.AgentSdk/Clavenar.AgentSdk.csproj",
       "registry": "https://nuget.pkg.github.com/clavenar/index.json",
       "repository": "clavenar-dotnet-sdk",
-      "tag": "v1.6.4",
-      "version": "1.6.4"
+      "tag": "v1.6.5",
+      "version": "1.6.5"
     },
     {
       "access": "anonymous",
@@ -42,8 +42,8 @@
       "manifest": "VERSION",
       "registry": "https://proxy.golang.org",
       "repository": "clavenar-go-sdk",
-      "tag": "v1.5.1",
-      "version": "1.5.1"
+      "tag": "v1.5.2",
+      "version": "1.5.2"
     },
     {
       "access": "anonymous",
@@ -84,10 +84,10 @@
   ],
   "contract": "clavenar.protected-distribution/v1",
   "goModuleTags": [
-    "v1.5.1",
-    "adapters/anthropic/v1.5.1",
-    "adapters/openai/v1.5.1",
-    "examples/v1.5.1"
+    "v1.5.2",
+    "adapters/anthropic/v1.5.2",
+    "adapters/openai/v1.5.2",
+    "examples/v1.5.2"
   ],
   "imagePublication": {
     "access": "anonymous",

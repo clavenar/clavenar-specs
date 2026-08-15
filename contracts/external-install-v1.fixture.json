@@ -9,9 +9,9 @@
       "id": "typescript-sdk",
       "repository": "clavenar-typescript-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.2",
+      "version": "1.6.3",
       "access": "anonymous",
-      "install": "pnpm add @clavenar/agent-sdk@1.6.2",
+      "install": "pnpm add @clavenar/agent-sdk@1.6.3",
       "registry": "https://registry.npmjs.org",
       "verification": ["install", "import", "hello-world"]
     },
@@ -19,9 +19,9 @@
       "id": "python-sdk",
       "repository": "clavenar-python-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.2",
+      "version": "1.5.3",
       "access": "anonymous",
-      "install": "pip install clavenar-agent-sdk==1.5.2",
+      "install": "pip install clavenar-agent-sdk==1.5.3",
       "registry": "https://pypi.org",
       "verification": ["install", "import", "hello-world"]
     },
@@ -29,12 +29,12 @@
       "id": "java-sdk",
       "repository": "clavenar-java-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.4",
+      "version": "1.5.5",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "com.clavenar:agent-sdk:1.5.4",
+      "install": "com.clavenar:agent-sdk:1.5.5",
       "registry": "https://maven.pkg.github.com/clavenar/clavenar-java-sdk",
       "releaseAssets": [
-        "agent-sdk-1.5.4.jar",
+        "agent-sdk-1.5.5.jar",
         "pom.xml",
         "bom.json",
         "bom.xml"
@@ -45,13 +45,13 @@
       "id": "dotnet-sdk",
       "repository": "clavenar-dotnet-sdk",
       "sourcePath": "README.md",
-      "version": "1.6.4",
+      "version": "1.6.5",
       "access": "authenticated-registry-and-anonymous-release",
-      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.4",
+      "install": "dotnet add package Clavenar.AgentSdk --version 1.6.5",
       "registry": "https://nuget.pkg.github.com/clavenar/index.json",
       "releaseAssets": [
-        "Clavenar.AgentSdk.1.6.4.nupkg",
-        "Clavenar.AgentSdk.1.6.4.snupkg"
+        "Clavenar.AgentSdk.1.6.5.nupkg",
+        "Clavenar.AgentSdk.1.6.5.snupkg"
       ],
       "verification": ["authenticated-install", "compile", "anonymous-download"]
     },
@@ -59,15 +59,15 @@
       "id": "go-sdk",
       "repository": "clavenar-go-sdk",
       "sourcePath": "README.md",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "access": "anonymous",
-      "install": "go get github.com/clavenar/clavenar-go-sdk@v1.5.1",
+      "install": "go get github.com/clavenar/clavenar-go-sdk@v1.5.2",
       "registry": "https://proxy.golang.org",
       "moduleTags": [
-        "v1.5.1",
-        "adapters/anthropic/v1.5.1",
-        "adapters/openai/v1.5.1",
-        "examples/v1.5.1"
+        "v1.5.2",
+        "adapters/anthropic/v1.5.2",
+        "adapters/openai/v1.5.2",
+        "examples/v1.5.2"
       ],
       "verification": ["four-module-install", "compile", "hello-world"]
     },
