@@ -1,3378 +1,612 @@
-# Clavenar — Implemented Features
+# Clavenar — implemented feature guide
 
-A complete inventory of what's shipped today, with each feature explained on three axes:
+This document is the implementation-first index for Clavenar. It describes
+feature families, identifies their owning repositories or contracts, and
+points to executable verification. [`TECH_SPEC.md`](TECH_SPEC.md) remains the
+design and wire-contract authority.
 
-1. **Concept** — what it does and why it matters.
-2. **Implementation** — where the code lives and the load-bearing structs / wire shapes.
-3. **Verify** — concrete steps to observe the feature working.
+`main` describes checked-in source. It does not, by itself, prove that a
+package was published, a deployment was configured, or a public environment
+is running that source. Use the evidence source that matches the claim:
 
-This is a companion to `TECH_SPEC.md`. Where the spec is design-first, this file is implementation-first: every feature listed here corresponds to working code on `main` in one or more of the 30 repos. Re-verify with `git log --oneline -10` per repo before relying on any specific file reference — code moves faster than docs.
-
-Boot environment assumed for all "Verify" recipes:
-
-```bash
-# One-time prereqs
-docker run -d --name clavenar-nats  -p 4222:4222 nats:2
-docker run -d --name clavenar-vault -p 8200:8200 -e VAULT_DEV_ROOT_TOKEN_ID=root hashicorp/vault:1.18
-./repos/clavenar-proxy/scripts/gen_certs.sh
-
-# Two boot paths (pick by what you're testing):
-./repos/clavenar-e2e/dev/run.sh                                               # host-cargo, full assertions (dev env)
-docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack up -d # console-with-data demo
-```
-
-The host-cargo runner (`run.sh`) builds in **debug profile on purpose** — Apple clang has been observed to segfault when building `ring`'s release-profile C code on some macOS versions.
-
----
-
-## Table of contents
-
-1. [Security pipeline (Layers 1–4)](#1-security-pipeline-layers-14)
-2. [HIL — human-in-the-loop](#2-hil--human-in-the-loop)
-3. [Identity & agent onboarding (WAO)](#3-identity--agent-onboarding-wao)
-4. [Operator surface — console](#4-operator-surface--console)
-5. [Operator authentication](#5-operator-authentication)
-6. [`clavenarctl` CLI](#6-clavenarctl-cli)
-7. [Regulatory export](#7-regulatory-export)
-8. [Forensic / audit pipeline](#8-forensic--audit-pipeline)
-9. [Cold-tier analytics exports](#9-cold-tier-analytics-exports)
-10. [GTM tooling](#10-gtm-tooling)
-11. [Test infrastructure](#11-test-infrastructure)
-12. [Supply chain & threat model](#12-supply-chain--threat-model)
-13. [Wire contracts](#13-wire-contracts)
-14. [Forensic-tier deep review](#14-forensic-tier-deep-review)
-15. [Deception layer (decoys)](#15-deception-layer-decoys)
-16. [Governed language SDK execution](#16-governed-language-sdk-execution)
-17. [Durable tenant lifecycle](#17-durable-tenant-lifecycle)
-18. [HIL legal hold and erasure](#18-hil-legal-hold-and-erasure)
-19. [HIL backup and restore erasure](#19-hil-backup-and-restore-erasure)
-20. [Production federated identity](#20-production-federated-identity)
-21. [Optional Exec containment](#21-optional-exec-containment)
-
----
-
-## 1. Security pipeline (Layers 1–4)
-
-### 1.1 mTLS ingress (Layer 1)
-
-**Concept.** The proxy is the single ingress point for agent traffic. Mutual TLS terminates here — every agent presents a client certificate that the proxy validates against its CA root before any handler runs. There is no "auth-less" entry path; an agent without a valid cert never reaches the security pipeline at all. The proxy parses the SPIFFE SAN URI from the cert (modern path) and falls back to the CN (`MtlsIdentity.cn`) for legacy callers during a deprecation window.
-
-**Implementation.** `clavenar-proxy:8443`. Cert chain validation happens in `WebPkiClientVerifier` configured at TLS startup. The SPIFFE SAN parser runs in the connection setup layer; the parsed identity flows through every handler as `MtlsIdentity { cn, spiffe_id }`. Vault credential injection happens in `forward_upstream` — the proxy fetches per-agent upstream credentials from Vault Transit and injects them into the upstream HTTP request headers, never logging the credential value.
-
-**Verify.**
-
-```bash
-# Without a cert — connection rejected at TLS layer, no handler invocation
-curl -v https://localhost:8443/mcp     # ssl handshake failure
-
-# With the e2e suite's bundled cert, the request reaches handle_mcp
-./repos/clavenar-e2e/dev/run.sh              # tail logs for "mtls accept"
-```
-
-Console `/audit` shows the resolved agent identity on every row, under the column labeled **`agent`** — that's the CN/SPIFFE identity threaded through (for SPIFFE-bearing certs the column renders just the `<name>` segment of `spiffe://.../agent/<name>/...`, not the full URI).
-
-### 1.2 Security-first serial pipeline
-
-**Concept.** When a request arrives, the proxy resolves the security verdict (Brain → Policy, then HIL if Yellow-tier) **before** any upstream call. Earlier commits raced security against upstream via `tokio::select!` to optimize latency, but that race re-opened a side-effect window for Yellow-tier tools — a wire transfer would have fired before HIL approval. The race has been dropped. Today the proxy fails closed: upstream is only contacted on `Authorized` or HIL-Approved verdicts.
-
-**Implementation.** `handle_mcp` in `clavenar-proxy/src/lib.rs` awaits the `fork` module's verdict before forking upstream. `update_history` (which records the agent's recent-call counter for velocity tracking) only runs on successful upstream calls — i.e. inside `forward_upstream`, after the verdict resolves.
-
-**Verify.** With a Yellow-tier scenario, observe that the upstream stub never receives the request when HIL denies. Run the chaos-monkey HIL-denial scenario:
-
-```bash
-./repos/clavenar-chaos-monkey/target/release/clavenar-chaos-monkey --proxy https://localhost:8443 --scenario hil_yellow_denied
-```
-
-The proxy returns 403, and the upstream stub log shows zero invocations for that `correlation_id`.
-
-### 1.3 Layer 2 — Brain (semantic inspection)
-
-**Concept.** Brain is the semantic-evaluation layer. It runs three signals against every request: an **intent classifier** (a pluggable inspector LLM — Claude Haiku 4.5 by default) that maps the JSON-RPC body to a category, a **persona-drift** detector (numeric cosine distance against a golden embedding, not an LLM opinion) that flags when an agent's behaviour diverges from its baseline, and an **indirect-injection scanner** (inspector LLM + heuristic) that catches prompt-injection payloads embedded in tool inputs. Every LLM-backed detector funnels through a single `LlmProvider` trait; each `(provider, model)` pair is read from `CLAVENAR_BRAIN_MODELS_FILE`, so a single Brain can mix Anthropic, OpenAI, Google, Bedrock, Vertex, and Ollama — Haiku ships as the default, never as a hardcoded dependency. The deliberate choice is that Brain's model is **separate from any agent's primary LLM** — the "Zero-Knowledge Bonus" — so a compromised agent model can't influence its own inspector. **Multi-turn context:** the proxy threads a bounded `prior_requests` window (recent method/tool tuples from its `HistoryStore`) into the inspect request, so the always-recomputed detectors reason over the request *sequence*. Two consumers use it: the injection scanner prepends a recent-sequence summary to its prompt, and a structural **sequence-escalation** signal — a second drift axis, distinct from the embedding persona-drift — fires (surfaced as `sequence_escalation_score`) when a *novel* high-blast-radius tool (write / exec / bulk-exfil shape) follows a benign-read window, the rapport-then-strike shape. Because it reads method/tool shape alone (never an embedding), it fires in mock mode too; Yellow-tier tools are deliberately excluded — they already route to HIL on every call regardless of sequence. The window field is additive (`#[serde(default)]`) and excluded from the verdict cache key, so the cached classifier stays history-independent.
-
-**Implementation.** `clavenar-brain:8081`. Wire surface: `POST /inspect`, body `BrainRequest { agent_id, correlation_id, jsonrpc fields... }`, response `{ authorized, intent_category, reason }`. Mock mode triggered by `CLAVENAR_BRAIN_MOCK_MODE=true` (or the legacy `ANTHROPIC_API_KEY=mock-key` sentinel) — used by e2e to avoid burning provider tokens; LLM-backed detectors use deterministic local fail-closed behavior and persona drift is explicitly unavailable. Per-call provider timeout (`CLAVENAR_BRAIN_LLM_TIMEOUT_SECS`, aliasing the legacy `CLAVENAR_BRAIN_ANTHROPIC_TIMEOUT_SECS`) and the separately bounded Voyage embedding path prevent latency cascades.
-
-**Versioned provider routing.** `clavenar.brain-provider-routing/v2` separates
-credential references, provider targets, named models, and workload
-assignments. The schema forbids inline credential values, requires exact
-reference closure and provider/credential compatibility, bounds target
-timeouts and fallback fan-out, and makes disabled versus transient-only
-fallback explicit. Brain normalizes v2 and historical unversioned files into
-one runtime type; partial or unknown version markers fail closed. The fixed
-`ANTHROPIC_API_KEY` compatibility alias remains available during the documented
-migration window. An enabled `transient_only` route tries at most two declared
-alternates and only after replay-safe pre-dispatch/local availability, rate
-limit, HTTP 408/425, or exact HTTP 503. Ambiguous/post-dispatch transport,
-authentication, invalid request, unsupported capability, parse, malformed
-detector output, refusal, truncation, incomplete/empty output, and policy
-results remain fail-closed without provider fallback. Named completion targets
-have independent bulkheads and circuits; every attempted provider/model and
-bounded fallback decision is observable without prompt or credential data.
-
-**Verify.** In `clavenar-specs`, run `python3 -m unittest -v
-tests.test_brain_provider_routing_contract`; then run `python3
-scripts/check_brain_provider_routing.py` in `clavenar-e2e`.
-
-**Model qualification.** Configurable does not mean supported. The canonical
-`clavenar.brain-model-qualification/v1` policy pins the 92-case regression
-corpus by digest, exercises eight provider-neutral completion/failure
-scenarios, and requires three live runs to meet schema, model-evidence, cost,
-quality, category, latency, and degradation gates. Passing runs emit a
-`clavenar.brain-model-qualification-receipt/v1`; matrix entries cannot become
-`qualified` without a current receipt. The current matrix honestly lists all
-six adapter candidates as `experimental`, with zero hosted and zero local
-qualified providers, so the two-hosted-plus-one-local GA gate remains false.
-
-**Verify.** Run `python3 -m unittest -v
-tests.test_brain_model_qualification_contract` in `clavenar-specs`, then
-`python3 scripts/check_brain_model_qualification.py` in `clavenar-e2e`.
-
-The same mTLS application port carries three auxiliary reads/operations with
-exact caller identities: policy-engine alone may `POST /explain-pattern`, and
-console alone may `POST /narrate-decision` or `GET /model-snapshot`. The
-general inspect/scan SPIFFE prefix list cannot grant these capabilities. The
-plain `:9081` listener contains only `/`, `/health`, `/readyz`, and `/metrics`;
-TLS-disabled compatibility mode combines the routers on loopback only. Explain
-and narrate strict profiles explicitly pin the canonical policy-engine and
-console caller URI settings and fail startup on omissions, prefixes, or lists.
-The two operations share a configurable 16 KiB body cap, enforce route-specific field
-caps, admit at default fixed-minute rates of 20 and 60, reserve against one
-shared default 5,000,000-micro-USD fixed-hour provider budget, and wrap the
-whole provider future in a 5-second deadline. Body/field failures return
-`413`/`400`, admission failures `429`, and provider/deadline failures `503`.
-Both callers treat every failure as loss of optional enrichment: the miner
-keeps its template and the console leaves the non-evidentiary annotation or
-live canary anchor absent.
-
-**Verify.**
-
-```bash
-# Direct probe in the loopback-only plain compatibility mode
-curl -X POST http://localhost:8081/inspect \
-  -H 'content-type: application/json' \
-  -d '{"agent_id":"test","correlation_id":"...","method":"tools/call","params":{...}}'
-
-# Indirect-injection assertion
-./repos/clavenar-chaos-monkey/... --scenario injection
-```
-
-Console `/audit` shows `intent_category` and `reasoning` columns.
-
-### 1.4 Layer 3 — Policy (Rego over `regorus`)
-
-**Concept.** Policy is the rules layer. It evaluates pure-Rust Rego (`regorus` crate) over a set of `.rego` files describing tool denylists, business-hours windows, attestation requirements, and velocity thresholds. The proxy maps Brain's `authorized` boolean to an `intent_score` (`0.1` if true, `0.5` if false); Policy's `intent_score >= 0.2` rule means a Brain rejection alone fails policy — Brain and Policy compose as defense-in-depth, not as alternatives.
-
-**Implementation.** `clavenar-policy-engine:8082`. Wire surface: `POST /evaluate`, body `PolicyInput { tool_type, agent_history, intent_score, agent_id, method, current_time, correlation_id, recent_request_count, attestation, agent_spiffe }`. The service replaces caller-supplied time, velocity, spend-window, cumulative-spend, and budget fields before production evaluation; malformed or unavailable state fails closed. Rego files live at `clavenar-policy-engine/policies/*.rego` (denylist, business_hours, velocity, attestation).
-
-**Verify.**
-
-```bash
-curl -X POST http://localhost:8082/evaluate \
-  -H 'content-type: application/json' \
-  -d '{"tool_type":"wire_transfer","agent_id":"test","method":"tools/call","intent_score":0.1,"current_time":"<RFC 3339 UTC>","recent_request_count":0}'
-```
-
-Returns `{ "allow": false, "reason": "..." }` — wire_transfer requires HIL or attestation.
-
-### 1.5 Velocity tracker — two backends
-
-**Concept.** A circuit breaker against runaway agents. Tracks per-agent request rate over a sliding window and breaks the circuit when the rate exceeds threshold. Two backends: `InProcessTracker` for single-process deployments, `NatsKvTracker` for clustered ones. The two-backend split exists because you want production deploys to share state across replicas (so an agent burst can't be amplified by load-balancing across pods) but local development shouldn't need a NATS dependency.
-
-**Implementation.** `clavenar-policy-engine` selects via `CLAVENAR_VELOCITY_BACKEND={inprocess|nats-kv}`. A NATS-connected deployment defaults to `nats-kv`; standalone mode defaults to `inprocess`. Requested distributed state that cannot connect or later degrades fails closed instead of silently changing enforcement scope. `InProcessTracker` is size-bounded. `NatsKvTracker` uses the exact `clavenar_velocity` JetStream KV bucket with JSON-encoded millisecond timestamps and a CAS update loop with per-agent local mutex. Cumulative monthly budget state uses the same posture in the separate `clavenar_policy_spend` bucket.
-
-**Verify.**
-
-```bash
-./repos/clavenar-chaos-monkey/... --scenario velocity_breaker     # MUST run last
-```
-
-The chaos-monkey ordering rule: `velocity_breaker` runs last because the policy tracker records every `/evaluate`, so a mid-run burst would rate-limit subsequent attacks. The e2e runner (`run.sh`) exercises the nats-kv backend with a per-run unique bucket so test runs don't interfere.
-
-### 1.6 Layer 4 — Ledger (hash-chained forensic store)
-
-**Concept.** Append-only forensic store. Every security verdict, every HIL transition, every agent lifecycle event becomes a row in a SHA-256 hash-chained SQLite database. The chain is the regulator-grade evidence: tamper with any historical row and every later row's hash mismatches.
-
-**Implementation.** `clavenar-ledger` uses a split router: plain `:8083` for
-aggregate/diagnostic reads and mTLS `:8183` for the full application surface.
-Internal routes admit only canonical, profile-governed workload SPIFFE prefixes;
-the Compose profile uses proxy, console, and deep-review, while Helm additionally
-admits its simulator workload. The merged mTLS `/verify` route accepts any
-CA-valid client certificate. Separately, only exact
-`spiffe://clavenar.local/service/website` enables trusted forwarding: Caddy
-replaces (never appends) untrusted `X-Forwarded-For`, while direct/plain callers'
-forwarding fields are ignored and share one conservative full-walk limiter
-bucket. Full walks allow 3 requests per trusted source per minute, 12 globally
-per minute, one walk in flight, and at most 64 active trusted-source windows.
-Trusted forwarding does not grant internal authority: the website-certificate
-fixture proves `/verify` succeeds, but website `POST /log` returns 401 without
-mutation. Hash formula:
-
-```
-genesis        = 64 × "0"
-entry_hash[n]  = sha256( prev_hash[n] || "|" || canonical_json(hashable[n]) )
-```
-
-`canonical_json` is sorted-keys, no-whitespace, UTF-8 NFC. Wire surface: `POST /log` (HTTP fallback for non-NATS callers), `GET /verify` (whole-chain integrity check), `GET /audit/correlation/{id}` (per-request reconstruction), `POST /export/regulatory` (see §7), `POST /export` (cold-tier Iceberg+Parquet, see §9). NATS subscriber on `clavenar.forensic` is the primary ingestion path.
-
-**Verify.**
-
-```bash
-curl http://localhost:8083/verify
-# {"valid":true,"row_count":1234,"head_hash":"..."}
-```
-
-Console `/audit` is the human-readable view; `clavenarctl regulatory export` produces the auditor-grade artifact.
-
-### 1.7 Five coexisting chain versions
-
-**Concept.** The hash chain has evolved five times. v1 was the original verdict-only shape. v2 added per-action cryptographic signatures (`agent_spiffe`, `signature`, `key_id`). v3 added lifecycle-event row anchoring (a different hashable shape entirely, keyed on `event_kind` + `payload_sha256`). v4 added reproducible Brain-evidence verdict rows (EU AI Act Art 12). v5 is the forward-only complete evidence shape: every new row commits one fixed 32-field canonical object containing the explicit version, position and predecessor plus every current immutable evidence and attribution column. All optional fields serialize as explicit `null`, so removing a value and changing absence into presence are both detectable. Historical v1-v4 rows retain their exact semantics and bytes.
-
-**Implementation.** `CURRENT_CHAIN_VERSION = 5` in `clavenar-ledger`. `recompute_for_version` dispatches each stored row to its immutable `HashableEntryV<N>`. SQLite and PostgreSQL stamp every new append v5 regardless of optional-field population and produce byte-identical hashes. V5 rejects ambiguous dual lifecycle/Brain payloads and missing digest/byte pairs. A successful complete walk returns a `clavenar.verified-chain/v1` commitment containing the verified head hash, length/last sequence, and tail version; an invalid walk returns no commitment.
-
-**Verify.** Mixed v1-v5 verification:
-
-```bash
-./repos/clavenar-e2e/dev/run.sh
-curl -s 'http://localhost:8083/verify?full=true' |
-  jq '{valid, commitment}'
-```
-
-The owner suite mutates every v5 field and null boundary, deletes/reorders rows,
-changes the predecessor and sequence, tampers with sidecar bytes, and verifies
-SQLite/PostgreSQL parity. The deployment receipt compares the full-walk
-commitment to the exact live database tail and count.
-
-### 1.8 Append-only `chain_vacuum_cursor`
-
-**Concept.** Long-running deployments accumulate ledger rows; SQLite size grows. Operators want to vacuum old rows after they've been exported to cold storage. But naive deletion would break chain verification — the verifier needs the genesis row to seed `expected_prev`. The append-only `chain_vacuum_cursor` table records "the chain has been vacuumed up to seq N, and the prev_hash at seq N was X" so the verifier can pick up from a cursor instead of genesis.
-
-**Implementation.** `clavenar-ledger` `chain_vacuum_cursor` SQLite table. Vacuum is **opt-in** post-export — it never runs automatically. The verifier checks the cursor table first; if a cursor exists, `expected_prev` starts from the cursor's recorded hash, not from genesis. Cursor rows are themselves append-only so the audit trail of vacuums is preserved.
-
-**Verify.** Run an export, then trigger vacuum (via the operator-side endpoint or CLI), then re-verify the chain:
-
-```bash
-curl http://localhost:8083/verify    # still valid after vacuum
-```
-
-This is mostly a disk-pressure relief feature; day-1 deployments don't need it (~3.5 GB/year at 10k rows/day).
-
-### 1.9 Policy mutability — SQLite store + write API + outbox
-
-**Concept.** Policy used to be configured by editing `policies/*.rego` and `policies/*.json` on disk and redeploying the policy engine. Two operational gaps fell out: the only audit trail was `git log` (no anchor in the chain), and tuning the attestation allowlist for a single new measurement still meant a code push. The mutability surface closes both — every policy now lives in SQLite alongside an append-only version table; mutations land via a typed API; the engine atomically rebuilds without dropping in-flight `/evaluate` calls; every change anchors as a `policy.*` chain v3 row through a durable outbox. The console UI is *not* a no-code editor — operators still write rego — but the change loop collapses from "PR + redeploy" to "edit + Save" with a stronger audit trail. Rollback is one-click against the version-history table.
-
-**Implementation.** `clavenar-policy-engine` modules: `storage.rs` (SQLite-backed `policies` + `policy_versions` + `policy_outbox` tables), `validation.rs` (regorus compile gate for `rego` content type, JSON Schema gate for `json`), `write_api.rs` (the create/update/state/rollback/delete handlers), `outbox_worker.rs` (drains `policy_outbox` to NATS `clavenar.forensic`). Wire surface (Viewer reads, Admin writes):
-
-```
-GET    /policies                              list (Viewer)
-GET    /policies/{name}                       current + metadata (Viewer)
-GET    /policies/{name}/versions              version timeline (Viewer)
-GET    /policies/{name}/versions/{n}          historical body (Viewer)
-GET    /policies/{name}/diff?from=N&to=M      unified diff (Viewer)
-POST   /policies                              create (Admin)
-PUT    /policies/{name}                       update (Admin)
-POST   /policies/{name}/activate              (Admin)
-POST   /policies/{name}/deactivate            (Admin)
-DELETE /policies/{name}                       soft delete (Admin)
-POST   /policies/{name}/rollback/{version}    (Admin)
-POST   /policies/categories/{domain}/activate    install whole category (Admin)
-POST   /policies/categories/{domain}/deactivate  uninstall whole category (Admin)
-```
-
-Single-policy write requests carry `{reason: string, expected_current_version: int}` (required `reason` is the human-readable change rationale; `expected_current_version` enables 409-on-conflict optimistic concurrency so two operators editing the same policy can't silently clobber each other). The category endpoints carry `{reason, actor_sub, actor_idp}` and flip every non-deleted row matching the `domain` column in one transaction + one engine rebuild, returning `{changed, skipped, results}` (already-in-target rows are `skipped`, idempotent); they skip `protected` floor rows on deactivate. Failure shapes: `400` for parse/validation errors (regorus error returned verbatim) or a category deactivate that would zero the active rego set, `409` `policy_version_conflict` with the new metadata so the UI can prompt "policy was changed since you opened the editor; reload?" (also returned when deactivating/deleting a `protected` floor policy), `403` for `Admin`-gated routes called by lower roles. Boot ingestion: if the `policies` table is empty, the seeder reads `policies/*` from disk into SQLite once (floor `active=1 protected=1`; domain templates seeded only when `CLAVENAR_POLICY_SEED_TEMPLATES=true`, with their `active` flag from `CLAVENAR_POLICY_SEED_TEMPLATE_STATE` ∈ {`active` default, `inactive`}); subsequent boots load directly from SQLite, with a `reconcile_protected_from_dir` pass re-marking the floor each boot. The chain side is event-kind-polymorphic — no v4 bump needed; new event kinds are `policy.created`, `policy.updated`, `policy.activated`, `policy.deactivated`, `policy.deleted`, `policy.rollback`.
-
-**Verify.**
-
-```bash
-./repos/clavenar-e2e/dev/run-policies.sh
-# Boots policy-engine + ledger + NATS, drives the full mutation surface
-# end-to-end, asserts every mutation lands as a policy.* chain v3 row
-# and the chain still verifies after each.
-```
-
-For the console UI counterpart, see §4.10.
-
-### 1.10 Audit-agent fan-out (`GET /agents`)
-
-**Concept.** The console's `/audit` page wants to default to "show me every agent that's ever logged a row" when no search criteria are typed. Computing that list from chain rows on every page load is wasteful; a small endpoint that returns the distinct CN/SPIFFE-name set is cheap and cacheable. Used in tandem with the simulator's roster so transient demo agents and real agents both appear in the default fan-out.
-
-**Implementation.** `GET /agents` on `clavenar-ledger`. Reads via `list_distinct_audit_agent_ids` against the `audit` table, returns `{ agents: [...] }`. SDK side: `LedgerClient::list_agents() -> Vec<String>`. Console fan-out: `(sim_roster_from_admin) ∪ (ledger /agents response)`.
-
-**Verify.**
-
-```bash
-curl http://localhost:8083/agents | jq .agents
-```
-
-### 1.11 Pluggable storage backend (SQLite + Postgres)
-
-**Concept.** Until v0.5.0 the ledger was SQLite-only. The storage trait makes
-the chain backend-independent, but the supported PostgreSQL deployment is
-deliberately staged at one Ledger replica. SQLite remains the production
-default. PostgreSQL is available for controlled evaluation without implying
-database failover, multi-writer rollout safety, or whole-stack HA. **The chain
-hash is backend-agnostic** — equivalent persisted timestamps and rows produce
-byte-identical `entry_hash` values across SQLite and PostgreSQL, enforced by
-cross-backend tests and an image-level full verification walk.
-
-**Implementation.** `LedgerStore` in `clavenar-ledger/src/storage.rs` covers
-the chain primitives, with `SqliteLedgerStore` as default and
-`PostgresLedgerStore` behind the `postgres` cargo feature. The production
-Dockerfile builds the feature-enabled binary. PostgreSQL timestamps are
-normalized to the database's microsecond precision before hashing, so rows
-remain verifiable after persistence. The normal PostgreSQL connection path
-requires a private CA file, forces TLS, and verifies the certificate against
-the single TCP host in the DSN. The chart exposes a structured
-`services.ledger.postgres` object with governed DSN and CA Secret names plus an
-optional rotation identifier; it rejects persistence, more than one replica,
-missing Secret names, and env-based shadow configuration.
-
-The exact supported/unavailable route inventory is governed by
-`clavenar.postgres-ledger-topology/v1` in
-`contracts/postgres-ledger-topology-v1.{schema,fixture}.json`. Sixteen
-backend-agnostic paths are supported, including append, verify, audit reads,
-strict deduplication, active-agent metering, regulatory export, and compliance
-evidence. Twenty-one SQLite-direct analytics, case, replay, allowlist, and
-cold-tier routes return stable `503` responses with no SQLite fallback.
-
-Backend selection:
-
-```
-CLAVENAR_LEDGER_BACKEND={sqlite|postgres}   # default: sqlite
-CLAVENAR_LEDGER_PG_URL=postgres://...       # Secret-backed in the chart
-CLAVENAR_LEDGER_PG_TLS_CA_FILE=/path/ca.crt # required verified-TLS trust root
-CLAVENAR_LEDGER_DB=/var/lib/clavenar/...    # sqlite-mode only
-```
-
-**Verify.**
-
-```bash
-# SQLite (default)
-cargo run --bin clavenar-ledger
-
-# Contract, chart source, and image-level live acceptance
-python3 clavenar-e2e/scripts/check_postgres_ledger_topology.py --require-source
-sudo -n clavenar-e2e/scripts/check-postgres-ledger-image-live.sh \
-  --image-ref ghcr.io/clavenar/clavenar-ledger@sha256:<digest> \
-  --receipt /tmp/postgres-ledger-receipt.json
-```
-
-### 1.11.1 Supported recovery and failure model
-
-**Concept.** A tested restore is not the same claim as high availability.
-Operators need one exact account of what stays unavailable, what fails closed,
-which external action restores service, and whether configured schedules meet
-the inventory objectives.
-
-**Implementation.** The strict
-[`clavenar.supported-failure-model/v1`](contracts/supported-failure-model-v1.fixture.json)
-contract enumerates the Compose cold-active/passive, Helm single-writer, and
-staged PostgreSQL Ledger boundaries. It binds all 17 component and dependency
-failure modes to the accepted state inventory, backup and passive plans,
-PostgreSQL scope, monotonic writer fence, and cold-passive drill evidence.
-Weekly capture (604,800 seconds) is recorded separately from the 300-second
-critical-state RPO and 612,000-second point-age ceiling. The configured cadence
-does not meet that RPO. Five-minute passive re-verification does not create a
-recovery point. Drill measurements remain observations rather than an SLO.
-
-**Verify.**
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_supported_failure_model_contract
-cd ../clavenar-e2e
-python3 scripts/check_supported_failure_model.py --require-source
-```
-
-### 1.12 Observe-only mode (`CLAVENAR_MODE=observe`)
-
-**Concept.** New deployments don't want enforcement to bite on day one — false positives during the tuning window stall agents and burn operator trust. Observe mode flips every deny / review verdict to allow at the proxy boundary while still emitting the forensic event, including a `would_deny` / `would_park` annotation. Operators tune policy against real traffic for a week, then promote to `enforce`. The default is `enforce` so a misconfigured environment fails closed.
-
-**Implementation.** `clavenar-proxy` reads `CLAVENAR_MODE={enforce|observe}` (default `enforce`); `clavenar-lite` exposes the same toggle under `CLAVENAR_LITE_MODE`. In observe mode the verdict-to-status mapping in `forward_or_block` short-circuits to `Authorized`, but the forensic event carries the original `verdict` and an `observe_mode` flag so downstream audit and webhooks can distinguish "would-have-blocked" from "allowed". The `clavenar_proxy_would_deny_total` / `clavenar_proxy_would_park_total` Prometheus counters surface the gap between current policy posture and an enforcement-on world.
-
-**Verify.**
-
-```bash
-CLAVENAR_MODE=observe ./repos/clavenar-e2e/dev/run.sh
-# trigger any scenario that would normally deny
-curl http://localhost:9001/metrics | grep clavenar_proxy_would_deny_total
-# counter increments; agent received 200
-```
-
-### 1.13 Rate limiting + quotas (proxy ingress)
-
-**Concept.** Before Brain / Policy run, the proxy enforces a token bucket per `agent_id` and per `tenant` (SVID URI `tenant/<t>`). Burst spikes from a runaway agent get bounced with `429 Too Many Requests` before they touch the security pipeline; tenant-wide quotas put a ceiling on shared-noisy-neighbor cost. Forensic events tag the throttle (`signal=rate_limited_{agent,tenant}`) so audit lists exactly which scope tripped. Opt-in: default 0 leaves the limiter `None` and the fast path skips the gate entirely.
-
-**Implementation.** Token-bucket gate in `clavenar-proxy::handle_mcp`, runs before `handle_mcp_inner`'s Brain/Policy pipeline. Per-agent and per-tenant buckets keyed on the parsed `MtlsIdentity`. Knobs: `CLAVENAR_PROXY_RATE_LIMIT_PER_AGENT_QPS` / `CLAVENAR_PROXY_RATE_LIMIT_PER_TENANT_QPS`. 429 body is a structured JSON `{error, scope, key, retry_after_secs, correlation_id}`. New counter `clavenar_proxy_rate_limit_denied_total{scope}`. `clavenar-lite` ships the per-agent half (no SVID tenant to derive from); 429 body shape identical minus `scope`.
-
-**Verify.**
-
-```bash
-CLAVENAR_PROXY_RATE_LIMIT_PER_AGENT_QPS=2 ./repos/clavenar-e2e/dev/run.sh
-# burst more than 2 RPS from a single client cert
-for _ in $(seq 1 10); do curl -sk --cert client.crt --key client.key https://localhost:8443/mcp -d '{}' & done
-# Some return 200, some 429 with retry_after_secs body
-```
-
-### 1.14 Policy starter pack (7 Rego templates)
-
-**Concept.** A fresh policy engine without rules denies nothing — but writing seven Rego files cold is a non-trivial first day. The starter pack ships ready-made templates for the common ground-truth bad cases: PII egress, prod-DB writes, money moves, agent impersonation, prompt-injection indicators, off-hours actions, rate-limit review. Each adds rules to `clavenar.authz`'s deny / review sets; `governance.rego` keeps the `allow if` gate. Operators copy what they want, drop them in `policies/templates/`, and either tune in-place or use the `clavenarctl generate-policy` command (§6.6) to scaffold against the sibling repo.
-
-**Implementation.** `repos/clavenar-policy-engine/policies/templates/`. Seven files: `pii_egress.rego`, `prod_db_writes.rego`, `money_moves.rego`, `agent_impersonation.rego`, `prompt_injection.rego`, `off_hours_actions.rego`, `rate_limit_review.rego`. Each declares packages under `clavenar.authz.{templates,deny,review}` so they compose with `governance.rego`'s entry point without conflict. Test coverage at `tests/policy_templates.rs` — 17 integration tests probing each template against trigger inputs and safe-baseline inputs.
-
-**Verify.**
-
-```bash
-ls repos/clavenar-policy-engine/policies/templates/
-# pii_egress.rego  prod_db_writes.rego  money_moves.rego ...
-cargo test --manifest-path repos/clavenar-policy-engine/Cargo.toml policy_templates
-# 17 passed
-```
-
-### 1.15 Policy Exchange (signed packs + mandatory backtest)
-
-**Concept.** Distribute governance across deployments as **signed, versioned Rego packs**, installable only after a **mandatory local backtest** proves the pack doesn't regress known-attack coverage. The starter pack (§1.14) seeds one stack; Policy Exchange is the cross-deployment unit — sign a pack once, and any operator's `install` is fail-closed on both signature and backtest before a rule lands.
-
-**Implementation.** A pack is a directory of `*.rego` plus `pack.json` (manifest committing to each file's sha256) + `pack.sig` (detached ed25519 over `sha256(canonical pack.json, signature blanked)`). `clavenarctl policy exchange install <dir>` remains fail-closed: it re-hashes files, verifies the signature, backtests the Rego-decidable chaos catalog, and records pack provenance on install. The original CLI `sign` path reused Identity `/sign/blob` with `policy-pack`; the endpoint-capability baseline intentionally retires that production path because `/sign/blob` is now Ledger-only and regulatory-purpose-bound. Pack issuance therefore requires a separately authorized offline/operator signer until a distinct publication capability ships.
-
-**Verify.**
-
-```bash
-# Verify/backtest/install a pack issued by an authorized offline publisher.
-clavenarctl policy exchange install ./acme-pack \
-  --jwks-url http://localhost:8086/jwks.json --reason "Q3 finance controls" \
-  --actor-sub ops@acme.com --actor-idp okta
-#   …signature OK; backtest N attacks, 0 regressions; installed money_moves
-# Legacy direct Identity signing now fails closed: policy-pack purpose is not
-# admitted by the Ledger-only /sign/blob capability.
-```
-
-### 1.16 Fleet-wide kill-chain breaker
-
-**Concept.** A multi-step attack — read a secret, then exfiltrate it — often splits across requests and, in a horizontally-scaled fleet, across proxy replicas. Per-agent state that lives only in one replica's memory can't see the whole chain. The kill-chain breaker shares each agent's recent authorized-tool sequence across the fleet over a NATS JetStream KV bucket, so the policy engine reconstructs the chain and denies the exfil step even when no single replica saw both halves.
-
-**Implementation.** The proxy's `HistoryStore` gains a `NatsKvHistoryStore` (`clavenar-proxy/src/history.rs`) alongside the in-process default, cloning the velocity tracker's CAS-KV pattern: bucket `clavenar_history`, one key per agent, value a JSON `AgentHistory { last_tool, recent_sequence: [{tool, method, ts_ms, replica}] }` bounded to 16 events. The store stamps `ts_ms` + its `replica` id at record time; records happen only after the upstream 2xx (denied steps never enter the sequence). `boot::pick_history_store` selects the backend from `CLAVENAR_PROXY_HISTORY_BACKEND` (`inprocess` default | `nats-kv`), falling back to in-process if the bucket can't open. The proxy already ships `agent_history` inside the `PolicyInput`, so adding `recent_sequence` to the policy-engine's `AgentHistory` (`#[serde(default)]`) flows it to Rego unchanged — the whole input *is* the Rego input. `governance.rego` gains a `deny` rule: current `tool_type` in `external_egress_tools` + a `recent_sequence` event whose tool is in `sensitive_read_tools` within `kill_chain_window_ms` ⇒ deny with a `kill chain — …` reason (window checked against the proxy-stamped `current_time` for determinism). Fail-open throughout: an empty/absent sequence (older proxy, NATS blip) never fires the rule, so the breaker only *adds* denies on top of the single-replica floor. dev e2e: `clavenar-e2e/dev/run-killchain.sh` + JetStream enabled in `nats-server.conf`.
-
-**Verify.**
-
-```bash
-cargo test --manifest-path repos/clavenar-policy-engine/Cargo.toml --test temporal_test kill_chain
-cargo test --manifest-path repos/clavenar-proxy/Cargo.toml --lib history
-# live (stack up): CLAVENAR_PROXY_HISTORY_BACKEND=nats-kv via the override
-repos/clavenar-e2e/dev/run-killchain.sh
-```
-
----
-
-## 2. HIL — human-in-the-loop
-
-### 2.1 Yellow-tier state machine
-
-**Concept.** Some tool calls are too expensive (or too irreversible) to auto-approve even when Brain and Policy bless them. Wire transfers, account deletions, large refunds — the "Yellow tier." For these, the proxy parks the request at `clavenar-hil`, which surfaces it to a human approver and resolves the verdict on their click. The state machine is `Pending → Approved | Denied | Expired`. Approved → upstream fires (proxy treats it like Authorized). Denied/Expired/poll-timeout → 403 to the agent.
-
-**Implementation.** `clavenar-hil:8084`. Wire surface: `POST /pending` (proxy creates) with body `CreatePending { agent_id, correlation_id, method, request_payload, risk_summary, ttl_seconds, sandbox_report }`; `GET /pending/{id}` long-polled by the proxy until status leaves `pending`; `POST /decide/{id}` for approve, deny, or modify-and-resume. Each state transition emits a NATS forensic event that lands in the chain.
-
-**Verify.** Drive the centerpiece scenario through the simulator and watch a row land in `/audit` with `tool_type=wire_transfer` in `Pending` state, then approve via console `/hil`, watch upstream fire.
-
-```bash
-# Boot stack
-docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack up -d
-# Open the simulator's run flag
-curl -X POST http://localhost:9100/running -d '{"running":true}'
-# Approve the queued wire_transfer in the console
-open http://localhost:8085/hil
-```
-
-### 2.2 Sandbox preview (`sandbox_report`)
-
-**Concept.** When an approver sees a Yellow-tier request, they need to know what the action would actually do — not just "this is a wire_transfer to account X." The `clavenar-sandbox` static analyzer parses the MCP tool call and produces a structured preview: classification (`Read`/`Write`/`Exec`/`Network`/`Delete`), severity, target list, summary. The HIL approver UI renders this verbatim so the operator can see "this would `rm -rf /etc/letsencrypt`" alongside the raw `risk_summary`.
-
-**Implementation.** `clavenar-sandbox` is a pure-Rust static analyzer crate. Proxy calls it in `sandbox_handoff.rs` before posting to HIL; the report is serialized as opaque JSON in `CreatePending.sandbox_report`. HIL persists it verbatim, returns it on `GET /pending/{id}` so the console can render the annotated preview.
-
-The reviewed `clavenar.sandbox-adversarial-corpus/v1` artifact pins 40
-filesystem, shell, HTTP, SQL, malformed, near-miss, and unknown cases. It proves
-deterministic static classification only. Authorization, tenant authority, and
-execution isolation remain outside this crate.
-
-**Verify.**
-
-```bash
-curl http://localhost:8084/pending/<id> | jq .sandbox_report
-# { "operation_class": "network", "severity": "risky", "targets": [...], "summary": "..." }
-```
-
-In the console `/hil/{id}` page, the sandbox report renders above the raw payload.
-
-### 2.3 Modify-and-resume
-
-**Concept.** Sometimes an approver looks at a pending request and thinks "this would be fine if it were $100 instead of $5000." Rather than denying and forcing the agent to retry, the approver edits the payload in the UI and approves the modified version. The chain records both the original and the modified payloads.
-
-**Implementation.** The existing `POST /decide/{id}` accepts only the typed
-`clavenar.hil.modification-diff/v1` scalar-replacement contract. HIL commits the
-original and candidate digests; Proxy independently reconstructs canonical
-candidate bytes. The candidate is then reparsed and re-enters current quota,
-revocation, grant, attestation, decoy, Brain, and Policy gates before signing or
-forwarding. Fresh Green may continue. Fresh Red denies. Fresh Yellow creates a
-distinct blocking pending over the candidate; only a plain approval of that row
-continues, while row reuse or a second modification fails closed. The final
-Proxy audit signal and parameter hash belong to the candidate, not the original.
-
-**Verify.** In the console `/hil/{id}` page, click "Modify" — the payload becomes editable. Save → approve. Check the chain for both rows:
-
-```bash
-python3 clavenar-e2e/scripts/check-hil-modification-diffs.py --require-source
-./clavenar-e2e/scripts/check-hil-modification-regating-live.sh \
-  --environment dev --compose-file clavenar-e2e/dev/docker-compose.yml \
-  --env-file /tmp/clavenar-smoke.env --proxy-url https://localhost:19443 \
-  --hil-url https://localhost:18084 --ledger-url https://localhost:18183 \
-  --cert-root clavenar-proxy/certs-dev --receipt /tmp/wp-04.7.json
-```
-
-### 2.4 Async callback flow (`X-Clavenar-Callback-URL`)
-
-**Concept.** The default Yellow-tier flow is synchronous — the proxy long-polls HIL and the agent's request hangs until decide / expiry. Async callback inverts the dependency: the agent supplies a callback URL on `/mcp`, the proxy returns `202 Accepted` immediately with the correlation ID, and on operator decide HIL POSTs the resolution to the agent's callback. Frees the agent to do other work while the human decides — important for long-tail review windows that exceed sensible HTTP timeouts. Callback targets are gated against an explicit allowlist so a compromised agent can't redirect resolutions to an attacker.
-
-**Implementation.** `clavenar-lite` ships the OSS surface today; full-stack `clavenar-proxy + clavenar-hil` push variant is the next layer. Agent supplies `X-Clavenar-Callback-URL: <url>` on `/mcp`; on operator decide clavenar-lite POSTs `{correlation_id, decision, decider_note, decided_at}` fire-and-forget. URLs must match a normalized HTTP(S) scheme, IDNA host, effective port, and path-segment boundary in `CLAVENAR_LITE_CALLBACK_ALLOWLIST`; unset rejects callbacks entirely (partners fall back to polling). Credentials, fragments, local-use names, non-public IP literals, and redirects fail closed. Failures log at `warn` and never delay the operator response.
-
-**Verify.**
-
-```bash
-CLAVENAR_LITE_CALLBACK_ALLOWLIST=https://my-agent.example.com/ \
-  clavenar-lite start &
-# Agent makes a request and supplies the callback URL
-curl ... -H "X-Clavenar-Callback-URL: https://my-agent.example.com/decide" ...
-# Returns 202 Accepted with correlation_id. After approve via /pending/{id}/decide,
-# clavenar-lite POSTs to the agent's callback.
-```
-
-### 2.5 Mobile-responsive approver flow
-
-**Concept.** Approvers are not at their desk when production wakes them. The console's HIL queue needs to be operable on a phone: 44pt tap targets, swipeable nav, no horizontal scroll on 375px viewports. Slack notifications carry an "Open in console" deep-link so the approver lands directly on the right pending without hunting through the queue.
-
-**Implementation.** `clavenar-console/templates/hil*.html` + `static/styles.css` enforce mobile-first widths; the Approve / Deny / Modify buttons are sized for thumb input and the queue uses a swipeable carousel pattern (CSS scroll-snap, no JS library). `clavenar-hil` reads `CLAVENAR_CONSOLE_URL`; when set, the Slack pending card embeds an "Open in console" button targeting `${CLAVENAR_CONSOLE_URL}/hil/${pending_id}` so a Slack-on-phone approval flow lands one tap from the queue.
-
-**Verify.** Open `http://localhost:8085/hil` on a phone-shaped viewport (Chrome devtools → Pixel 7). Buttons hit-test cleanly with no zoom required. With `CLAVENAR_CONSOLE_URL` set, post a Yellow-tier from the simulator and check the Slack message — the deep-link button is present.
-
----
-
-## 3. Identity & agent onboarding (WAO)
-
-### 3.1 SVID issuance (`POST /svid`)
-
-**Concept.** Every agent has a verifiable workload identity — a SPIFFE SVID. The format is `spiffe://<trust-domain>/tenant/<tid>/agent/<agent-name>/instance/<uuidv7>`. Three layers:`tenant` is the billing/isolation boundary, `agent` is the stable logical identity (what policy keys off of), `instance` is the per-process replica (rotates on restart so we can revoke a single misbehaving replica without grounding the fleet). The SVID is short-TTL (≤1h) so a stolen cert has a tiny replay window.
-
-**Implementation.** `clavenar-identity:8186`, mTLS `POST /svid`. The agent generates its P-256 or Ed25519 key locally, submits a ≤16 KiB self-signed PKCS#10 `csr_pem`, and binds attestation `nonce_echo` to `sha256(CSR DER)`. Identity rejects malformed/tampered/unsupported/extension-bearing requests, constructs the subject and exact SPIFFE URI SAN itself, and returns only certificate + CA material — never a private key. Initial verified `service/simulator` authority is restricted to tenant `simulator`, immutable `system:simulator-bootstrap` registry targets, and a one-use `available` bootstrap state that success atomically retires. Renewal must authenticate with the exact current agent SVID (self target, SPIFFE instance, leaf fingerprint, validity, revocation, and supersession all match); success supersedes it atomically. Before signing, Identity commits an immutable-CSR `svid_issuance_intents` row. Success commits SVID metadata, terminal `issued`, lifecycle state, and a durable chain-outbox row before credential release; signer/authorization failures terminalize and startup marks abandoned pending rows `interrupted` without re-signing. `POST /agents/{id}/svid-recovery` is a separate `agents:admin` ceremony: mandatory reason, signed lifecycle evidence, current-SVID revocation, incremented one-use recovery generation, and atomic retirement when consumed. Simulator stores each certificate/key/CA record in an explicit 0700 directory as a 0600 atomically replaced file; restart renews with that stored SVID, while missing/corrupt state after enrollment fails closed and requires recovery.
-
-**Workload current-SVID authority.** Every managed service generates and atomically persists its own pending CSR/key/request ID before `POST /workload-svid`. Identity accepts the fingerprint-pinned bootstrap only for generation one or one operator-opened recovery generation; every normal renewal must present the exact active, non-expired current workload leaf for the same SPIFFE ID. A pre-sign immutable intent makes acknowledgement-loss retries return the retained public certificate without re-signing. Success atomically supersedes the prior generation and retires bootstrap/recovery authority. Services restart from owner-only persisted current state, fail readiness and inbound TLS after expiry, and never restore bootstrap automatically. `POST /workloads/{service}/svid-recovery` is a distinct exact-Console + OIDC `workloads:recover` ceremony with a mandatory reason and signed lifecycle evidence.
-
-**Verify.**
-
-```bash
-# The e2e runner's onboarding flow exercises this end-to-end
-./repos/clavenar-e2e/dev/run-onboarding.sh
-```
-
-Console `/agents/{id}` lifecycle timeline shows the registration row that gates issuance.
-The live runner also proves CSR tamper, extension, nonce-binding, target-substitution, bootstrap retirement, exact-current renewal, stale-SVID rejection, explicit one-use recovery, persisted restart renewal, response-private-key negatives, and 0600 credential storage.
-
-### 3.2 OIDC delegation grants (`POST /grant`)
-
-**Concept.** A grant says "this human authorized this agent to do these things." The shape follows RFC 8693 actor-token semantics — the `act` claim makes "Alice's support-bot is acting on behalf of Alice" cryptographically explicit. This is what makes the audit story land: HIL approvers see "Alice's support-bot-3 wants to refund $42," not just "bot-7f3a wants to refund $42." Grants are short-TTL JWTs; they carry both `scope` and `yellow_scope` arrays, intersected against the agent's registered envelope at grant time.
-
-**Implementation.** `clavenar-identity` `POST /grant`, body includes `id_token` (verified against per-tenant JWKS) + agent SVID mTLS. Returns a grant JWT with claims `{ iss, sub, act { sub, idp, amr }, scope, yellow_scope, exp, jti }`. Persisted in `grants` table. Envelope intersection: requested scopes ⊄ envelope → `403 scope_outside_envelope`; same for yellow.
-
-**Verify.**
-
-```bash
-# Already-running identity + dex mock from run-onboarding.sh
-TOKEN=$(curl -s http://localhost:9999/dex/token | jq -r .id_token)
-curl -X POST http://localhost:8086/grant \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"agent_spiffe":"...","scope":["mcp:read:tickets"],"yellow_scope":[]}'
-```
-
-Out-of-envelope scope returns 403 with `{"error":"scope_outside_envelope","offenders":["wire_transfer"]}`.
-
-### 3.3 Per-action signing (`POST /sign`)
-
-**Concept.** After the security verdict resolves, the proxy asks `clavenar-identity` to sign it. The signature is the legal proof that "Clavenar, at this timestamp, with this verdict, processed this request from this agent." The chain row carries `signature + key_id` alongside the verdict; a regulator with `manifest.sig` + the issuer JWKS can independently verify every row.
-
-**Implementation.** `POST /sign` on identity accepts `{ binding: { target_spiffe, tenant, audience, purpose, operation, lifetime_seconds }, correlation_id, method, prev_hash, payload_canonical_json }`. The exact verified Proxy certificate supplies `identity.sign.action`; no caller header or legacy signing allowlist grants authority. Identity requires the binding to name the local agent, ledger audience, `forensic-action` purpose, exact method, and ≤60-second lifetime, then parses the canonical payload and compares `agent_id`, `agent_spiffe`, `method`, and `correlation_id` before signing. Returns `{ signature, key_id, signed_at }`. Vault Transit and `Ed25519FileSigner` remain wire-compatible backends; JWKS exposes only public material.
-
-**Verify.**
-
-```bash
-curl http://localhost:8086/jwks.json | jq      # public verification material
-```
-
-Then export the chain and verify a row's signature with `openssl` + `sha256sum` per the bundle's `README.txt` recipe (§7).
-
-**Blocked actions sign too.** The proxy signs the deny path (violation / review-denied) fail-soft, so a blocked attack lands as a chain-v2 row with the same `signature + key_id` anchor an approval gets — a denied wire transfer is as non-repudiable as an approved one.
-
-**Tamper-Evident Attack Receipt (in-browser verifier).** `clavenar-console` serves `/receipt`, where a visitor verifies a signed row entirely in their own browser: it recomputes each `entry_hash` with WebCrypto and checks the ed25519 signature against a same-origin `/jwks.json` passthrough — no Clavenar code installed. Because the signature is *inside* the v2 hashable form, forging one byte (a "Tamper test" button flips `denied → authorized`) shatters both the hash and the signature at once, while the server's global `/verify` still validates — proving the visitor's edit is the forgery, not the record. Canonical-form drift between the Rust ledger and the JS verifier is guarded by paired golden-vector tests (`clavenar-ledger` `receipt_canonical_golden_vectors` ↔ `clavenar-console` `receipt_canonical.test.mjs`).
-
-### 3.4 Detached blob signing (`POST /sign/blob`)
-
-**Concept.** Sibling to `/sign`, used only by `clavenar-ledger` for regulatory-export manifests. Signs a digest (not a structured payload) under an exact tenant, audience, purpose, operation, and lifetime binding.
-
-**Implementation.** `POST /sign/blob` accepts `{ binding: { tenant, audience, purpose, operation, lifetime_seconds }, digest_sha256 }`, response `{ signature, key_id, algorithm: "ed25519", signed_at }`. Only the exact verified Ledger certificate receives `identity.sign.blob`; the binding requires the local ledger audience, `regulatory-export-manifest`, `ledger.export.regulatory`, and ≤300 seconds. Policy-pack and other purposes are rejected. Wired into ledger via `clavenar-ledger::identity_client::{ManifestSigner, HttpManifestSigner}` with no caller-assertion header.
-
-**Verify.**
-
-```bash
-clavenarctl regulatory export --from <FROM_RFC3339> --to <TO_RFC3339> --output bundle.tar.gz
-tar -xzf bundle.tar.gz
-cat manifest.sig    # 128 hex chars + LF
-```
-
-### 3.5 SPIFFE federation
-
-**Concept.** Two Clavenar tenants need to A2A without sharing a CA. Tenant A publishes its trust bundle at a well-known URL; Tenant B's identity service polls that URL on a schedule. Cross-tenant actor tokens redeem against a freshness-gated peer-bundle store — if Tenant B's last-seen bundle for Tenant A is stale, A2A fails with `peer_bundle_stale:<td>` rather than silently accepting potentially-revoked keys.
-
-**Implementation.** `GET /.well-known/spiffe-bundle` (public). Federation poller in `clavenar-identity` configured via `CLAVENAR_FEDERATION_PEERS`. The exact verified Proxy certificate supplies separate `identity.actor-token.issue` and `.redeem` capabilities. Both requests carry target/tenant/audience/`a2a-mcp-forward`/operation/lifetime bindings. Redemption selects the peer bundle only from that expected binding, requires it to be fresh, verifies the exact `kid` and Ed25519 compact-JWS signature, and then compares issuer, subject, audience, scope, timestamps, and ≤60-second signed lifetime before atomically reserving the authenticated issuer/JTI in the shared durable `clavenar_actor_token_replay` JetStream KV bucket. Failures include `invalid_token:*`, `peer_bundle_unknown:<td>`, `peer_bundle_stale:<td>`, `jti_already_used`, or fail-closed `replay_store_unavailable`.
-
-**Verify.**
-
-```bash
-./repos/clavenar-e2e/dev/run-federation.sh
-# Boots two clavenar-identity instances with different trust domains and asserts:
-# 1. Fresh peer bundle → A2A succeeds
-# 2. Bundle staled out → peer_bundle_stale rejection
-```
-
-### 3.6 A2A actor tokens
-
-**Concept.** When agent A calls agent B (cross-Clavenar, possibly cross-tenant), B's proxy needs to know that A is authorized for this specific call. A delegation grant says "A can call X" but doesn't bind to a specific outbound call. The actor token is the missing piece: A's outbound request triggers the proxy to mint a single-use, audience-bound token; B's proxy verifies the token via the federation bundle before accepting.
-
-**Implementation.** Proxy outbound: agent sets `x-clavenar-audience: <target>`; proxy calls `/actor-token` with `{ binding: { target_spiffe, tenant, audience, purpose, operation, lifetime_seconds }, scope: [operation] }` and attaches the token. Identity emits an RFC 7515 compact JWS with protected `alg=EdDSA`, `typ=JWT`, and exact bundle `kid`, signing the encoded `protected.payload` input. Inbound: the peer proxy calls `/actor-token/redeem` with the token plus its exact expected binding. Identity strictly parses the three bounded compact segments, verifies the exact peer-bundle Ed25519 key before claim checks, and rejects legacy payload-only signatures. JOSE, claim, time, freshness, and binding failures do not consume the JTI. Only then does Identity atomically create `SHA-256(issuer || NUL || jti)` in the bounded file-backed JetStream KV replay bucket. Successful JTIs are single-use across replicas and restarts — replay returns `409 jti_already_used`; unavailable or ambiguous storage returns `503 replay_store_unavailable`, with no local fallback.
-
-**Verify.**
-
-```bash
-./repos/clavenar-e2e/scripts/check-actor-token-jose.sh dev
-# Mints with Proxy mTLS, verifies protected.payload against /jwks.json,
-# and proves protected-header, payload, and signature mutations fail.
-./repos/clavenar-e2e/scripts/check-actor-token-replay.sh \
-  --environment dev --identity-mtls-url https://localhost:18186 \
-  --cert-dir ./repos/clavenar-proxy/certs-dev \
-  --compose-file ./repos/clavenar-e2e/dev/docker-compose.yml
-# Proves one winner across two replicas, restart durability, and fail-closed
-# partition/recovery behavior.
-```
-
-### 3.7 Capability attestation verifier contract
-
-**Concept.** SVID + grant prove identity and authorization, but they do not prove the agent's binary is approved. Contract 1.0.0 defines what a real verifier must prove before Identity, Proxy, or Policy can consume an attestation result: trusted evidence provenance plus exact nonce, public-key, SVID, SPIFFE, tenant, workload, instance, measurement-policy, and verifier-policy bindings.
-
-**Implementation status.** The strict JSON Schema, real Ed25519 `k8s-key-bound` verifier, signed measurement approval/retirement lifecycle, CSR/SVID/caller binding, append-only verified results, exact-current Proxy runtime lookup, strict Policy input, fixtures, Compose mounts, Helm immutable ConfigMap, and release drift checker ship together. Limits are 64 KiB evidence, 32-byte/120-second challenges, 30-second future skew, 300-second evidence age, 900-second verified-result lifetime, and a 300-second cache ceiling. Production excludes `dev-mock`; SVID rotation, revocation, approval retirement, and every binding substitution fail closed.
-
-The implemented `tpm2-quote` profile extends production verification to agents
-outside Kubernetes without replacing `k8s-key-bound`. A pinned P-256 AK signs
-the raw TPM quote; Identity checks the TPM magic/type/safe clock, qualified
-signer, exact SHA-256 PCR selection and digest, signed measurement approval,
-and a qualification covering the one-use challenge plus every CSR/SVID/SPIFFE
-binding. Initial issuance is an operator-authorized, durably one-use challenge;
-renewal is forwarded by Proxy only for the exact currently authenticated agent
-leaf. The TLS key remains caller-owned and CSR-self-signed; the profile claims
-co-located challenge-time TPM possession, not TPM-resident TLS key storage.
-Identity ships the strict quote verifier, one-use enrollment state, exact-current
-renewal authority, and combined-provider readiness. The external client kit
-ships a pinned-profile evidence collector, transactional credential install,
-and bounded periodic renewal; Helm projects TPM trust only when explicitly
-configured and retains the Kubernetes verifier alongside it.
-
-The development mock emits only a strict-shaped local fixture and production
-configuration rejects it. Request headers can remove a claim for deny testing
-but cannot construct, replace, or strengthen one.
-
-**Verify.**
-
-```bash
-python3 repos/clavenar-e2e/scripts/check_attestation_verifier_contract.py
-# Verifies canonical/mirrored bytes, strict wire shapes, all bindings,
-# freshness/size limits, sanitized reasons, and 22 adversarial cases.
-
-cargo test --manifest-path repos/clavenar-identity/Cargo.toml tpm2
-python3 -m unittest \
-  repos/clavenar-e2e/tests/test_tpm2_quote_evidence.py \
-  repos/clavenar-e2e/tests/test_client_kit.py
-# Verifies strict TPM structure/signature/binding rejection, one-use enrollment,
-# renewal authority, collector pinning, and hardened client scheduling.
-```
-
-Inspect `contracts/attestation-verifier-v1.schema.json` and its adjacent fixture.
-
-### 3.8 Agent registry + lifecycle (WAO)
-
-**Concept.** Without a registry, `POST /svid` issues for any `(tenant, agent_name)` on a first-call-wins basis — namespace-squat is wide open. The agent-onboarding (WAO) layer adds a pre-step: every agent must be **declared** before it can hold an SVID. Declaration records the human who authorized the agent, the team that owns it, and the capability envelope it's allowed to operate within. Lifecycle states (Active → Suspended → Decommissioned) give operators an incident lever; the chain records every transition.
-
-**Implementation.** `agents` SQLite table in `clavenar-identity` with 14 columns including `tenant`, `agent_name`, `state`, `scope_envelope`, `yellow_envelope`, `attestation_kinds_accepted`, `created_by_sub`, `created_by_idp` (immutable — non-repudiation anchor), `owner_team` (mutable via transfer), `state_changed_*`. `UNIQUE (tenant, agent_name)` includes Decommissioned (no name reuse). Indexes on `(tenant, state)` and `(tenant, owner_team)`.
-
-**Verify.**
-
-```bash
-clavenarctl agents create --tenant acme --name support-bot-3 \
-  --owner-team payments \
-  --scope mcp:read:tickets --scope mcp:write:tickets \
-  --yellow-scope refund:'<=50usd'
-
-clavenarctl agents list --tenant acme --state Active
-clavenarctl agents get <id>
-```
-
-Console `/agents` shows the registry; `/agents/{id}` shows the lifecycle timeline (chain v3 rows).
-
-### 3.9 Lifecycle endpoints
-
-**Concept.** Ten endpoints implementing the state machine and the per-attribute mutators. Asymmetric authority is the principle: narrowing the envelope (less capability) is owner-team self-service; widening (more capability) requires a different human with `agents:admin`. The original registering admin's signature covered the original envelope; widening is a *new* authorization event and must be a *new* authorization signature.
-
-**Implementation.** `POST /agents/{id}/{suspend,unsuspend,decommission,envelope/narrow,envelope/widen,attestation-kinds,owner-team,description}` on `clavenar-identity`. All take `Authorization: Bearer <oidc_id_token>`; capabilities resolved via per-tenant group mapping in `identity.toml`. Each emits a chain v3 row (see §3.11) via the durable outbox.
-
-**Verify.**
-
-```bash
-clavenarctl agents suspend <id> --reason "investigating anomaly"
-clavenarctl agents unsuspend <id>                             # requires agents:admin
-clavenarctl agents envelope narrow <id> --scope mcp:read:tickets
-clavenarctl agents envelope widen <id> --scope mcp:write:knowledge-base    # requires agents:admin
-clavenarctl agents transfer <id> --to-team newteam            # requires agents:admin
-clavenarctl agents decommission <id> --reason "team disbanded"
-```
-
-### 3.10 Capability envelope (opaque scope strings)
-
-**Concept.** A scope is a string. It's either in the envelope set or it isn't. No DSL, no parser, no semantic comparison — `refund:<=50usd` and `refund:<=100usd` are distinct strings; if the envelope contains the first, the second is rejected. Teams that want graduated tiers declare each tier as a separate envelope entry. Forward compatibility: any future structured grammar is a strict superset of opaque-string equality, so envelopes verify under every future grammar without invalidating chain v3 rows.
-
-**Implementation.** Strings are NFC-normalized lowercase, ≤128 bytes, no whitespace. Validated by `validate_label` in `grant.rs`, reused for envelope columns. Empty envelope (`[]`) is legal and means "this agent can hold an SVID but cannot be granted any capability" — useful as a Suspended → Active rehearsal state.
-
-**Verify.**
-
-```bash
-# Out-of-envelope scope rejected
-clavenarctl agents create --tenant acme --name test --scope mcp:read:tickets ...
-# Then attempt grant with mcp:write — 403 scope_outside_envelope
-```
-
-### 3.11 Chain v3 lifecycle anchoring
-
-**Concept.** Every lifecycle transition lands in the chain as a v3 row, signed by the identity issuer key. Tampering with any historical lifecycle row breaks the signature on every later row. Per-event-kind variation lives in a separate payload, content-hashed into `payload_sha256` — the outer hashable is locked at v3 launch and never altered without a v4 bump.
-
-**Implementation.** `HashableEntryV3` order: `{ id, timestamp, event_kind, agent_id, tenant, agent_name, actor_sub, actor_idp, payload_sha256, signature, key_id, seq, prev_hash }`. Ten event kinds: `agent.registered`, `suspended`, `unsuspended`, `decommissioned`, `envelope_narrowed`, `envelope_widened`, `attestation_kinds_changed`, `owner_team_transferred`, `description_changed`, `certified`. Per-kind payload schemas (e.g., `agent.registered` carries `{ scope_envelope, yellow_envelope, attestation_kinds_accepted, owner_team, description }`; `agent.certified` carries `{ certified_at_version, certificate_sha256, signature, key_id, survived }` — the agent passed the pre-flight gauntlet). Identity-side durable outbox (`agents_ledger.rs`) handles retry; ledger dispatches via `recompute_for_version`.
-
-**Verify.**
-
-```bash
-clavenarctl agents create ...        # emits agent.registered v3 row
-curl http://localhost:8083/verify  # whole chain still valid
-
-# Inspect the row
-curl "http://localhost:8083/audit/correlation/<id>" | jq
-```
-
-### 3.12 Registration mode (`off|warn|enforce`)
-
-**Concept.** A migration switch for registry and grant enforcement. `off` ignores registry gating and `warn` keeps `/grant` succeeding for unregistered agents with an `unregistered_agent` forensic signal; `enforce` rejects the absent row with 403. CSR-bound `/svid` is stricter in every mode: registry mode never manufactures authority, so an absent immutable bootstrap target returns `issuance_authority_denied` in `off|warn` (and the earlier `unregistered_agent` gate in `enforce`). Once a record exists, its envelope is enforced according to the mode contract.
-
-**Implementation.** `CLAVENAR_IDENTITY_REGISTRATION_MODE` env var, parsed into `Mode::{Off, Warn, Enforce}`. **Today the default is `Enforce`** (the rollout flip has already happened). Operators bulk-enroll legacy fleets via `clavenarctl agents migrate` before the flip.
-
-**Verify.**
-
-```bash
-# Observe the enforce default
-CLAVENAR_IDENTITY_REGISTRATION_MODE=enforce
-# /svid for a never-registered (tenant, agent_name) → 403 unregistered_agent
-
-./repos/clavenar-chaos-monkey/... --scenario unregistered_agent_enforce
-```
-
----
-
-## 4. Operator surface — console
-
-### 4.1 Audit page (`/audit`)
-
-**Concept.** The primary investigation surface. Every forensic row from every layer rendered in chronological order, joinable by `correlation_id`. An operator investigating an incident lands here, filters to a time window or a `correlation_id`, and sees the full bundle: proxy verdict, policy decision, HIL state transitions (if any), identity signature.
-
-**Implementation.** `clavenar-console/src/handlers.rs::audit`. Reads from `clavenar-ledger` via `clavenar-sdk::LedgerClient`. Joins related rows by `correlation_id`. Filter chips for signal column (`unregistered_agent`, `peer_bundle_stale:*`, `grant_expired`, etc.). The "Hide simulated traffic" filter joins by `correlation_id` so all sim-driven rows (proxy + policy + HIL) hide together — the `source` column on the forensic event is metadata; only the proxy's first event sets it, but the join means downstream rows hide too. Default agent fan-out when no search criteria are typed = `(simulator roster) ∪ (LedgerClient::list_agents())`. Timestamps render in the browser's local timezone (rather than ledger UTC) so an operator in Berlin doesn't have to do mental arithmetic during an incident.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/audit
-# Toggle "Hide simulated traffic" — sim rows disappear in groups
-```
-
-### 4.2 SSE live tail (`/stream/audit`)
-
-**Concept.** The audit page's incident-mode counterpart. Instead of refreshing to see new rows, operators watch them stream in real time. Useful during a rollout or a chaos exercise.
-
-**Implementation.** `/stream/audit` SSE endpoint backed by a broadcast `Sender` in `clavenar-ledger`. New rows fanout to every subscribed console. Authenticated — viewer-or-better via `require_viewer_api`.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/audit
-# In another terminal:
-./repos/clavenar-chaos-monkey/...      # rows appear live in the browser
-```
-
-### 4.3 HIL queue (`/hil`)
-
-**Concept.** The approver dashboard. Lists every Pending row with `risk_summary`, `sandbox_report` preview, agent identity, and `correlation_id`. Approve / Deny / Modify buttons inline. OIDC viewers see the queue but no buttons (RBAC).
-
-**Implementation.** `clavenar-console` `/hil` (list) + `/hil/{id}` (detail). htmx-driven action buttons. Backend calls `clavenar-hil` via `clavenar-sdk::HilClient`. Template carries `can_approve` flag based on session role — viewers get read-only.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/hil
-# As an OIDC viewer (no approver group), buttons hidden
-# As an approver, buttons render and decisions land in the chain
-```
-
-### 4.4 Agent registry UI (`/agents`)
-
-**Concept.** Browse and manage the agent registry without dropping to the CLI. Shows the lifecycle state badge, owner team, scope counts, last activity (joined from the latest ledger row). Click into `/agents/{id}` for the full record + lifecycle timeline (every chain v3 row for this agent, newest first).
-
-**Implementation.** `clavenar-console` `/agents`, `/agents/{id}`. Reads from `clavenar-identity` via `clavenar-sdk::AgentsClient`. The one **mutating** console action is the Blast-Radius one-click envelope narrow on `/agents/{id}` (§4.16), Admin-gated and forwarded under the operator token's `agents:admin` capability; the remaining lifecycle writes (register / suspend / widen / decommission) stay on `clavenarctl` until the console gains its own OIDC auth-code flow.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/agents
-open http://localhost:8085/agents/{id}
-```
-
-The audit page (`/audit`) gains an "Agent" column linkable to `/agents/{id}` if registered.
-
-### 4.5 `/config` diagnostic page
-
-**Concept.** Answers the "what is this binary, what is it talking to, and is everything reachable?" question without SSH access. Four cards: Console (bind, port, version, git SHA), Backends (required) — ledger + HIL with health probes, Backends (optional) — identity + simulator, Auth (session TTL, cookie_secure, currently logged in). The page is a diagnostic, not a control plane — no mutation. Open by design (matches the rest of the read-only console surface) so it works during auth incidents.
-
-**Implementation.** `clavenar-console/src/handlers.rs::config` + `templates/config.html`. Probes via `clavenar-console/src/probe.rs` — dedicated short-timeout `reqwest::Client`, all four probes under one `tokio::join!`. Probe result classification: 2xx + <500ms = green, 2xx + 500–1500ms = amber, otherwise red with truncated reason. Operator token redacted by architecture: handler only ever has access to `bearer_fingerprint() -> Option<String>` (sha256[..8] hex prefix), never the raw token.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/config
-```
-
-You'll see the four cards; the bearer fingerprint is the redaction guard. Try killing the ledger and refreshing — the ledger card goes red with `connect refused`, the rest of the page still renders.
-
-### 4.6 `/sim` panel
-
-**Concept.** Live control of `clavenar-simulator` without dropping to curl. Pause/resume, multiplier, transient-agent control. Useful for demos and for stopping the sim mid-investigation.
-
-**Implementation.** `clavenar-console` `/sim` is a thin proxy to `clavenar-simulator`'s admin server (`SIM_ADMIN_PORT=9100`, default loopback-only). Endpoints: `/status`, `/multiplier`, `/running`, `/auto-decide`, `/agents`. Rendered when `CLAVENAR_SIMULATOR_URL` is set; absent otherwise.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/sim
-# Click "Start" to flip the sim on
-```
-
-The simulator boots paused (`SIM_START_RUNNING=true` overrides this); `run-stack-smoke.sh` flips the run flag via the admin server before asserting rows.
-
-### 4.7 `/me/identities` (Slack/Teams self-link)
-
-**Concept.** Approvers click approve buttons in three places: the console UI (OIDC session), Slack DMs (Slack OAuth), Teams DMs (Teams OAuth). All three should produce the same `decided_by` value on the chain — `oidc:<sub>` — regardless of channel. The `/me/identities` page is the operator-side flow: log in via OIDC, then link your Slack and Teams identities. After linking, channel clicks resolve to the same `oidc_sub`.
-
-**Implementation.** `clavenar-console` `/me/identities` page. Slack OAuth flow (`/auth/slack/start` → callback) and Teams OAuth (symmetric). Mappings persist in `clavenar-hil`'s `user_identities` table — nullable per-mode columns (`oidc_sub`, `webauthn_name`, `basic_username`, `slack_user_id`, `teams_user_id`) with a CHECK constraint that exactly one identity column is set. Slack/Teams approve clicks look up `slack_user_id → oidc_sub`; if absent, return 404 "your Slack identity is not linked — link via the console first."
-
-**Verify.**
-
-```bash
-open http://localhost:8085/me/identities
-# Click "Link Slack" — Slack OAuth flow runs, link persists
-```
-
-Manifests for buyer-side Slack/Teams app registration: `clavenar-console/docs/slack-app-manifest.json`, `clavenar-console/docs/teams-app-manifest.md`.
-
-### 4.8 Other read views
-
-**Concept.** `/exports`, `/velocity`, `/stats/*` give operators the supporting context for an audit investigation. Exports lists past `/export` and `/export/regulatory` runs. Velocity surfaces the per-agent rate-limit state. Stats counts requests by tier, verdict, agent.
-
-**Implementation.** All three are read-only Axum-rendered Askama templates backed by `clavenar-sdk` clients. Viewer-or-better gated.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/exports
-open http://localhost:8085/velocity
-open http://localhost:8085/stats/by-tier
-```
-
-### 4.9 Viewer-route gates
-
-**Concept.** Without a gate, a misconfigured deploy could leak audit data to anyone who hit the URL. Every read route runs through `require_viewer` (HTML pages) or `require_viewer_api` (SSE + JSON) middleware. No-session HTML requests redirect to `/login` (303); no-session SSE/JSON requests get 401 (so the browser doesn't follow the redirect into a non-HTML stream).
-
-**Implementation.** `clavenar-console/src/handlers.rs::require_viewer` + `require_viewer_api`. Disabled mode short-circuits both gates with a synthetic Approver session for dev/CI. HIL queue template carries `can_approve` flag so OIDC viewers see the queue contents but no Approve/Deny/Modify buttons.
-
-**Verify.**
-
-```bash
-# Without a session
-curl -i http://localhost:8085/audit
-# HTTP/1.1 303 See Other
-# Location: /login
-
-curl -i http://localhost:8085/stream/audit
-# HTTP/1.1 401 Unauthorized
-```
-
-### 4.10 Policy management (`/policies`)
-
-**Concept.** Browser-side counterpart to §1.9. Lists every loaded policy grouped by category (the `domain` frontmatter field) with its state (active/inactive, current version, last editor, last reason). Click into a policy for the CodeMirror Rego editor, the diff view against any historical version, and one-click activate / deactivate / rollback / delete. Required free-text reason on every mutation — the chain row gets it verbatim. Read views are Viewer-or-better; every mutation is `Role::Admin`-gated server-side, with the buttons hidden client-side for lower roles.
-
-**Authoring loop.** The create/edit/read surfaces are built for the rego author: the **detail** body renders as a read-only syntax-highlighted CodeMirror and version **diffs** are colorized (added green, removed rose, hunks sky). On **`/policies/new`** a starter-snippet picker (deny / review / mixed tiers + a healthcare-PHI example, mirroring the `clavenarctl policy scaffold` structure) seeds the editor, and Domain / Severity / Tier dropdowns plus tag/framework/tool-surface/summary inputs compose the leading `# Key: Value` frontmatter header the engine parses on save — the body stays the single source of truth. Both the create and edit forms carry an inline **"Test against chaos catalog"** button that replays the *unsaved* draft through the policy-engine's `evaluate-batch` (no persistence) and shows the verdict flips in place. A save that loses an optimistic-concurrency race renders the **base-vs-current diff** beside the retained draft instead of a bare banner, so the operator can merge and retry.
-
-**Install on demand.** Policies are **installable on demand**: "install" == flip the `active` flag. `/policies` shows the **installed** (active) set only — the live rule set, with per-row Uninstall and per-category Uninstall-all (one transaction + one engine rebuild over the whole `domain`). The always-on protected floor (`governance.rego`, `attestation.rego`, and the `.json` data documents) renders as a distinct **Baseline** section at the top — locked, no uninstall — rather than scattered across the `cross-cutting` / `uncategorized` domain buckets. Uninstalled (inactive) templates don't appear here; they live on **`/policies/library`**, the install surface, where `installed` means *active* and the Install action activates a seeded-but-inactive row (or creates one if it's not seeded). The baseline floor (`governance.rego`, `attestation.rego`, and their `.json` data documents) is `protected` — it renders 🔒 locked and refuses deactivation/delete. The per-surface default is the `CLAVENAR_POLICY_SEED_TEMPLATE_STATE` knob: the demo surface seeds the domain packs **active** (everything pre-installed), while the operator dev console seeds them **inactive** so the operator installs deliberately. On the demo surface every mutation is refused for demo-session callers (`forbid_demo_session`) — the catalog is read-only there.
-
-**Implementation.** `clavenar-console` `/policies` (index, grouped by domain), `/policies/new` (create form), `/policies/{name}` (detail + history), `/policies/{name}/edit` (CodeMirror editor), `/policies/{name}/diff?from=N&to=M` (colorized unified diff), `POST /policies/lab/run-draft` (name-free chaos-catalog replay for an unsaved draft), plus `POST` handlers for activate / deactivate / rollback, `POST /policies/category/{domain}/{activate,deactivate}` for the category sweeps, and `DELETE` for soft-delete. All call `clavenar-sdk::PoliciesClient` (`activate_category` / `deactivate_category` for the sweeps). Optimistic concurrency: the edit form carries a hidden `expected_current_version`; on a `409` version conflict the server fetches the base-vs-current diff (`GET /policies/{name}/diff`) and renders it inline beside the retained draft (rebinding the hidden version so a merge-retry lands). Validation errors (regorus compile failure, JSON Schema mismatch) render below the editor verbatim with line/column markers, and a "Check syntax" action surfaces them before save via `POST /policies/validate`.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/policies
-# Edit a rego file, save with reason — chain v3 row lands in /audit
-```
-
-End-to-end coverage in `./repos/clavenar-e2e/dev/run-policies.sh` (see §11.7).
-
-### 4.11 Cost + latency dashboard (`/stats/cost-latency`)
-
-**Concept.** Operators need one page that answers "is the security pipeline meeting its latency SLA, and what is it costing us per agent?" The dashboard scrapes `/metrics` from every clavenar service, parses Prometheus text format with a lenient hand-rolled scraper (no Pushgateway dependency), and surfaces per-service / per-endpoint p50 / p99 / request counts / error rates in one table. Cost is operator-driven: set per-tool prices and the dashboard multiplies ledger row counts over a rolling 24h window. Empty cost table renders an in-page "ingest not configured" explainer rather than blank.
-
-**Implementation.** `clavenar-console` `/stats/cost-latency` route. Env vars: `CLAVENAR_CONSOLE_METRICS_URLS` (comma list of `{name}={url}` pairs; sensible localhost defaults), `CLAVENAR_CONSOLE_TOOL_COSTS=tool:$/call,…`. Pure-Rust Prometheus scraper at `clavenar-console/src/metrics_scrape.rs` — no `prometheus-parse` dependency (its strictness rejects our `# HELP` formatting in places). Cost rollup queries `clavenar-ledger`'s `/audit` for the 24h window per configured tool.
-
-**Real per-request inspection cost (`cost_micros`).** Beyond the operator-supplied tool estimate, every proxied request now carries an *attributed* inspection-spend figure. The Brain sums the PriceTable-estimated micro-USD cost of the priced detector LLM calls one `/inspect` makes and returns it on `InspectionResponse`; the proxy stamps it onto the forensic row's non-hashable `cost_micros` ledger column (no chain bump) and feeds the same number to the policy-engine budget breaker in place of a flat env estimate. So `SELECT agent_id, SUM(cost_micros) FROM entries GROUP BY agent_id` is real attributed inspection spend — an *estimate, never billed cost*, and structurally `0` on a mock-mode box (no provider call fires) until a real key + price file are wired. (The unified shared price model that lets this dashboard read the column directly is a follow-up that rides with a later dashboard upgrade.)
-
-**Verify.**
-
-```bash
-CLAVENAR_CONSOLE_TOOL_COSTS="stripe.refund:0.02,search.web:0.001" \
-  cargo run --bin clavenar-console
-open http://localhost:8085/stats/cost-latency
-```
-
-### 4.12 Audit narrative view (`/audit/agents/{id}/narrative`)
-
-**Concept.** The `/audit` page renders rows. Sometimes you want the story instead — "Everything `support-bot-3` did this week" as a paragraph plus a sparkline plus a top-intent breakdown. The narrative view aggregates the agent's recent ledger window into a `Narrative` shape: headline sentence, hourly/daily sparkline, top intent categories with percentages, top tools by call count, distinct deny reasons with sample reasoning, HIL summary (pending/approved/denied/expired/unreachable), signal annotations, and a notable-events timeline that filters routine traffic out. Same demo-prefix gating as `/audit` and HIL `/decide` so a visitor only narrates their own synthetic agent.
-
-**Implementation.** `clavenar-console` `/audit/agents/{agent_id}/narrative` route + `narrative.rs` module. Window selector: 5m / 15m / 1h (default) / 24h / 7d / 30d / 90d (hard cap). Bucket granularity auto-picks: minute buckets for ≤30m windows, 5-minute buckets up to 2h, hourly up to 36h, 6h buckets up to 10d, daily for longer. Title is a static `<h1>`; a "Switch agent ▾" button in the right-side action cluster opens a popup menu of agents (preserves the current window in the URL on swap). `/audit` page gains a "Story view →" header link surfaced only when exactly one literal agent is in the filter — hidden for wildcards and the all-agents view so the link never misleads about scope. 14 lib tests covering window parsing, empty-state, outside-window drops, headline pluralisation, top-N sort, HIL category mapping, deny-vs-review separation, signal aggregation, notable-events ordering, and bucket-granularity selection.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/audit/agents/support-bot-3/narrative?window=7d
-```
-
-### 4.13 Server-rendered chart kit (donuts, heatmap, gauge, trend lines)
-
-**Concept.** The quantitative pages leaned on counters, bar sparklines, and tables. This pass adds four reusable chart primitives so the dashboards read at a glance instead of as spreadsheets: a donut/pie (part-of-whole mixes), a weekday×hour activity heatmap, a radial gauge (one value against a limit), and a line/area trend. The landing page gains a showcase row — verdict-mix donut + 7-day request-volume trend + a 7×24 activity heatmap — so the first screen an evaluator sees is alive, not a list. Every chart is paired with a labelled legend or numeric value so it carries meaning without relying on colour, and degrades to a muted "no data" / "collecting traffic…" state on an empty window.
-
-**Implementation.** All geometry is precomputed in Rust layout helpers in `clavenar-console/src/templates.rs` (`Donut`, `ActivityHeatmap`, `LineChart`, `Gauge`, plus `heat_tone`/`heat_bg`), mirroring the existing `StatsSparkBar` pattern; templates loop over the structs and emit inline SVG — no client charting library, no build step, works with JS disabled. Donuts use the `stroke-dasharray` ring technique (a circle of radius 15.9155 has circumference ≈100, so a wedge's arc length *is* its percentage); SVG fill/stroke inherit the Tailwind `brand`/semantic palette via `class="text-…"` + `currentColor`. Placements: brain-delta donut on `/deep-review` (retires the old chip-stack), verdict-mix donut on `/stats`, intent×verdict heat-table on `/stats/intents`, deny-rate trend line on `/stats/deny-rate`, peak-load gauge on `/velocity`, decision donut on `/hil/analytics`, fleet-state donut on `/agents`, persona donut + success-rate gauge on `/sim`, token-share-by-provider donut on `/stats/cost-latency`, and the landing showcase (`/_partials/landing-charts`, htmx-loaded + lazily cached, demo-prefix-scoped). No new wire contract — every chart reshapes data the handlers already aggregate.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/               # landing showcase: donut + heatmap + trend
-open http://localhost:8085/deep-review    # brain-delta donut
-open http://localhost:8085/stats/intents  # intent × verdict heat-table
-```
-
----
-
-### 4.14 Fleet posture score (landing-page gauge)
-
-**Concept.** The landing page headlines a single **0–100 fleet posture score** — an at-a-glance answer to "how safe is the fleet right now" that visibly reacts when the control plane is under pressure. It is a **heuristic, not a certification**: a directional health indicator, never a security guarantee, audit result, or compliance attestation, and the methodology (including the signals deliberately *not* folded in) ships in a disclosure beside the gauge. The score blends four on-chain signals over the last hour — deny rate, velocity-breaker pressure, degraded-gate fail-open events, and the latest continuous-assurance pass rate — into a weighted mean. A sub-signal with too little data to score is renormalised out rather than scored as 0, so a quiet fleet reads 100 and a single correctly-denied demo scenario can't paint the gauge red right after the system defended.
-
-**Implementation.** Composed entirely in `clavenar-console` from data it already reads (terminal ledger rows + the `assurance_run` lane) — **no new ledger endpoint, no chain field, no proxy change**. `GET /_partials/posture` is a console partial beside the existing ops-signals / chart partials, refreshed on the page's uniform 30 s htmx poll; the radial gauge reuses the `Gauge` chart-kit helper (§4.13) and redraws via a CSS keyframe on each swap-in (no SSE producer exists; the whole landing page is poll-based). Operator path serves a 60 s background-warmed global aggregate; demo-session visitors get a posture scoped to their own `demo-<6hex>` agent + `demo-<prefix>-assurance` lane, computed fresh per request. On the always-on demo deployment a `clavenar-simulator` **idle beat** (`SIM_BEAT_ENABLED`) keeps that no-session global aggregate from sitting static: a single `pulse-bot` heartbeat fires green-dominant traffic with a rare hard-deny drift on a fixed timer **independent of the simulator's Start/Stop run flag**, so a casual visitor lands on a *living* gauge rather than a fleet pinned at 100 while the persona traffic is paused. See `clavenar-specs/TECH_SPEC.md#fleet-posture-score` for the formula and weights.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/                       # posture gauge above the ops-signals strip
-curl -s http://localhost:8085/_partials/posture   # the htmx-loaded gauge partial
-```
-
----
-
-### 4.15 Pipeline visualizer (`/demo/run/{cid}`)
-
-**Concept.** Firing a curated demo scenario now opens an **animated three-panel run-down** of the request's journey instead of dropping the visitor onto a static queue: **Semantic** (Brain — intent & injection) → **Governance** (Policy — deterministic rules) → **Decision & forensic** (human review + the hash-chained rows). The visitor approves or denies *in place* and watches the chain rows land. The Semantic panel renders the **real per-detector Brain verdict** for the fired payload (see the live-scores paragraph below), falling back to the scenario's labeled classification when no scores survived; the Governance panel stays the scenario's tier disposition (a demo fire skips the policy engine — labeled as such); the third panel is entirely **real** — the visitor's own HIL pending, their decision, and the chain rows read back with per-row `+Δms`.
-
-**Shareable threat card.** Once the request reaches a verdict, the decision panel resolves into a **shareable per-attack outcome card** — a verdict pill (Approved / Denied / Expired), the scenario tier, an honest tier-aware outcome line, a **Verify receipt** link into the existing in-browser receipt verifier, and a **Copy summary** button. The verdict is read from the **authoritative HIL decision** (`get_pending_by_correlation`), which distinguishes `approved` / `denied` / `expired` natively — so a TTL **expiry renders a neutral state, never a deny**: the card never dresses up a timeout as a human block. The copy blob is server-owned prose (the verdict matrix lives in one place); the absolute verify URL is appended client-side from the live origin. "Shareable" means the visual / copyable artifact travels — the card never offers cross-person live verification it cannot back, and isolation is unchanged (the run page stays fail-closed prefix-gated).
-
-**Implementation.** Console-only — **no proxy, ledger, wire, or chain change.** The pipeline completes server-side in milliseconds, so there is nothing to *stream*; the run-down is a **client-paced replay**. `POST /demo/fire/{scenario}` redirects to `/demo/run/{cid}?scenario=…` (carrying the scenario id, since the tier lives on the catalog entry, not the HIL pending). The page reuses the existing `audit_correlation` read for the chain rows and the existing `/hil/{id}/approve|deny` routes for the in-place decision; a successful decision **reloads** the run page so the verdict card is rendered server-side (one render path, no duplicated client-side verdict matrix), and `GET /demo/pipeline/{cid}` is re-fetched a beat later to catch the decision's chain row as it propagates. Both run routes are demo-prefix gated (a visitor only sees correlations under their own session prefix) and return `403` (never a redirect) so the page's `fetch()` can act on them. The staged reveal is a CSS keyframe paced by a small inline script that branches on `prefers-reduced-motion` to render all panels immediately for motion-sensitive visitors; the Copy-summary button is JS-injected so a JS-disabled visitor sees no dead control and the panels degrade to a labeled static diagram.
-
-**Live Brain scores (real `/inspect` capture).** Every demo fire is shaped as a true MCP `call_tool` body (`params.name` + `arguments` — the same wire shape a real agent submits through the proxy) and run through Brain `POST /inspect` **best-effort** before the HIL pending is minted: the console's workload SVID is allowlisted on the brain's mTLS listener (its first allowlisted brain surface — the entry gates `/inspect` and `/scan-response` together, both read-only). The captured verdict (intent, authorized flag, reason, and graduated injection / malicious-code / supply-chain confidences) rides the new **non-hashable `brain_scores`** field: HIL pending → forensic event → ledger row, never entering any chain-hashable (no chain-version bump). The Semantic panel renders it as tone-mapped detector bars captioned "live Brain output" (plus "deterministic heuristic mode" under the mock brain); persona drift renders **"n/a"** when structurally absent (the demo agent has no persona baseline) rather than a misleading 0%, and any inspect failure — unreachable brain, missing allowlist entry, timeout — degrades to the labeled seed, never a failed fire. Two catalog scenarios carry genuinely detector-firing payloads (a `write_file` reverse-shell drop and a `run_command` `npm install crossenv` typosquat from the bundled compromised-package list); the rest are honest governance-tier stories whose near-zero semantic scores are themselves real output.
-
-**Verify.**
-
-```bash
-# (demo session required) fire a scenario, then:
-open http://localhost:8085/demo                   # each card now opens the run-down
-curl -s http://localhost:8085/demo/pipeline/<cid> # chain rows JSON (prefix-gated)
-```
-
----
-
-### 4.16 Blast-Radius Autopilot — measured least privilege
-
-**Concept.** The ledger holds a tamper-evident per-agent record of which tools an agent *actually used*; identity holds the `scope_envelope` it was *provisioned* for. Joining the two surfaces **over-provisioning**: scopes an agent was granted but never exercises — dead blast radius an attacker who lands the agent inherits for free. The per-agent page flags those never-used scopes as narrow candidates with confidence bars; one click narrows the envelope down to the used set. `/agents` headlines a board-grade fleet gauge: **"% of granted tool scopes unused"** across the fleet. The apply step is **chain-anchored and auditor-verifiable** — the narrow lands as an `agent.envelope_narrowed` row carrying the recommendation reason. Compliance framing is SOC2 CC6.1/CC6.3 + NIST MANAGE, deliberately **not** an EU Art 14 (human-oversight) claim — this is least privilege, not oversight.
-
-**Implementation.** Per-agent panel: `clavenar-console` joins `clavenar-ledger`'s `GET /analysis/agent-envelope-recommendations` (windowed distinct-tool usage, keyed on the cert CN the proxy stamps — **not** the identity UUID) against the agent's `scope_envelope` from identity. **One-click narrow** is the console's single agent mutation: `POST /agents/{id}/envelope/narrow` re-reads the live envelope, recomputes the used set server-side (so a concurrent edit can only ever shrink, never widen, the applied set), and forwards the **full new envelope** plus a `reason` to identity's narrow endpoint under the operator token's `agents:admin` capability — Admin-gated, mirroring `/policies` mutations; a no-op narrow short-circuits before the call. The fleet gauge (`GET /_partials/fleet-scope-waste`) is a console-side aggregation — the provisioned denominator lives only in identity, the used numerator only in the ledger, so the join is necessarily console-side — over a 60 s background-warmed cache so the ~fleet-sized ledger fan-out never lands on the page render; it reuses the `Gauge` chart-kit helper (higher-is-worse, amber 40% / rose 70% unused) and is **deliberately not folded into the §4.14 fleet posture score** (it is an operational metric that does not land on the audit chain). An operator-side narrated walkthrough (`/agents/{id}?walkthrough=1`) anchors numbered steps to the live panel, the narrow button, and the chain row; the `/demo` page carries a labeled-static least-privilege explainer card (an operator capability, not a visitor-fireable live verdict). `clavenar-simulator` personas enroll with realistic over-provisioned envelopes (their tool mix plus a few never-fired high-blast-radius scopes) so the panel and gauge read genuine narrow candidates.
-
-**Verify.**
-
-```bash
-open http://localhost:8085/agents                 # fleet "% of granted scope unused" gauge
-open "http://localhost:8085/agents/{id}?walkthrough=1"  # narrated least-privilege tour + Narrow button
-```
-
----
-
-## 5. Operator authentication
-
-### 5.1 Four auth modes
-
-**Concept.** Buyers come in four flavors. Solo evaluators want a single password. Self-hosted small teams want WebAuthn passkeys without an SSO dependency. Production deployments want OIDC against their existing IdP. Dev and CI want auth bypassed entirely. Mode selection is a runtime knob (`CLAVENAR_CONSOLE_AUTH={disabled|basic-admin|webauthn|oidc}`), not a build-time choice — operators flip modes without rebuilding.
-
-**Implementation.** `clavenar-console/src/auth_session.rs::AuthMode` enum. Each mode has its own session-establishment path: `disabled` short-circuits to a synthetic Approver session; `basic-admin` validates against `CLAVENAR_CONSOLE_ADMIN_USER` + `CLAVENAR_CONSOLE_ADMIN_PASS_BCRYPT` (bcrypt verify); `webauthn` proxies the ceremony to HIL; `oidc` runs the auth-code flow against any compliant IdP.
-
-**Verify.**
-
-```bash
-# basic-admin mode
-CLAVENAR_CONSOLE_AUTH=basic-admin \
-  CLAVENAR_CONSOLE_ADMIN_USER=admin \
-  CLAVENAR_CONSOLE_ADMIN_PASS_BCRYPT='$2b$12$...' \
-  cargo run -p clavenar-console
-```
-
-The `/login` page renders different forms per mode.
-
-### 5.2 Loopback bind enforcement
-
-**Concept.** `disabled` and `basic-admin` modes are dangerous outside a developer laptop. Boot guards refuse to come up if those modes are paired with a non-loopback bind. `basic-admin` has a documented escape hatch (`CLAVENAR_CONSOLE_ALLOW_BASIC_ADMIN_NETWORK=true`) for evaluators who want to expose a basic-auth-protected console behind a reverse proxy; `disabled` has no escape — production deploys that need auth-off must also be loopback-bound.
-
-**Implementation.** `guard_loopback(bind, mode_name, allow_override)?` in `clavenar-console/src/auth_session.rs`. Called during AppState construction; returns Err on mismatch; main panics out with a clear message.
-
-**Verify.**
-
-```bash
-CLAVENAR_CONSOLE_AUTH=disabled cargo run -p clavenar-console -- --bind 0.0.0.0
-# refuses to boot:
-# error: auth mode 'disabled' requires loopback bind, got 0.0.0.0
-```
-
-### 5.3 WebAuthn approver auth
-
-**Concept.** Passkey auth, with HIL as the credential authority. The console proxies the registration and authentication ceremonies but doesn't hold the credentials. The verified principal flows back to HIL on `/decide` so the chain row's `decided_by` matches the credential that actually clicked.
-
-**Implementation.** Console: `/auth/login/begin` and `/auth/login/finish` proxy the ceremonies to HIL. HIL: stores `webauthn_credentials` plus a durable `admin | approver` role on the canonical identity; the one lifetime deployment bootstrap creates Admin while invitation enrollment creates Approver and credential maintenance preserves the role. Registration and login return that stored role to Console, and the verified principal stamps `decided_by = "webauthn:{name}"` server-side. Session cookie shuttles back to the browser.
-
-**Verify.** Console `/login` in WebAuthn mode prompts a passkey ceremony. Complete the one-time bootstrap and confirm the Console session is Admin; enroll an invited identity and confirm it is Approver. After auth, approving a HIL pending stamps `webauthn:<name>` on the chain row.
-
-### 5.3a Durable accountable-enrollment state
-
-**Concept.** Invitation, one-time bootstrap, credential addition, and recovery
-need durable, tenant/subject-bound authority before public routes can safely use
-them. A restart must not reopen bootstrap or erase attempt/replay state.
-
-**Implementation.** HIL provisions five additive SQLite tables. Authority rows
-carry deployment, tenant, normalized subject, issuer, fixed purpose, expiry,
-bounded attempts, lifecycle status, and audit timestamps; bearer material and
-ceremony challenges persist only as SHA-256 digests. Exact conditional
-transitions enforce completion/cancellation/expiry/exhaustion, one active flow,
-one lifetime bootstrap per deployment, and a live exact parent for every
-ceremony. The storage API is staged before route adoption and grants no new
-enrollment authority by itself.
-
-**Verify.** Run `cargo test enrollment:: --lib` in `clavenar-hil`. The suite
-proves clean/idempotent schema creation, existing-row preservation, canonical
-binding, digest-only persistence, uniqueness, bounded attempts, expiry,
-terminal replay rejection, and parent-bound ceremony lifetime.
-
-### 5.4 OIDC code flow + JWKS
-
-**Concept.** Generic OIDC against any compliant IdP. Tested in CI against Keycloak (the only IdP with reliable Dockerized fixtures); quickstart docs cover Google / Okta / Azure AD / Auth0 without CI fixtures (their public test infra is unreliable). JWKS is cached for an hour, refreshed reactively on signature failure.
-
-**Implementation.** `clavenar-console/src/auth_handlers.rs` runs the auth-code flow, validates the `id_token` against the per-tenant JWKS, extracts `sub` + `groups`, builds the session. Session cookie via `tower-sessions`.
-
-**Verify.**
-
-```bash
-# Boot stack with Keycloak fixture (clavenar-e2e ships one)
-docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack-oidc up -d
-open http://localhost:8085/login
-# Redirects to Keycloak, returns with session
-```
-
-### 5.5 RBAC (viewer / approver / admin)
-
-**Concept.** Three static roles, monotonically increasing capability. `viewer` = read-only across the console. `approver` = viewer + ability to decide HIL pending items. `admin` = approver + the policy-management write surface (§4.10). No runtime role exceptions — the IdP's `groups` claim is the source of truth, mapped via config-as-code. Out-of-band admin operations on the agent registry still go through `clavenarctl` + direct identity API.
-
-**Implementation.** `OidcGroupMap { admin_groups, approver_groups, viewer_groups: Vec<String> }` in `clavenar-console/src/auth_session.rs`. Configured via env CSV. Session carries the resolved `Role::{Admin, Approver, Viewer}`; ordering is encoded in `Role::at_least(other)`. Middleware: `require_viewer` (read), `require_approver` (HIL decide), policy mutations check `Role::Admin` inline.
-
-**Verify.**
-
-```bash
-# In Keycloak, put the test user in only `viewer_groups`
-# Login → /audit works → /hil works (read-only) → buttons hidden
-```
-
-### 5.6 Server-derived decision principal
-
-**Concept.** HIL attaches a closed `DecisionPrincipal {subject, tenant, method, credential}` to every enabled HTTP decision. It writes `decided_by` from `subject` and provenance from `method`; request body fields and caller text cannot override or infer either value.
-
-**Implementation.** WebAuthn sessions bind the exact tenant, subject, and passkey credential. Console builds the typed subject/tenant/method claim from its authenticated server session; HIL accepts it only from the exact Console workload and supplies the mTLS certificate fingerprint. HIL synthesizes Simulator's `workload-mtls` principal and permits it only on the configured simulator tenant. Slack and Teams retain their separately authenticated channel mapping.
-
-**Verify.**
-
-```bash
-# Approve a pending via console as `alice@acme.com` → chain row carries decided_by="oidc:alice@acme.com"
-curl http://localhost:8083/audit/correlation/<id> | jq '.[] | .decided_by'
-```
-
-### 5.7 Typed `approver_assertion`
-
-**Concept.** The legacy column name remains for wire and SQLite compatibility, but enabled HTTP decisions store one uniform typed principal rather than mode-specific caller blobs.
-
-**Implementation.** The exact JSON keys are `subject`, `tenant`, `method`, and `credential`. WebAuthn and demo credentials are derived from verified sessions; Console and Simulator credentials are exact workload-certificate fingerprints. HIL's non-human auto tier uses the reserved typed principal `system:policy-tier` with method `system` and credential `policy-tier:auto`, so its method and stored provenance agree without impersonating a workload certificate. Historical chat and auth-disabled rows may retain their older shapes.
-
-**Verify.**
-
-```bash
-curl http://localhost:8083/audit/correlation/<id> | jq '.[] | .approver_assertion'
-```
-
-### 5.8 Console and Simulator → HIL trust
-
-**Concept.** WebAuthn keeps HIL as the credential authority. Operator-mTLS, OIDC, basic-admin, and SAML use a shared bearer as a second factor, but HIL also requires the exact Console workload identity and accepts only a typed session-derived claim. Simulator receives a distinct server-synthesized machine principal over one configured tenant. Arbitrary workloads and caller-supplied identities are rejected.
-
-**Implementation.** Console calls HIL with `Authorization: Bearer <DECIDE_TOKEN>` plus a hex-encoded `X-Clavenar-Decision-Principal`. HIL constant-time verifies the bearer, binds the exact Console mTLS peer, validates subject/method/tenant, and injects the TLS credential fingerprint. The legacy `X-Clavenar-Decided-By` header is a hard `400`. Simulator sends no principal or tenant claim; HIL uses its exact mTLS identity plus `CLAVENAR_HIL_SIMULATOR_TENANT`. Strict external-secret rules remain unchanged.
-
-**Verify.**
-
-```bash
-python3 clavenar-e2e/scripts/check-hil-decision-principals.py --require-source
-# Verifies spoofed approver/tenant/method/credential, legacy header,
-# arbitrary workload, and Simulator-to-operator-row negatives.
-```
-
-### 5.9 Route-wide authenticated HIL tenant scope
-
-**Concept.** An authenticated approver may decide and observe only their tenant's HIL work. Query parameters and request JSON are filters, not proof of tenant authority; foreign objects behave like absent objects and SSE/aggregates never reveal cross-tenant events or counts.
-
-**Implementation.** Exact Console mTLS sends `X-Clavenar-Tenant-Scope`, derived from the authenticated server session. HIL converts it to `PendingScope::Tenant` and applies it to decide, list, summary/cursor, stream, object, correlation, annotation, assignment, decision-link mint, and aggregate paths. Exact Simulator mTLS cannot send that header and receives the fixed `CLAVENAR_HIL_SIMULATOR_TENANT`; demo cookies receive `PendingScope::DemoPrefix`; only explicit auth-disabled mode retains query/body tenant compatibility.
-
-**Verify.**
-
-```bash
-python3 clavenar-e2e/scripts/check-hil-tenant-scope.py --require-source
-# The canonical dev/prod smoke also creates two tenants and proves route-wide
-# cross-tenant rejection, cursor binding, and zero SSE cross-emission live.
-```
-
-### 5.9a HIL notification lifecycle
-
-**Concept.** An approval notification must not remain open after its HIL row
-resolves, and a configured production HIL must not report ready when no
-operator route exists.
-
-**Implementation.** Slack, Teams, PagerDuty, authenticated webhook, and SMTP
-share trigger/update/resolve semantics with stable event identity. Partial
-quorum and SLA escalation emit updates; approve, deny, and TTL expiry resolve
-every configured channel. Production uses enforce-mode readiness and a
-distinct external bearer token to a durable operator inbox. Delivery results
-are bounded-label Prometheus counters with a sustained-failure alert.
-
-**Verify.** Protocol mocks exercise all five transports through the real
-notifier calls, the exact webhook fixture validates against
-[`hil-notification-lifecycle-v1.schema.json`](contracts/hil-notification-lifecycle-v1.schema.json),
-and the canonical production smoke retains a sanitized authenticated receipt
-containing both trigger and resolve for one live pending UUID.
-
-### 5.9b Reproducible active-agent subscription meter
-
-**Concept.** Subscription billing must be reconstructible from the verified
-audit chain without merging same-name agents across tenants or turning
-delivery retries into additional units.
-
-**Implementation.** The Ledger derives one active unit per typed
-`<tenant>/<agent>` with an authorized tool execution in a half-open rolling
-30-day window. Stable stage identity collapses duplicates. Strict forensic
-completion rows use committed event time and receive a 72-hour late-arrival
-grace before the invoice becomes final. Immutable idempotent credit/correction
-rows adjust units without rewriting source events. Console-only generated
-capabilities protect the JSON API, identical JSON attachment, and adjustment
-mutation; the Console derives tenant authority from the authenticated session
-and emits a commitment-bearing 16-column CSV. The invoice pins the verified
-chain position at `observed_through`, so later concurrent appends cannot change
-the API response or attachment for the same query.
-
-**Verify.** The
-[`active-agent-meter-v1` fixture](contracts/active-agent-meter-v1.fixture.json)
-validates against its strict schema. Owner tests reconcile same-name tenants,
-a replay duplicate, a late completion, credit and correction rows, API/export
-parity, and raw chain commitments. The live release receipt repeats that
-two-tenant reconciliation over mTLS and binds the exact release and BOM.
-
-### 5.10 Sessions, CSRF, JWKS cache
-
-**Concept.** Mechanical defaults that don't warrant their own sections.
-
-**Implementation.**
-
-- `tower-sessions`, server-side encrypted cookie, 8-hour rolling lifetime (`DEFAULT_SESSION_TTL_SECS = 28800`).
-- CSRF: htmx + origin-check + per-session token (no separate state cookie).
-- OIDC JWKS: 1-hour cache TTL, reactive refresh on signature failure.
-- Logout: clears server session, optionally calls IdP `end_session_endpoint`.
-
-**Verify.** Inspect cookie attributes after login; reload after 8 hours and observe re-prompt.
-
-### 5.10 Official-demo asymmetric issuer
-
-**Concept.** A verifier must not share an issuer's signing secret, and one
-issuer must not inherit another tenant's signing authority. The official demo
-uses separate per-environment RS256 keypairs for the Acme operator and simulator
-issuers. Bootstrap receives both private keys, the simulator receives only its
-own, and identity receives only the corresponding public JWKS documents.
-
-**Implementation.** Identity strict-asymmetric mode requires every configured
-tenant issuer to use RS256 JWKS, rejects HS256 or mixed configuration, requires
-unique non-empty `kid` values, and validates RSA key shape before binding a
-listener. The simulator signs with an externally mounted private-key file and
-explicit `kid`; the development-compatible HS256 path remains available only
-when strict mode is off and still rejects known, short, or repeated keys.
-
-**Verify.** Render the deployment and confirm identity has distinct JWKS mounts
-but no issuer private-key mount, while simulator has no Acme key or operator
-token projection. Decode bootstrap and simulator token headers: `alg` is
-`RS256`, each `kid` selects its tenant's JWKS, and the RSA moduli differ.
-Starting identity in strict mode with any HS256 tenant entry must fail before
-listen.
-
-### 5.11 Coordinated authentication generation rotation
-
-**Concept.** HIL sessions, the console-to-HIL decision bearer, demo sessions,
-and deployment-managed OIDC issuers form one authentication generation. An
-operator rotates them together using an explicit expected-current identifier;
-a stale command changes nothing, and a failed rollout never restores old
-authentication material.
-
-**Implementation.** Deployment tooling stages all replacement values before
-stopping consumers, assigns new OIDC key IDs, atomically installs the complete
-generation, recreates issuer-derived bootstrap tokens, and rolls every
-consumer. Only sanitized generation metadata persists. The Helm chart exposes
-the non-secret `authSecrets.rotationId`: the same identifier preserves
-chart-managed keys, while a new identifier rotates them and annotates every Pod
-template; external-secret deployments update the complete Secret before
-advancing the identifier.
-
-**Verify.** Accept genuinely valid HIL session, HIL decision, demo-session, and
-OIDC tokens immediately before rotation. After readiness, replay those exact
-bytes and require HTTP 401 for every class, then prove all replacement flows
-succeed. Repeat with the stale prior identifier and require failure before any
-workload or Secret mutation.
-
-### 5.12 SAML SP (feature-gated)
-
-**Concept.** OIDC covers the bulk of modern enterprise SSO (Okta, Azure AD, Google Workspace, OneLogin all speak it), but SAML-only IdPs — older Shibboleth, ADFS, some Ping Federate installs — still exist in regulated industries. The console ships a SAML SP behind the `saml` cargo feature so deployments needing it can build with SAML wired in, while default builds keep the static-cargo posture (samael pulls libxml2 + libxmlsec1 via FFI). The role-resolution layer reuses the same OIDC group-map (§5.5) — the SAML half is purely about the bind protocol.
-
-**Implementation.** `clavenar-console` `AuthMode::Saml(SamlConfig)` arm. Consumes IdP metadata at boot (URL or inline XML); verifies XML-DSig assertions via `samael`'s xmlsec backend; extracts NameID + group attribute with Okta / Azure AD / Google Workspace / OneLogin attribute names recognized. Browser flow: `GET /auth/saml/login` (HTTP-Redirect AuthnRequest) → `POST /auth/saml/acs` (HTTP-POST signed SAMLResponse). Audit chain stamps `decided_by = saml:<NameID>`. RBAC hardening alongside: every gate deny bumps `clavenar_console_role_denials_total{required,actual}` so SREs can alarm on suspicious access attempts. Builds via `--build-arg CLAVENAR_CARGO_FEATURES=saml` against the Dockerfile, which conditionally installs the matching system libs. 110 lib tests pass on both feature configs; clippy `-D warnings` clean both ways.
-
-**Verify.**
-
-```bash
-CLAVENAR_CARGO_FEATURES=saml cargo build --features saml --bin clavenar-console
-CLAVENAR_AUTH_MODE=saml \
-  CLAVENAR_SAML_METADATA_URL=https://idp.example.com/metadata \
-  cargo run --features saml --bin clavenar-console
-open http://localhost:8085/auth/saml/login
-```
-
----
-
-## 6. `clavenarctl` CLI
-
-### 6.1 Device-flow auth
-
-**Concept.** Same pattern as `gcloud auth login`, `aws sso login`, `gh auth login`. The CLI displays a verification URL + code, the operator opens the URL in a browser, completes auth there, and the CLI polls until the IdP completes the device flow (RFC 8628). No long-lived API tokens. No operator SVID requirement (would be a circular bootstrap).
-
-**Implementation.** `clavenarctl auth login --tenant <tid>`. Caches `id_token` + `refresh_token` in `~/.clavenar/credentials.json`. Re-uses the cached refresh token transparently; expired refresh sends the operator back through device flow. `auth logout` clears the cache; `auth whoami` echoes `sub`, `idp`, `groups`, capabilities.
-
-**Verify.**
-
-```bash
-clavenarctl auth login --tenant acme
-# Visit https://idp.acme.com/device with code ABC-DEF
-clavenarctl auth whoami
-# sub: alice@acme.com, idp: okta, groups: [...], capabilities: [agents:create]
-```
-
-Token-file (`--token-file`) and token-stdin (`--token-stdin`) alternatives exist for CI contexts where device flow is impossible.
-
-### 6.2 `agents` subcommands
-
-**Concept.** Full lifecycle CRUD on the agent registry. Mirrors the console UI but scriptable. The `--if-absent` flag on `create` makes it idempotent (200 if existing matches, 409 if differs) — covers IaC-without-Terraform patterns: a CI job loops a YAML file and runs `clavenarctl agents create --if-absent` per entry.
-
-**Implementation.** `clavenar-ctl/src/cmd/agents.rs`. Subcommands: `create`, `list`, `get`, `suspend`, `unsuspend`, `decommission`, `envelope narrow`, `envelope widen`, `transfer`, `description`, `migrate`. Built on `clavenar-sdk::AgentsClient`. `--json` flag on read commands for machine-readable output.
-
-**Verify.** See §3.8, §3.9.
-
-### 6.3 `agents migrate` (bulk enrollment)
-
-**Concept.** The `enforce` mode flip would have grounded every legacy agent that hadn't been registered. The `migrate` command reads the existing `svids` table and creates `agents` records for every distinct `(tenant, agent_name)` it finds, with operator-supplied defaults. This is the official adoption tool — operators run it once before flipping.
-
-**Implementation.** `clavenarctl agents migrate --identity-db <path> [--dry-run] [--default-owner-team unassigned] [--default-envelope '*'] [--default-attestation-kinds '*']`. Idempotent — rerun completes from where it stopped; chain rows for already-migrated agents are no-ops. Each migrated agent gets `actor_sub = "system:migration:<operator_oidc_sub>"` so the human who ran the migration is recorded; never anonymous.
-
-**Verify.**
-
-```bash
-clavenarctl agents migrate --identity-db /var/lib/clavenar-identity/identity.sqlite --dry-run
-# Reports what would be created
-clavenarctl agents migrate --identity-db ... --default-envelope '*'
-./repos/clavenar-chaos-monkey/... --scenario migration_replay
-# Asserts second run is no-op, no duplicate ledger rows
-```
-
-### 6.4 `regulatory export`
-
-**Concept.** Auditor-facing bundle export for exactly the tenant authorized by
-the operator credential. Returns a signed `.tar.gz` per the format in §7.
-
-**Implementation.** `clavenarctl regulatory export --tenant <TENANT> --from
-<RFC3339> --to <RFC3339> [--readme PATH] [--include-exports] [--ledger-url
-URL] --output bundle.tar.gz`. Tenant uses the standard configuration
-precedence. SDK and Ledger refuse missing tenant scope; manifest v8 signs it.
-The Console `/exports` download derives tenant from the authenticated session.
-
-**Verify.**
-
-```bash
-clavenarctl regulatory export \
-  --tenant acme \
-  --from <FROM_RFC3339> --to <TO_RFC3339> \
-  --readme ./tech-docs.md \
-  --include-exports \
-  --output bundle.tar.gz
-
-tar -tzf bundle.tar.gz
-# manifest.json
-# manifest.sig
-# entries.ndjson
-# technical_documentation.md
-# README.txt
-```
-
-### 6.5 Deterministic exit codes
-
-**Concept.** CI-friendly. Exit codes documented and stable: `0` success, `2` validation, `3` auth/capability, `4` conflict, `5` server.
-
-**Implementation.** Each command's error path maps to one of the five. `--if-absent` returns 0 on idempotent match, 4 on diff.
-
-**Verify.**
-
-```bash
-clavenarctl agents get nonexistent || echo "exit: $?"      # 4
-clavenarctl agents get <id> --bad-flag || echo "exit: $?"  # 2
-```
-
-### 6.6 First-run ergonomics (`init` / `doctor` / `generate-policy`)
-
-**Concept.** Make `clavenarctl` the front door for new operators, not a thin client over `clavenar-sdk`. Three verbs collapse the typical first-day questions: `init` scaffolds `~/.config/clavenar/config.toml` (and optionally a `policies/templates/` starter dir); `doctor` probes `/health` on every configured service URL and reports up/down/latency in one go (skips proxy by default — the mTLS gate would register as a false-negative); `generate-policy` lists or emits the 7 starter templates from §1.14 to disk, embedded via `include_str!` against the sibling repo so the CLI is self-contained.
-
-**Implementation.** `clavenar-ctl` Cargo workspace. `init` writes `config.toml` with `--with-policies` opt-in for the starter dir. `--guard --upstream <URL>` is the one-command local-guard flow (see §10.6): it additionally scaffolds a complete `governance.rego` + `clavenar-lite.env` and prints the observe-mode launch command (`--launch` spawns it; `--print-config` resolves and prints without writing). `doctor` accepts a comma-list override via `--services`; defaults to console / hil / identity / policy-engine / ledger. `generate-policy {list|<name>}` ships the seven templates from §1.14 baked into the binary so the CLI works without a checked-out sibling repo. clippy `-D warnings` clean.
-
-**Verify.**
-
-```bash
-clavenarctl init --with-policies                  # config + starter templates land
-clavenarctl init --guard --upstream http://localhost:9000/mcp  # local guard scaffold
-clavenarctl doctor                                # latency table
-clavenarctl generate-policy list                  # 7 names
-clavenarctl generate-policy pii_egress > pii.rego # template to stdout
-```
-
----
-
-## 7. Regulatory export
-
-### 7.1 EU AI Act Article 11/12 bundle
-
-**Concept.** The audit artifact regulators actually want. Article 11 = technical documentation, Article 12 = automatic logging records. The bundle is a `.tar.gz` containing NDJSON (one chain row per line) + a manifest (window metadata, hashes, schema version) + a detached Ed25519 signature + an optional operator-supplied prose document + a 7-step verification recipe in plaintext. The auditor unstars it with `tar`, verifies it with `openssl` and `sha256sum`. **No Clavenar binary required for verification.**
-
-**Implementation.** `POST /export/regulatory` on `clavenar-ledger`. Bundle assembled in `clavenar-ledger/src/regulatory.rs`. Half-open window `[from, to)`. Empty window returns a valid bundle with `row_count: 0` (auditors expect a verifiable artifact even for "we logged nothing"). Operator stores; Clavenar does not retain bundles server-side.
-
-**Verify.**
-
-```bash
-clavenarctl regulatory export --from ... --to ... --output bundle.tar.gz
-tar -xzf bundle.tar.gz && cat README.txt    # 7-step recipe
-```
-
-### 7.2 Manifest schema v7
-
-**Concept.** Self-describing. The manifest tells the auditor what's in the bundle and how to verify it. `chain_state` carries `prev_hash_at_window_start` and `entry_hash_at_window_end` so the auditor can verify chain continuity without fetching anything outside the bundle. `signature` is an envelope referencing the detached `manifest.sig` sidecar. Every optional block (`technical_documentation`, `parquet_pointers`, `compliance_register`, `anchors`, `annex_iv`, `post_market_monitoring_plan`) is signed transitively (the signature commits to the canonical manifest) and declared in a pinned order, so a bundle with a block unpopulated is byte-identical to the prior schema version apart from `schema_version`.
-
-**Implementation.** `Manifest` struct in `clavenar-ledger/src/regulatory.rs`. Fields:
-
-```jsonc
-{
-  "schema_version": "8",
-  "generated_at": "...",
-  "window": { "from": "...", "to": "..." },
-  "row_count": 1234,
-  "seq_lo": 5000, "seq_hi": 6233,
-  "chain_state": { "prev_hash_at_window_start": "...", "entry_hash_at_window_end": "..." },
-  "verified_chain": {
-    "contract": "clavenar.regulatory-bundle-signing/v1",
-    "commitment": { "contract": "clavenar.verified-chain/v1", "head_hash": "...", "length": 120599, "tail_chain_version": 5 },
-    "cryptographic_contract": "clavenar.cryptographic-verification/v2",
-    "cryptographic_status": "verified",
-    "historical_key_lineage_sha256": "sha256:...",
-    "signed_rows": 18649,
-    "verified_signed_rows": 18649,
-    "legacy_unverifiable_rows": 0,
-    "tsa_required": true,
-    "tsa_verified": 4,
-    "tsa_trust_bundle_sha256": "sha256:..."
-  },
-  "ndjson_sha256": "...",
-  "article_scope": ["EU-AI-Act-Article-11", "EU-AI-Act-Article-12"], // widened to 14/15/Annex-IV/72 by the optional blocks
-  "signature": { "sidecar": "manifest.sig", "algorithm": "ed25519", "digest_alg": "sha256", "key_id": "...", "signed_at": "..." },
-  "technical_documentation": { "filename": "...", "sha256": "...", "byte_size": 2048 },    // optional (v3)
-  "parquet_pointers": [{ "snapshot_id": "...", "data_uri": "...", "data_sha256": "...", ... }], // optional (v3)
-  "compliance_register": { "filename": "compliance_register.json", "sha256": "...", "byte_size": 4096 },    // optional (v4)
-  "anchors": { "filename": "anchors.ndjson", "sha256": "...", "byte_size": 2048, "count": 3 },               // optional (v5)
-  "annex_iv": { "filename": "annex_iv_documentation.json", "sha256": "...", "byte_size": 3072 },             // optional (v6)
-  "post_market_monitoring_plan": { "filename": "post_market_monitoring_plan.json", "sha256": "...", "byte_size": 2560 } // optional (v6)
-}
-```
-
-**Verify.**
-
-```bash
-tar -xzf bundle.tar.gz
-jq . manifest.json
-```
-
-### 7.3 Detached Ed25519 signature
-
-**Concept.** Embedded signatures are byte-fragile — any whitespace difference between writer and verifier breaks them. Detached signatures keep the manifest byte-stable across implementations. The signature commits to `sha256(canonical_manifest_with_signature_blanked_to_null)` so the auditor blanks the `signature` field, re-serializes pretty-printed, sha256s, and runs `ed25519_verify`. Tampering with `technical_documentation` or `parquet_pointers` (which the manifest carries hashes of) breaks both the signature verification and a cheap recompute.
-
-**Implementation.** `clavenar-ledger::identity_client::HttpManifestSigner` calls `clavenar-identity` `POST /sign/blob` with the canonical-manifest digest and exact export-scope tenant, local ledger audience, regulatory purpose/operation, and 300-second binding. Caller authority comes only from the verified Ledger mTLS certificate. Official Compose and Helm profiles require signing at startup. Before signing, Ledger performs a fresh complete hash/signature/TSA walk and commits its exact authority under `verified_chain`; after signing, Ledger fetches the bounded-fresh historical lineage independently, verifies the Ed25519 response, and rejects a lineage race. Missing identity/key/CA/verifier, signing failure, wrong key, invalid signature, or incomplete chain verification produces 503 and no bundle bytes.
-
-**Verify.**
-
-```bash
-tar -xzf bundle.tar.gz
-
-# Step 5–6 of the auditor recipe:
-jq '.signature = null' manifest.json | jq -S . > unsigned.json
-openssl dgst -sha256 -binary unsigned.json | xxd -p -c 256
-# Or run the implementation-independent archive + lineage + Ed25519 verifier:
-python3 scripts/verify_regulatory_bundle.py --bundle bundle.tar.gz --key-set historical-keys.json
-```
-
-### 7.4 Operator-supplied prose
-
-**Concept.** Article 11 wants prose. Operators want to attach a `technical_documentation.md` describing the deployment, its risk classification, intended use cases. The endpoint accepts an optional `text/markdown` request body up to 1 MiB; the bundle embeds it verbatim and commits its sha256 in the manifest.
-
-**Implementation.** `POST /export/regulatory` accepts a `text/markdown` (or any `text/*`) body. 1 MiB cap (`413 payload_too_large` on overrun). Manifest's `technical_documentation` sub-object commits to `{ filename, sha256, byte_size }`.
-
-**Verify.**
-
-```bash
-clavenarctl regulatory export --from ... --to ... --readme ./tech-docs.md --output bundle.tar.gz
-tar -xzf bundle.tar.gz technical_documentation.md
-diff tech-docs.md technical_documentation.md
-```
-
-### 7.5 Parquet pointers
-
-**Concept.** Cold-tier `/export` snapshots (Iceberg + Parquet, see §9) and the regulatory bundle cover overlapping windows. Operators may want auditors to cross-check analytical aggregates against the chain rows. `?include_exports=true` runs a seq-overlap scan against the `exports` table and embeds Parquet pointers in the manifest. The auditor independently fetches the snapshots, verifies their sha256s against the manifest, and runs whatever Parquet tooling they prefer.
-
-**Implementation.** `BundleOptions { include_exports: bool, .. }` in `clavenar-ledger`. When true, `regulatory.rs` queries the `exports` table for snapshots with `seq_lo <= window.seq_hi AND seq_hi >= window.seq_lo` and emits one `parquet_pointers[]` entry per match.
-
-**Verify.**
-
-```bash
-clavenarctl regulatory export --include-exports --from ... --to ... --output bundle.tar.gz
-jq '.parquet_pointers' manifest.json
-```
-
-### 7.6 Auditor verification recipe (`README.txt`)
-
-**Concept.** The bundle teaches the auditor how to verify it. `README.txt` is plain ASCII, no Markdown rendering required, opens in any text editor.
-
-**Implementation.** Embedded as a constant in `clavenar-ledger/src/regulatory.rs`. Seven steps:
-
-1. Untar the bundle.
-2. Verify `entries.ndjson` byte-hash matches `manifest.json`'s `ndjson_sha256`.
-3. Verify chain continuity from `chain_state.prev_hash_at_window_start` through every NDJSON row to `chain_state.entry_hash_at_window_end`.
-4. (Optional) Verify `technical_documentation.md` byte-hash matches `manifest.technical_documentation.sha256`.
-5. Blank `manifest.signature` → `null`, re-serialize pretty-printed JSON, sha256.
-6. `ed25519_verify` the digest from step 5 against `manifest.sig` using the operator-published public key (`key_id` in `manifest.signature`).
-7. (Optional) For each entry in `manifest.parquet_pointers`, fetch `data_uri`, sha256, compare to `data_sha256`.
-
-**Verify.**
-
-```bash
-tar -xzf bundle.tar.gz
-cat README.txt
-```
-
-### 7.5 Continuous compliance evidence (Article 14/15 + SOC 2 / ISO 27001)
-
-**Concept.** The Article 11/12 bundle covers documentation + logging. Articles 14 (human oversight) and 15 (accuracy / robustness / cybersecurity), plus the operational-monitoring controls auditors ask about under SOC 2 / ISO 27001, are *auto-derived from the chain* — no operator prose required. A live JSON register the operator renders at `/compliance` and downloads as a signed pack. It is evidence projection, not a legal conformity assessment, and says so on the wire.
-
-**Implementation.** Derivation engine in `clavenar-ledger/src/compliance.rs` — a static `CONTROL_CATALOG` of eleven EU AI Act, ISO 27001, SOC 2, NIST AI RMF, and NIST GenAI Profile controls, each a pure deriver over a chain slice. `POST /compliance/evidence?from=&to=` (internal mTLS listener) returns a `ComplianceRegister` JSON (schema v3: per-control `status` ∈ `satisfied`/`partial`/`no_data`, an auditable `metric` object, at most five representative `sample_seqs`, a narrative, and aggregate cryptographic verification). `POST /export/regulatory?…&include_compliance=true` embeds the same register as `compliance_register.json` in the signed bundle (current manifest **v8**, block introduced in v4, committed by sha256) — both go through one derivation function so the live view and the bundled artifact agree. The derivation and required Identity signing are backend-agnostic, so `/compliance/evidence` and signed regulatory exports work on the staged PostgreSQL path too. Article 14 derives from HIL human decisions (`approver_assertion` / non-system `policy_decision.decided_by`) **and their channel provenance** — Satisfied demands every human decision rode an attested channel (`webauthn` / `oidc` / `saml`, stamped server-side by HIL from the verified principal); demo sessions, plain bearer stamps, and auth-disabled bypasses never count, system/auto decisions are excluded from the human count entirely, and the `provenance_summary` metric tags every decision channel so an auditor sees exactly what decided. Article 15 derives from deny-signal distribution + complete cryptographic verification + verified signed-denial coverage; ISO 8.13 from chain continuity + overlapping cold-tier exports. Mirror types in `clavenar-sdk` (`compliance_evidence`); console page `/compliance` (`clavenar-console/src/handlers/compliance.rs`); CLI flag `clavenarctl regulatory export --include-compliance`.
-
-**Verify.**
-
-```bash
-# Live register
-clavenarctl regulatory export --from <RFC3339> --to <RFC3339> \
-  --include-compliance --output pack.tar.gz
-tar -xzf pack.tar.gz && cat clavenar-regulatory-bundle-*/compliance_register.json
-# manifest.json: schema_version "8", article_scope includes 14 + 15
-```
-
----
-
-## 8. Forensic / audit pipeline
-
-### 8.1 NATS forensic bus (`clavenar.forensic`)
-
-**Concept.** Every layer publishes its forensic event to a single NATS subject; `clavenar-ledger` is the sole subscriber. This decouples ingestion: a temporarily-down ledger doesn't block the security pipeline (NATS buffers); a temporarily-down policy engine doesn't lose events that already happened (NATS at-least-once).
-
-**Implementation.** Subject: `clavenar.forensic`. Publishers: `clavenar-proxy` (post-verdict), `clavenar-policy-engine` (per-evaluation), `clavenar-hil` (per state transition), `clavenar-identity` (per lifecycle event). All emit `LogRequest`-shaped JSON. Ledger subscriber appends each well-formed message to the chain.
-
-**Verify.**
-
-```bash
-nats sub 'clavenar.forensic'    # in a separate terminal
-./repos/clavenar-chaos-monkey/...    # scenarios fire, events stream by
-```
-
-### 8.2 Versioned forensic event and causal identity
-
-**Concept.** Correlation joins are useful for investigation but do not make
-retries idempotent and cannot prove which exact record caused another action.
-`clavenar.forensic-event/v1` gives every logical stage an immutable
-`(producer.service, event_id, stage)` identity, commits the complete canonical
-payload, and names an exact immediate predecessor when causality crosses a
-stage or service boundary.
-
-**Implementation.** The strict public schema and golden corpus live in
-`contracts/forensic-event-v1.{schema,fixture}.json`. One governed operation
-allocates and retains one lowercase UUID before its first action; every stage
-reuses that ID plus the authenticated tenant/workload, correlation, and
-idempotency bindings. Payload SHA-256 uses RFC 8785 canonical bytes. Policy and
-Brain provenance are either complete or null. The existing
-`clavenar.execution/v1` bytes remain unchanged and map deterministically into
-the generic envelope. Outboxes, broker acknowledgements, and Ledger uniqueness
-land in subsequent producer/consumer migrations.
-
-**Verify.** Run the assembled contract checker. It compares the public and E2E
-mirrors byte-for-byte, validates every golden event and causal edge, recomputes
-payload commitments, and rejects governed identity, stage, timestamp, digest,
-provenance, predecessor, duplicate-conflict, and extra-field mutations.
-
-```bash
-cd ../clavenar-e2e
-python3 scripts/check_forensic_event_contract.py --require-source
-```
-
-### 8.2.1 Transactional forensic intent and terminal outboxes
-
-**Concept.** A broker publish after a database write is not a durable audit
-boundary: a crash between the two can erase the only evidence that an effect
-or credential release occurred. Each effect owner must first retain intent in
-its own database and must retain the successful terminal stage before it
-reports success.
-
-**Implementation.** The reviewed
-[`contracts/forensic-effect-inventory-v1.json`](contracts/forensic-effect-inventory-v1.json)
-classifies all 15 reachable effect families. Existing SDK, selected
-Proxy/Lite execution, Policy lifecycle, and Identity lifecycle stores remain
-mandatory. HIL atomically commits intent + pending transition + terminal for
-create, decide, quorum, modify, and expiry. Identity commits intent before
-CA/Vault for SVID, grant, actor-token, action-signature, and blob-signature
-authority, then commits `credential.released` before returning bytes. Both
-append-only SQLite outboxes retain canonical v1 envelopes with the current
-producer workload credential. Every row begins in the exact `local` state.
-
-**Verify.** The assembled checker enforces the byte-identical inventory,
-source ownership, transaction ordering, immutable schemas, selected-execution
-boundary, current workload fingerprint binding, and absence of an early
-publisher. The canonical production smoke snapshots SQLite plus WAL while each
-owner is paused, validates every retained digest and causal pair, and requires
-live HIL create/decide/modify plus Identity SVID/grant/actor-token/action-signature
-release evidence.
-
-```bash
-cd ../clavenar-e2e
-python3 scripts/check_forensic_outbox_contract.py --require-source
-```
-
-### 8.2.2 Acknowledged durable forensic delivery
-
-**Concept.** A successful core-NATS send proves neither persistence nor which
-stream accepted the bytes. A durable publisher must retain its local row until
-the exact persistent stream acknowledges the exact stable message identity.
-
-**Implementation.** The byte-identical
-[`contracts/forensic-delivery-v1.json`](contracts/forensic-delivery-v1.json)
-classifies seven durable boundaries. HIL, Identity authority and lifecycle,
-Policy lifecycle, and Proxy selected server execution publish exact retained
-bytes with stable `Nats-Msg-Id` values, require `clavenar-forensic`, wait for
-the second-phase acknowledgement, and retain its nonzero sequence. Retry
-workers use bounded ordered batches and bounded exponential stable jitter. SDK receipt
-delivery and Lite's embedded ledger remain non-broker durable sinks. Failed or
-lost acknowledgements retry indefinitely without deleting local custody; the
-stream has an explicit 24-hour duplicate window.
-
-**Verify.** The assembled checker validates the public mirror, shared publisher,
-service schemas and workers, in-place migrations, exact stream configuration,
-and least-privilege stream-update authority.
-
-```bash
-cd ../clavenar-e2e
-python3 scripts/check_forensic_delivery_contract.py --require-source
-```
-
-### 8.2.3 Transactional Ledger stage uniqueness
-
-**Concept.** Broker-window deduplication cannot stop a later redelivery from
-growing the hash chain. The consumer therefore owns one permanent identity for
-each strict producer/event/stage and decides duplicate versus conflict inside
-the same transaction as the chain append.
-
-**Implementation.** The byte-identical
-[`contracts/forensic-ledger-ingest-v1.json`](contracts/forensic-ledger-ingest-v1.json)
-defines strict canonical-envelope validation and the SQLite/PostgreSQL
-`forensic_stages` claim. A first tuple appends one row and claim; exact replay
-returns the retained entry ID, sequence, and hash; changed bytes conflict and
-append nothing. The existing chain shape commits a compact
-`policy_decision.forensic_identity` containing the tuple plus payload and exact
-envelope digests. Historical rows remain untouched and receive no invented
-identity.
-
-**Verify.** Run the assembled checker, then the Ledger owner tests. The source
-gate checks the three exact contract copies, strict decoder, both migrations,
-transactional insert/lookup, immutable claims, explicit JetStream dispositions,
-and adversarial owner coverage.
-
-```bash
-cd ../clavenar-e2e
-python3 scripts/check_forensic_ledger_ingest_contract.py --require-source
-cd ../clavenar-ledger
-cargo test
-cargo test --features postgres --test storage_equivalence
-```
-
-### 8.2.4 Crash reconciliation and delivery-health telemetry
-
-**Concept.** A durable intent proves only that an effect was admitted. After a
-process dies at the external-effect boundary, success must come from exact
-authoritative evidence, not elapsed time or a retry. When occurrence cannot be
-proved either way, the only safe terminal posture is explicit, non-executable
-uncertainty. Operators also need a bounded view of delayed forensic custody and
-missing required stages without event- or tenant-cardinality labels.
-
-**Implementation.** The byte-identical
-[`contracts/forensic-reconciliation-v1.json`](contracts/forensic-reconciliation-v1.json)
-classifies all 15 effect families, their authoritative oracle, interrupted
-outcome, required terminal stages, and telemetry owner. HIL, Policy, and
-Identity lifecycle effects retain their atomic no-reconciliation boundary.
-Identity authority intents and selected Proxy/Lite executions persist
-reconciliation state; after the five-minute grace period an unproved external
-effect becomes `uncertain` and is never invoked again. Existing rows remain
-`legacy`. Broker-backed services export ready/retry/terminal depth, oldest age,
-retry/terminal counters, reconciliation status, and missing-stage gauges using
-only fixed state/outcome/family/stage labels. Ledger derives missing HIL and
-Identity terminals from immutable strict claims and retains its duplicate and
-conflict counters.
-
-**Verify.** The assembled checker compares the public and packaged contracts,
-certifies each source boundary and fixed metric vocabulary, rejects forbidden
-identifier labels, and runs owner crash/migration/cardinality tests. The live
-receipt holds delivery long enough to raise age/retry/missing-stage signals,
-restores it, and proves gauges drain while counters and immutable rows remain.
-
-```bash
-cd ../clavenar-e2e
-python3 scripts/check_forensic_reconciliation_contract.py --require-source
-```
-
-### 8.2.5 Durable distributed control-state inventory
-
-**Concept.** A remote cache cannot safely become authority merely because its
-source is unavailable. Every distributed gate needs one explicit
-mandatory/advisory class and one recoverable durable state boundary before
-readiness and outage behavior can be enforced consistently.
-
-**Implementation.** The strict
-[`contracts/distributed-control-state-v1.fixture.json`](contracts/distributed-control-state-v1.fixture.json)
-inventory covers agent and grant revocation, force-HIL containment, configured
-tenant quota, grant use counts, decoy invocation, and decoy advertisement.
-Identity and Ledger databases or the retained grant-use KV are authoritative;
-KV watches and bounded HTTP caches are projections. Every KV contract pins file
-storage, history, retention, and a validated replica count. Force-HIL state is
-versioned in Identity SQLite and reconciliation cannot extend its expiry.
-
-**Verify.** Validate the public schema and semantic invariants, then run the
-assembled mirror/source checker.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_distributed_control_state_contract
-cd ../clavenar-e2e
-python3 scripts/check_distributed_control_state.py --require-source
-```
-
-### 8.2.6 Fail-closed distributed control readiness and recovery
-
-**Concept.** A mandatory projection is usable only after its exact initial
-synchronization and while its required authority path remains current. A
-reachable process or retained stale cache does not prove that safety controls
-are enforceable.
-
-**Implementation.** The strict
-[`contracts/distributed-control-resilience-v1.fixture.json`](contracts/distributed-control-resilience-v1.fixture.json)
-binds the exact inventory digest and selects fail-closed behavior for all six
-mandatory controls. Process-wide KV mirrors and the grant-use store gate
-readiness; tenant quota state synchronously fetches a complete budget/spend pair
-per applicable key. Post-HIL suspension, force-HIL, grant-revocation, and quota
-rechecks prevent a pending approval from crossing an outage. Decoy
-advertisement remains non-authorizing advisory state.
-
-No snapshot authorizes work in this version. A present
-`CLAVENAR_CONTROL_STATE_SNAPSHOT_PATH` is a startup error, so unsigned, stale,
-wrong-release, partial, or rollbacked local state cannot become an implicit
-fallback.
-
-**Verify.** Validate the public schema, exact inventory binding, mandatory-row
-coverage, fail-closed posture, and snapshot rejection.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_distributed_control_resilience_contract
-```
-
-### 8.2.7 Complete state and recovery inventory
-
-**Concept.** Recovery cannot be tested or approved until every authoritative,
-credential, trust, observability, configuration, and recovery state has an
-owner, an objective, a lifecycle, a custody rule, and a dependency-ordered
-verification target. Unlisted volumes, secrets, or required configuration
-mounts are an implicit data-loss path.
-
-**Implementation.** The strict
-[`contracts/state-recovery-inventory-v1.fixture.json`](contracts/state-recovery-inventory-v1.fixture.json)
-enumerates 20 state classes for the supported single-host Compose and
-single-writer Helm topologies. Reusable profiles bind numeric RPO/RTO,
-consistency checkpoints, bounded retention, deletion and tenant-erasure
-behavior, encryption custody, and protection disposition. Every row has
-topology locations, a restore dependency order, and integrity plus functional
-verification. Private credentials may be reconstructible only through explicit
-reissue without private-key backup. The contract records current topology
-limits. Scheduled backup, isolated restore, and passive DR now have separate
-accepted receipts; the inventory itself still does not inherit those claims.
-Upgrade safety remains separate.
-
-**Verify.** Validate the public schema and semantic closure, then run the
-assembled checker that accounts for every official Compose volume, secret, and
-required bind class; Helm persistence boundary; exact mirror; dependency; and
-source-evidence reference.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_state_recovery_inventory_contract
-cd ../clavenar-e2e
-python3 scripts/check_state_recovery_inventory.py --require-source
-```
-
-### 8.2.8 Scheduled encrypted offsite backup
-
-**Concept.** A backup is delivered only when every protected inventory state
-is captured through its approved consistency boundary, encrypted before
-transfer, published as a content-addressed offsite object, and measured. A
-timer recipe, local archive, or successful upload without exact object
-verification is not a delivered backup.
-
-**Implementation.** The strict
-[`contracts/backup-set-manifest-v1.fixture.json`](contracts/backup-set-manifest-v1.fixture.json)
-partitions all 20 inventory states and binds one passing capture to the exact
-inventory, release, operational plan, encryption key identifier, restic
-snapshot, encrypted repository delta, and immutable offsite digest. Compose
-runs an overlap-safe persistent weekly schedule. SQLite uses online
-backup plus `quick_check`; non-SQLite writers use bounded snapshot/restart
-handling; restricted material is allowlisted; reconstructible workload
-private identities are excluded. Authenticated restic encryption and
-deduplication happen before an encrypted delta is uploaded. Helm exposes the
-same state partition and requires an operator-owned repository credential
-without embedding it in the chart.
-
-**Verify.** Validate the public schema and partition, then run the assembled
-plan checker and adversarial runner tests. A production acceptance run also
-requires the scheduled timer, a digest-qualified remote object, encrypted
-delta verification, fresh metrics, a sanitized receipt, and unchanged
-canonical stack smoke.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_backup_set_manifest_contract
-cd ../clavenar-e2e
-python3 scripts/check_scheduled_backup.py --require-source
-python3 -m unittest tests.test_scheduled_backup
-```
-
-### 8.2.9 Isolated complete restore
-
-**Concept.** Backup confidence requires a complete restore from the immutable
-offsite chain into a namespace that cannot read or affect production. Each
-inventory state must meet its declared recovery objective and pass a
-state-native functional check.
-
-**Implementation.** The strict
-[`contracts/isolated-restore-receipt-v1.fixture.json`](contracts/isolated-restore-receipt-v1.fixture.json)
-binds the exact release, backup head, predecessor chain, restic snapshot,
-inventory and backup plan. The restore owner rejects missing or substituted
-objects, unsafe archive entries, plaintext, cycles, rollback, and release or
-snapshot mismatch before starting an isolated stack. All 20 state classes are
-restored, reconstructed, supplied from separate custody, or verified from
-signed source according to the existing inventory. Production volumes,
-networks, DNS, ports, and bind paths are prohibited. Runtime checks cover the
-five SQLite authorities, JetStream, Vault and Transit history, restricted
-authorities, trust, Caddy, observability, current identity reissue, readiness,
-and a representative governed transaction.
-
-**Verify.** Validate the public receipt contract and run the assembled
-adversarial restore owner. Production acceptance additionally consumes a real
-private offsite chain, boots the exact protected release without builds, and
-leaves the canonical production stack unchanged.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_isolated_restore_receipt_contract
-cd ../clavenar-e2e
-python3 scripts/check_isolated_restore.py --require-source
-python3 -m unittest tests.test_isolated_restore
-```
-
-### 8.2.10 Fenced passive failover and failback
-
-**Concept.** A passive is promotable only when it holds a fresh, completely
-verified encrypted recovery point and the previous writer is provably fenced.
-Routing convergence is not writer authority. Failback must carry every write
-made on the passive back to the original primary before it starts.
-
-**Implementation.** The strict
-[`contracts/passive-recovery-v1.fixture.json`](contracts/passive-recovery-v1.fixture.json)
-records one cold active/passive drill. Passive points reuse the exact 20-state
-backup partition, store only content-addressed encrypted restic objects, bind
-their parent and exact release/inventory/plans, and activate atomically.
-HMAC-SHA-256 fence state is separately custodied and advances monotonically
-through primary demotion, passive promotion, passive demotion, and primary
-promotion. Promotion requires the exact signed demotion generation and a fresh
-verified point; partitioned and double promotion fail.
-
-The drill restores the forward point, validates all state and a governed
-transaction, creates a new encrypted offsite backup from that promoted state,
-then restores its reverse point after failback. Ledger counts prove the passive
-transaction is the primary's failback baseline and the chain advances again.
-
-**Verify.** Validate the public schema and semantic transition order, then run
-the assembled source/adversarial owner checks. Production acceptance also
-requires the timed two-restore drill, enabled/active backup and fence timers,
-and the passive sync backup-success trigger.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_passive_recovery_contract
-cd ../clavenar-e2e
-python3 scripts/check_passive_recovery.py --require-source
-python3 -m unittest tests.test_passive_recovery tests.test_check_passive_recovery
-```
-
-### 8.2.11 Dependency-aware readiness
-
-**Concept.** A process being alive is not evidence that it can safely accept
-traffic. Every routed or required service needs one bounded local readiness
-surface that closes over its storage, authority, synchronization, worker, and
-upstream dependencies while keeping liveness process-only.
-
-**Implementation.** The strict
-[`contracts/dependency-readiness-v1.fixture.json`](contracts/dependency-readiness-v1.fixture.json)
-enumerates all 17 required Compose services and the 12 default Helm
-service/dependency boundaries. Each row binds distinct liveness and readiness
-targets, exact stable check names, topology-specific acyclic startup
-predecessors, a fail-closed result, and a provider-probe posture. HTTP
-readiness uses the common bounded `{status, checks}` response. External
-provider checks validate configuration without sending provider traffic.
-Compose requires healthy or completed predecessors; Helm renders the same
-edges into bounded startup gates plus distinct liveness/readiness probes.
-Broker-backed checks require an active bounded NATS server response, and every
-service reports its direct dependency failure explicitly rather than relying
-only on transitive withdrawal.
-
-**Verify.** Validate the public schema, exact service sets, dependency closure
-and acyclicity, liveness/readiness separation, provider posture, and critical
-check coverage. The assembled deployment verifier additionally binds the exact
-contract bytes to both rendered Compose environments and all Helm fixtures.
-The confirmed fault matrix pauses every remote dependency in turn, requires
-direct and transitive readiness withdrawal with liveness retained, restores
-forward, rejects unrelated withdrawal, and proves container, volume, and
-Ledger-chain continuity without a reset.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_dependency_readiness_contract
-cd ../clavenar-e2e
-python3 scripts/check_dependency_readiness.py --source-root .. --require-source
-python3 scripts/run_dependency_readiness_fault_matrix.py \
-  --environment prod \
-  --confirm readiness-fault-matrix
-```
-
-### 8.2.12 Transactional deployment promotion
-
-**Concept.** A new release is public only after the exact candidate is ready
-and completes a fresh governed transaction. A failed candidate must restore
-the exact prior release automatically and prove the restored system works.
-
-**Status.** Shipped and production-accepted in `1.197.1`.
-
-**Implementation.** The strict
-[`contracts/deployment-promotion-v1.fixture.json`](contracts/deployment-promotion-v1.fixture.json)
-binds both immutable release and BOM digests, the prior and candidate public
-versions, mutation state, complete-readiness and representative-transaction
-gates, and the terminal outcome. Canonical promotion is single-flight and
-rejects stale or missing prior state before mutation. Failure or interruption
-before confirmation restores the prior release with no build or state reset,
-then requires complete readiness, a fresh authenticated policy/upstream/Ledger
-transaction, chain continuity, and the prior public pointer. Rollback failure
-is explicit and critical.
-
-**Verify.** Validate the public schema and adversarial terminal states. The
-deployment owner additionally checks source ordering and exercises readiness,
-transaction, version, interruption, concurrency, stale-prior, rollback-failure,
-and success cases against exact signed artifacts.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_deployment_promotion_contract
-cd ../clavenar-e2e
-python3 scripts/check_deployment_promotion.py --require-source
-python3 -m unittest tests.test_deployment_promotion
-```
-
-### 8.2.13 Production alert delivery lifecycle
-
-**Concept.** A configured alert is not an operating control until a real
-receiver durably accepts the firing notification, an authenticated operator
-acknowledges it, and the receiver records a distinct resolved notification.
-
-**Implementation.** The strict
-[`contracts/alert-delivery-lifecycle-v1.fixture.json`](contracts/alert-delivery-lifecycle-v1.fixture.json)
-binds the exact release/BOM, critical alert identity, loaded rule and route,
-authenticated non-discard receiver, ordered firing/acknowledgement/resolution
-timestamps, durable notification identifiers, and terminal result. The
-contract is receiver-vendor-neutral. Production requires Prometheus,
-Alertmanager, and an authenticated durable operator inbox, with complete
-required-service scraping and fail-closed readiness. The chart emits standard
-`PrometheusRule` and `AlertmanagerConfig` resources whose receiver authority is
-secret-backed.
-
-**Verify.** Validate the schema and semantic ordering, then fire a synthetic
-critical page through the deployed rule, router, authenticated receiver,
-operator acknowledgement, and resolution path.
-
-```bash
-python3 -m unittest tests.test_alert_delivery_lifecycle_contract
-cd ../clavenar-e2e
-python3 scripts/check_alert_delivery.py --require-source
-# Against a deployed stack and its sanitized terminal receipt:
-python3 scripts/check_alert_delivery.py --require-source --require-runtime \
-  --receipt prod/runtime-secrets/alert-delivery-live-receipt.json
-```
-
-### 8.2.14 Stateful upgrade safety
-
-**Concept.** A singleton replica count is not a single-writer upgrade. The
-controller must terminate the existing SQLite writer before starting a
-candidate, and rollback must begin from a verified pre-migration database
-rather than assuming an interrupted schema remains readable.
-
-**Implementation.** The strict
-[`contracts/stateful-upgrade-v1.fixture.json`](contracts/stateful-upgrade-v1.fixture.json)
-binds source and target releases, CSI/PVC identity, all five SQLite workloads,
-`Recreate` strategy, online-backup integrity, explicit schema compatibility,
-failed scheduling, interrupted migration, restored state commitments,
-functional checks, and the maximum observed application-writer count.
-
-**Verify.** Validate the public contract and source projections, then run the
-CSI-backed install, mutation, failed-scheduling, interrupted-migration, and
-rollback matrix.
-
-```bash
-cd ../clavenar-specs
-python3 -m unittest tests.test_stateful_upgrade_contract
-cd ../clavenar-e2e
-python3 scripts/check_stateful_upgrade.py --require-source
-python3 scripts/run_stateful_upgrade_matrix.py --output /tmp/stateful-upgrade.json
-python3 scripts/check_stateful_upgrade.py --require-source \
-  --receipt /tmp/stateful-upgrade.json
-```
-
-### 8.3 UUIDv4 `correlation_id`
-
-**Concept.** Every request gets a single `correlation_id`, stamped by the proxy in `handle_mcp` at request entry. The ID threads through every downstream call (brain `/inspect`, policy `/evaluate`, HIL `/pending`) and every emitted forensic event. Per-request reconstruction is `GET /audit/correlation/{id}` — the join key is on every row, deterministic, no timestamp-heuristic needed.
-
-**Implementation.** UUIDv4 generated by the proxy. Threaded into `BrainRequest`, `PolicyInput`, `CreatePending`. Console's `/audit` filter can pin to a single ID.
-
-**Verify.**
-
-```bash
-# Boot the stack, drive a request, copy any correlation_id from /audit
-curl http://localhost:8083/audit/correlation/<id> | jq
-# Every event from every layer for that request appears in one response
-```
-
-### 8.4 Origin tag (`source` column)
-
-**Concept.** The simulator stamps `x-clavenar-source: simulator` on every request so the console's "Hide simulated traffic" filter can strip its noise. **`source` is metadata, not in the hashable** — an attacker that controls a client could stamp any value. Never used for authz, tamper detection, or chain integrity.
-
-**Implementation.** Proxy reads `x-clavenar-source`, stamps it on the forensic event under `source`. Ledger persists in nullable column. Console filter joins by `correlation_id` so policy / HIL rows for sim-driven traffic hide too (those events don't propagate the header).
-
-**Verify.**
-
-```bash
-curl http://localhost:8083/audit?source=simulator | jq '.[].correlation_id' | sort -u
-# Sim correlation IDs only
-```
-
-### 8.5 Annotation signal column
-
-**Concept.** Identity- and proxy-side rejection annotations ride on `LogRequest.signal`: `unregistered_agent`, `agent_suspended`, `agent_decommissioned`, `attestation_kind_not_accepted`, `peer_bundle_stale:<td>`, `grant_expired`, `signing_unavailable`, etc. Persisted as a nullable column, **not in the hashable**, queryable via `/audit`. The console's filter chips key off it.
-
-**Implementation.** Field on `LogRequest`. Ledger persists nullable. Audit query supports `?signal=<name>` filter. SSE `/stream/audit` carries it on every row so the console can render new rows in place.
-
-**Verify.**
-
-```bash
-# Filter to a specific signal
-open 'http://localhost:8085/audit?signal=peer_bundle_stale:other-tenant'
-```
-
-### 8.6 Outbound verdict webhooks (clavenar-lite)
-
-**Concept.** Operators want every terminal pipeline outcome (allow / deny / park, plus `would_deny` / `would_park` in observe mode) and every HIL decision (`decide_allow` / `decide_deny`) pushed to their SIEM in real time — no scrape lag, no polling. The webhook ships one stable-shape JSON event per outcome to a configured URL. Distinct from the human-facing Slack webhook (which posts Markdown); this one is for ingest pipelines (Datadog HTTP source, Splunk HEC, Loki, Vector, in-house).
-
-**Implementation.** `clavenar-lite` reads `CLAVENAR_LITE_WEBHOOK_URL`. Payload: `{event, correlation_id, agent_id, tool_type, method, intent_category, reasoning, review_reasons, mode, ts}` with RFC 3339 ms-precision UTC. 5s per-request timeout; failures log at `warn` and never delay the agent or operator response. 4 integration tests cover allow / deny / park-then-decide / observe-mode `would_deny` emission against a stub sink. Full-stack `clavenar-proxy` mirror is a follow-up.
-
-**Verify.**
-
-```bash
-# Stub sink
-nc -lk 4444 &
-CLAVENAR_LITE_WEBHOOK_URL=http://localhost:4444/ clavenar-lite start &
-# Drive any agent → see one JSON event per outcome on the sink
-```
-
-### 8.7 Streaming audit egress (ledger → SIEM)
-
-**Concept.** The full-stack ledger's counterpart to §8.5. Where the cold-tier export (§9) writes one Parquet snapshot per day for archive, the egress sweeper streams every chain row to a SIEM within seconds. Per-sink cursors keep the streams independent of cold export and of each other: mid-batch crashes advance only past entries the sink confirmed, and the next sweep retries from the first failed row. Stable wire envelope across all three sinks carries the chain row's UUID so downstream dedup is straightforward.
-
-**Implementation.** `clavenar-ledger/src/egress.rs`. `StreamSink` trait + three impls: `SplunkHecSink` (`POST /services/collector` with `Authorization: Splunk <token>`), `DatadogLogsSink` (`POST http-intake.logs.<site>/api/v2/logs` with `DD-API-KEY`), `GenericHttpSink` (JSON POST + optional bearer; covers Loki / Vector / Logstash / in-house). Per-sink cursors in `egress_cursors` SQLite table. Env vars: `CLAVENAR_LEDGER_EGRESS_INTERVAL_SECS` (default 30; 0 disables), `CLAVENAR_LEDGER_EGRESS_BATCH_SIZE` (default 100), plus per-sink URL/token. SQLite-only — Postgres mode (§1.11) ingests directly against the chain table.
-
-**Verify.**
-
-```bash
-CLAVENAR_LEDGER_EGRESS_SPLUNK_URL=https://splunk.example.com:8088 \
-  CLAVENAR_LEDGER_EGRESS_SPLUNK_TOKEN=$TOKEN \
-  cargo run --bin clavenar-ledger
-# Drive some traffic, then check Splunk for clavenar events
-```
-
----
-
-## 9. Cold-tier analytics exports
-
-### 9.1 Iceberg v2 metadata
-
-**Concept.** Distinct from regulatory export — this is the analytics-grade snapshot. Apache Iceberg v2 is the open table format that data warehouses (Snowflake, Databricks, BigQuery) consume. Every `/export` produces a real Iceberg snapshot: `metadata/{uuid}-m0.avro` (manifest), `metadata/snap-…avro` (snapshot), `metadata/v{N}.metadata.json` (table metadata). The snapshot summary carries `clavenar.parquet-sha256` so the integrity property of the legacy JSON sidecar is preserved.
-
-**Implementation.** `iceberg = "0.9"` crate, in-memory `FileIO`, pushed through the existing `Sink` trait (`S3Sink`, `LocalSink`, `MemorySink`). Per-version `iceberg_state` cache upserts atomically with the `exports` insert. Code lives in `clavenar-ledger/src/export.rs`.
-
-**Verify.**
-
-```bash
-curl -X POST 'http://localhost:8083/export?from=...&to=...&format=iceberg-parquet'
-# Inspect the resulting metadata directory
-```
-
-### 9.2 Native S3 sink (`aws-sdk-s3`)
-
-**Concept.** Production-grade S3 upload. Uses the official `aws-sdk-s3` crate (not a third-party wrapper) so credentials, retries, and multipart uploads behave the same as every other AWS-aware tool in the operator's environment.
-
-**Implementation.** `S3Sink` in `clavenar-ledger/src/export.rs`. Configured via standard AWS env vars (`AWS_ACCESS_KEY_ID`, etc.) or instance metadata. Multipart uploads for large snapshots.
-
-**Verify.** Configure S3 credentials and run an export with `?sink=s3://bucket/prefix/`; objects appear in the bucket.
-
----
-
-## 10. GTM tooling
-
-### 10.1 `clavenar-shadow-scanner`
-
-**Concept.** Top-of-funnel: helps prospects discover their unauthorized agent footprint. Scans GitHub orgs, Slack workspaces, and local filesystem trees for credentials likely belonging to autonomous agents (long-lived API tokens, `.env` patterns, hardcoded keys in code). Output is a CSV the prospect's security team can triage. The cold-outbound motion uses this output as a conversation opener: "we scanned your org and found 47 unmanaged agent credentials."
-
-**Implementation.** Standalone Rust CLI in `repos/clavenar-shadow-scanner/`. Reads from GitHub API, Slack API, local FS. Pattern matching + heuristic classification.
-
-**Verify.**
-
-```bash
-clavenar-shadow-scanner --github-org <name> --output findings.csv
-clavenar-shadow-scanner --local-fs ~/code --output findings.csv
-```
-
-### 10.2 `clavenar-lite`
-
-**Concept.** OSS single-binary edition for evaluators who want to try Clavenar without standing up the full six-service stack. Heuristic Brain (no Anthropic dep) + rego policy + hash-chain ledger + proxy in one binary. The chain format and policy input shape are wire-compatible with the full edition, so a customer can graduate from lite to full without re-instrumenting their agents.
-
-**Implementation.** `repos/clavenar-lite/`. Single-binary crate; subset of the full feature set. No HIL, no identity, no NATS — all in-process. Operator-facing surface:
-
-- **Multi-agent registry.** `CLAVENAR_LITE_AGENTS=agent-a:tok-a,agent-b:tok-b` registers N agents behind one binary; the matched token determines `agent_id` on the ledger and as `input.agent_id` in Rego, so policies can scope tool access per agent. Mutually exclusive with the legacy single-token `CLAVENAR_LITE_TOKEN`.
-- **Online backup + restore.** `clavenar-lite backup --output FILE` takes an online snapshot via SQLite's `sqlite3_backup_*` API (safe against a running proxy); `clavenar-lite restore --input FILE [--force]` verifies the snapshot's chain BEFORE touching the target, then atomic-renames the sibling tmp into place so a partial write can't corrupt. Schema migrations on `Ledger::open` run idempotently, making the version-to-version upgrade path implicit.
-- **Outbound webhook.** `CLAVENAR_LITE_WEBHOOK_URL` — see §8.5.
-- **Async callback URL.** `X-Clavenar-Callback-URL` on `/mcp` + `CLAVENAR_LITE_CALLBACK_ALLOWLIST` — see §2.4.
-- **Observe-only mode.** `CLAVENAR_LITE_MODE=observe` — see §1.12.
-- **Graduation report.** `clavenar-lite graduate report` — see §10.6.
-
-**Verify.**
-
-```bash
-CLAVENAR_LITE_AGENTS=alice:tok-a,bob:tok-b clavenar-lite start &
-# Per-agent ledger rows
-clavenar-lite backup --output /tmp/lite-backup.db
-clavenar-lite restore --input /tmp/lite-backup.db --force
-```
-
-### 10.6 One-command local guard + observe→enforce graduation
-
-**Concept.** The cheapest path from "I have a local MCP server" to "Clavenar is watching it." `clavenarctl init --guard --upstream <MCP-URL>` scaffolds a starter policy + a `clavenar-lite.env` and prints (or, with `--launch`, runs) a `clavenar-lite start --mode observe` command. After a while in observe mode, `clavenar-lite graduate report` summarizes from the local ledger exactly what enforce mode *would* have blocked or parked, and signs the summary so it's tamper-evident — the artifact a developer hands their security team to justify flipping enforce on.
-
-**Implementation.** Two halves, both offline (lite never calls clavenar-identity):
-
-- **`clavenarctl init --guard`** (`clavenar-ctl/src/cmd/init.rs`). Resolves a `GuardConfig` (port / upstream / policies dir / ledger path / mode, defaults `8088` / `http://localhost:9000/mcp` / `./policies` / `./clavenar-lite.db` / `observe`), drops the lite edition's complete `governance.rego` into `./policies/` (a single self-contained `package clavenar.authz` — loading the per-domain templates flat would risk regorus rule-name conflicts), writes `clavenar-lite.env` with the exact `CLAVENAR_LITE_*` names lite reads, and prints the launch command. `--launch` spawns the sibling `clavenar-lite` binary; `--print-config` resolves and prints the config without writing.
-- **`clavenar-lite graduate report`** (`clavenar-lite/src/report.rs` + `ledger.rs::graduation_stats`). Aggregates observe-mode verdict rows by intent category and agent (would-deny = `PolicyDeny` / `BrainDeny` / `PromptInjection` / `RateLimitDenied`; would-pend = `PendingReview`), embeds a chain-validity assertion (`Ledger::verify`), and emits a `GraduationReport`. The report body serializes in struct-declaration order (no maps / no `Value`) so it's byte-deterministic; it's signed with a local Ed25519 PKCS#8 key (`--signing-key` / `CLAVENAR_LITE_SIGNING_KEY_PATH`) and embeds its SPKI public key (`pubkey_pem`) so `clavenar-lite graduate verify` checks it with no network and no key distribution. `key_id` is `clavenar-lite-file:v1`, distinct from the full edition's `clavenar-identity-file:v1`, so an offline lite key is never confused with an issuer key. Without a signing key the report is emitted unsigned (useful summary, not tamper-evident). Enforce is recommended only when the chain verifies *and* nothing in the window would be blocked or parked.
-
-**Verify.**
-
-```bash
-clavenarctl init --guard --upstream http://localhost:9000/mcp
-openssl genpkey -algorithm ed25519 -out clavenar-lite.key
-clavenar-lite start --mode observe --policies ./policies   # drive some traffic
-clavenar-lite graduate report --signing-key clavenar-lite.key --output report.json
-clavenar-lite graduate verify --report report.json         # offline; OK on a clean report
-```
-
-### 10.3 `clavenar-sdk`
-
-**Concept.** The typed Rust client. Two artifacts share one source of truth: `clavenar-console` consumes it, `clavenarctl` consumes it, external integrators consume it. SDK is the contract.
-
-**Implementation.** `repos/clavenar-sdk/`. Clients: `LedgerClient`, `HilClient`, `SimClient`, `AgentsClient`, `PoliciesClient`. Each exposes `base_url() -> &Url` for the `/config` page redaction-safe readout. `AgentsClient::bearer_fingerprint() -> Option<String>` returns sha256[..8] hex of the configured token (never the raw token). `LedgerClient::list_agents()` powers the audit page's default fan-out (§4.1). `PoliciesClient` is `Clone`-able and exposes the full Viewer/Admin surface described in §1.9; conflict responses parse via `PoliciesClient::parse_conflict()` so callers can surface the new metadata to operators.
-
-**Verify.** Cargo dep:
-
-```toml
-[dependencies]
-clavenar-sdk = "0.x.y"
-```
-
-### 10.4 `clavenar-sandbox`
-
-**Concept.** Pure-Rust static analyzer for MCP tool calls. Classifies a call by `Read`/`Write`/`Exec`/`Network`/`Delete`/`Unknown`, severity (`safe`/`risky`/`destructive`), targets (file paths, URLs, IDs), summary (one-line human-readable). Consumed by the proxy for HIL `sandbox_report` (so approvers see a preview, see §2.2).
-
-**Implementation.** `repos/clavenar-sandbox/` exports a single function `analyze(method: &str, params: &Value) -> SandboxReport`. No external state, no network — pure static analysis. Version 0.2.0 binds the 40-case reviewed adversarial corpus and explicitly carries no authorization or isolation claim.
-
-**Verify.**
-
-```bash
-cd repos/clavenar-sandbox
-cargo test adversarial_corpus_matches_static_annotation_boundary
-# 40 corpus cases match their exact operation_class and severity
-```
-
-### 10.5 TypeScript SDK (`@clavenar/agent-sdk`)
-
-**Concept.** Wrap-the-client adapter for `@anthropic-ai/sdk` and `openai` so dropping clavenar into a Node agent is a two-line change. Streaming + parallel `tool_use` + retries with jittered exponential backoff + observe-mode safety (clavenar being down can't break the agent — observe falls through to allow + logs). `onPolicyError` callback hooks let the app distinguish "clavenar was unreachable" from "clavenar actively denied" without re-implementing the verdict shape.
-
-**Implementation.** `repos/clavenar-typescript-sdk/` — TypeScript, published as `@clavenar/agent-sdk` on npm. `clavenarWrap(client, opts)` returns a wrapped client; the wrapper intercepts `messages.create` (Anthropic) and `chat.completions.create` (OpenAI), inspects each `tool_use` block via clavenar, and either allows / denies / parks. `ClavenarDenied`, `ClavenarPending`, `ClavenarTransportError` exception classes mirror the wire verdicts. `bearer-token` auth at the `clavenar-lite` ingress (mTLS still available for the full stack). Tests: TypeScript strict mode + tsc clean.
-
-**Verify.**
-
-```bash
-cd repos/clavenar-typescript-sdk && npm test
-```
-
-### 10.6 Python SDK (`clavenar-agent-sdk`)
-
-**Concept.** Mirror of §10.5 for the Python ecosystem — wraps `AsyncAnthropic` / `AsyncOpenAI` plus the sync `Anthropic` / `OpenAI` clients. 1:1 parity with the TS SDK plus a synchronous flavour because not every Python agent codebase is asyncio.
-
-**Implementation.** `repos/clavenar-python-sdk/`, published as `clavenar-agent-sdk` on PyPI. Streaming (both providers, async + sync); retries with jittered exponential backoff; parallel `tool_use` observability via `asyncio.gather`; `ClavenarPending.resolve()` end-to-end. `ClavenarDenied` / `ClavenarPending` / `ClavenarTransportError` exception hierarchy matches TS. 43 unit tests; `ruff` + `mypy --strict` clean.
-
-**Verify.**
-
-```bash
-cd repos/clavenar-python-sdk && pip install -e . && pytest
-```
-
-### 10.10 Go, Java, and .NET SDKs
-
-**Concept.** The agent-wrapper family extended to three more ecosystems, all 1:1 with the TS reference on the wire (same `POST /mcp` JSON-RPC contract, verdicts, retries, enforce/observe, `resolve()` pending loop, streaming gate, realtime helper). Each ships its own `docs/PARITY.md`.
-
-**Implementation.**
-- `repos/clavenar-go-sdk/` — Go module `github.com/clavenar/clavenar-go-sdk` (zero-dep core: `Inspect` / `InspectAll` / `PollPendingOnce`, errors via `errors.As`); provider bindings in opt-in `adapters/anthropic` + `adapters/openai` sub-modules. `go test -race` + `golangci-lint` + `govulncheck` clean.
-- `repos/clavenar-java-sdk/` — Maven `com.clavenar:agent-sdk` (Java 17). `ClavenarInspector` is the LangChain4j / Spring AI tool-boundary surface; `Clavenar.wrap` is a dynamic-proxy wrap-and-forget facade. Jackson-only, no provider dep. `mvn verify` green (JUnit 5).
-- `repos/clavenar-dotnet-sdk/` — NuGet `Clavenar.AgentSdk` (`net8.0`). `ClavenarInspector` + `Clavenar.InspectResponseAsync` (duck-typed response). `System.Text.Json`-only, no provider dep. `dotnet test` green (xUnit).
-
-**Verify.**
-
-```bash
-(cd repos/clavenar-go-sdk && go test -race ./...)
-(cd repos/clavenar-java-sdk && mvn -B verify)
-(cd repos/clavenar-dotnet-sdk && dotnet test)
-```
-
-### 10.7 Framework recipes + Computer Use + Realtime adapters
-
-**Concept.** Working repos under `examples/` for the integrations evaluators actually ask about: native Anthropic, native OpenAI, LangChain (TS + Python), Vercel AI SDK, Mastra, LlamaIndex. Plus two adapter recipes for newer surfaces — Anthropic Computer Use (the agent that drives a GUI) and OpenAI Realtime (the WS pump pattern). Each recipe is one `run.{ts,py}` + a README pointing at the load-bearing line. The top-level `examples/README.md` indexes them and lays out the wrap-the-client vs wrap-the-dispatcher integration spectrum.
-
-**Implementation.** Spread across both SDK repos:
-
-- `clavenar-typescript-sdk/examples/` — `native-anthropic/`, `native-openai/`, `vercel-ai/`, `mastra/`, `langchain-js/`, `openai-realtime/`, `anthropic-computer-use/`. Realtime ships `inspectRealtimeFunctionCall` / `isRealtimeFunctionCallDone` / `normalizeRealtimeFunctionCall` helpers for the WS pump pattern; Computer Use tool_use blocks already flow through `clavenarWrap` unchanged, so its recipe is wiring + a starter Rego snippet.
-- `clavenar-python-sdk/examples/` — `langchain_recipe.py`, `llamaindex_recipe.py`, `computer_use_recipe.py`, `openai_realtime_recipe.py`. Python helpers under `clavenar_agent_sdk.realtime`. Uses the canonical `inspect_tool_use(NormalizedToolCall, opts)` signature end-to-end including the `ClavenarPending.resolve()` raise-on-deny contract.
-
-All recipes pass their respective type checkers (TS strict mode, mypy strict). 98 + 61 tests respectively across the two SDKs.
-
-**Verify.**
-
-```bash
-cd repos/clavenar-typescript-sdk/examples/native-anthropic && npm install && npm start
-cd repos/clavenar-python-sdk/examples && python langchain_recipe.py
-```
-
-### 10.8 One-click deploy (Fly.io)
-
-**Concept.** Make the first run a single click. The `clavenar-lite` repo ships a `fly.toml` + Dockerfile sized for Fly.io's free tier and a "Deploy to Fly" button in the README; clicking it runs `fly launch` against the upstream `ghcr.io/clavenar/clavenar-lite` multi-arch image and the new instance lands on a public hostname in ~60 seconds. The image defaults to `enforce` rather than `observe` because a misconfigured deploy must fail closed; entry-point docs walk operators through flipping to observe for the tuning window.
-
-**Implementation.** `repos/clavenar-lite/fly.toml` + multi-stage Dockerfile (rust:1-bookworm builder → debian:bookworm-slim runtime). Multi-arch (`linux/amd64,linux/arm64`) image push to ghcr.io on tag. README's `[![Deploy](https://fly.io/static/images/launch/deploy.svg)](https://fly.io/launch?...)` button points at the public image + a Fly launch template. CI gate: `smoke-e2e` runs an end-to-end `/mcp` happy path against the built image so a busted Dockerfile fails the release.
-
-**Verify.**
-
-```bash
-cd repos/clavenar-lite && fly launch --image ghcr.io/clavenar/clavenar-lite:latest
-```
-
-### 10.9 Unified docs site (`/docs/`)
-
-**Concept.** Until v0.5.0, evaluators had to read per-repo READMEs + the spec to learn clavenar. The unified docs site collapses that into a single portal with the four entry points operators actually need: a 5-minute quickstart, a concepts overview, an API reference, and a recipe cookbook. Vanilla HTML/CSS — no framework, no build step — so the site survives any future Node rev and the page weight stays under 50 KB per route.
-
-**Implementation.** `repos/clavenar-website/docs/`. Five HTML pages: `index.html` (landing — 4 cards), `quickstart.html` (zero-to-verdict in 5 minutes), `concepts.html` (the four-layer model + three security signals + HIL tiers + observe-vs-enforce + the hash-chained ledger), `api.html` (every wire contract summarised, cross-referenced to `clavenar-specs/TECH_SPEC.md`), `recipes.html` (12 cookbook patterns: TS SDK, Python SDK, LangChain, Vercel AI, Anthropic Computer Use, OpenAI Realtime, Slack HIL deep-link, SAML/SSO setup, Postgres ledger, Helm sidecar deploy, observe-mode rollout, Splunk/Datadog egress). Shares `styles.css` with the marketing pages — same primitives (`.section`, `.spec-toc`, `.spec-steps`, `.codeblock`, `.spec-verdict-grid`); small additive `.docs-subnav` / `.docs-cards` / `.docs-continue` primitives keep the docs nav consistent. Top-nav "Docs" link backfilled across all marketing pages so the 9-page site has one consistent navigation surface.
-
-**Verify.**
-
-```bash
-open https://clavenar.com/docs/
-```
-
----
-
-## 11. Test infrastructure
-
-### 11.1 `clavenar-e2e/dev/run.sh`
-
-**Concept.** The host-cargo runner. Boots all six services + Docker NATS/Vault + a stub upstream; runs the happy path; runs the chaos-monkey red-team suite; tears down. Source of truth for "does the stack work end-to-end." Builds in **debug profile on purpose** — Apple clang segfaults on `ring`'s release C build on some macOS versions.
-
-**Implementation.** Bash script at `repos/clavenar-e2e/dev/run.sh`. Env knobs: `E2E_SKIP_CHAOS=1` for fast happy-path runs, `E2E_KEEP_LOGS=1` to retain logs and the temp work dir.
-
-**Verify.**
-
-```bash
-./repos/clavenar-e2e/dev/run.sh                         # full
-E2E_SKIP_CHAOS=1 ./repos/clavenar-e2e/dev/run.sh        # fast
-E2E_KEEP_LOGS=1 ./repos/clavenar-e2e/dev/run.sh         # debug
-```
-
-### 11.2 `clavenar-e2e/dev/run-federation.sh`
-
-**Concept.** Two-tenant federation runner. Boots two `clavenar-identity` instances under different trust domains and asserts the SPIFFE federation freshness gate: fresh peer bundle → A2A succeeds; staled-out → `peer_bundle_stale`.
-
-**Implementation.** `repos/clavenar-e2e/dev/run-federation.sh`. Configures `CLAVENAR_FEDERATION_PEERS` on each instance pointing at the other's `/.well-known/spiffe-bundle`. Triggers a peer-bundle staleness by stopping one instance's bundle endpoint, waiting past the freshness window, attempting A2A.
-
-**Verify.**
-
-```bash
-./repos/clavenar-e2e/dev/run-federation.sh
-```
-
-### 11.3 `clavenar-e2e/dev/run-onboarding.sh`
-
-**Concept.** WAO § 13.1 runner. Boots a `dexidp/dex` mock IdP container, drives `clavenarctl agents create / suspend / decommission / migrate`, asserts `/svid` + `/grant` gating in `warn` and `enforce` modes (including § 13.1.7 bulk-enrollment migration replay).
-
-**Implementation.** `repos/clavenar-e2e/dev/run-onboarding.sh`. Dex mock configured with two static users:
-
-- `admin@acme.com` with `groups: [clavenar-platform-admins]` (mapped to `agents:create + agents:admin`)
-- `dev@acme.com` with `groups: [payments]` (no Clavenar capabilities — tests `403 missing_capability:agents:create`)
-
-**Verify.**
-
-```bash
-./repos/clavenar-e2e/dev/run-onboarding.sh
-```
-
-### 11.4 Compose stack (`--profile stack`)
-
-**Concept.** The console-with-data demo. Boots everything in containers + the simulator + upstream-stub; surfaces a populated console for screenshots, evaluator walkthroughs, and operator practice. Identity boots in `enforce` registration mode end-to-end so the demo matches the production default.
-
-**Implementation.** `repos/clavenar-e2e/prod/docker-compose.yml --profile stack`. First cold build is ~15 min (release profile, no shared cargo target across 12 distinct build contexts). Subsequent runs are image-cached. The production profile gives Caddy only the website certificate, private key, and CA, targets Ledger mTLS `:8183`, and requires one exact named trusted forwarder for forwarded-source trust while merged `/verify` accepts any CA-valid certificate. Caddy runs only on a dedicated Internet-capable `edge` network with its required Ledger, console, and demo-mint upstreams; it cannot resolve NATS on the default network. The website identity stays outside Ledger's canonical internal caller prefixes. The Kubernetes profile fixes the Ledger Service port and exact website→Ledger NetworkPolicy; the operator remains responsible for projecting the separately deployed website's matching certificate, private key, and CA. A missing or widened chart-controlled boundary fails render. `run-stack-smoke.sh` is the lighter health/boundary check; `run-stack-e2e.sh` is the full assertion suite (see §11.8).
-
-**Verify.**
-
-```bash
-docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack up -d
-open http://localhost:8085
-./repos/clavenar-e2e/prod/run-stack-smoke.sh
-docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack down -v
-```
-
-### 11.5 `clavenar-chaos-monkey`
-
-**Concept.** Curated red-team catalog. Each scenario fires a specific attack at a live proxy and asserts the predicted verdict. The list grows as the threat model expands; removing a scenario requires explaining why the attack is no longer relevant.
-
-**Implementation.** Rust CLI at `repos/clavenar-chaos-monkey/`. The exact
-[`clavenar.attack-release/v1`](contracts/attack-release-v1.fixture.json)
-manifest records 86 proxy-facing scenarios across 12 runtime categories and
-seven direct Identity onboarding scenarios: 93 listed scenarios total.
-`--release-manifest` emits those exact versioned bytes, while `--list` derives
-its entries from the runtime catalogs. An owner test requires the runtime
-category/ID projection to equal the manifest, so additions, removals, moves,
-duplicates, and independently edited numeric claims fail before release.
-
-The direct Identity scenarios require the Identity URL and matching
-credentials when fired. They are always included in `--list` and the release
-manifest so an unwired run cannot silently redefine the shipped catalog.
-
-**Verify.**
-
-```bash
-./repos/clavenar-chaos-monkey/target/release/clavenar-chaos-monkey \
-  --proxy-url https://localhost:8443/mcp --only invalid_actor_token
-# Asserts predicted verdict, exits 0 on match
-```
-
-### 11.6 `clavenar-simulator`
-
-**Concept.** Continuous, persona-driven mTLS load generator. Mints per-agent client certs from the proxy's CA, fires a Poisson-distributed mix of MCP tool calls (auto-allow + Yellow-tier wire_transfer + drift into hard-deny), and runs an HIL auto-decision sidecar at configurable approve/deny/expire ratios. Every request carries `x-clavenar-source: simulator` so the proxy stamps `source="simulator"` on the forensic event.
-
-**Implementation.** `repos/clavenar-simulator/`. Admin server (`SIM_ADMIN_PORT=9100`, default loopback-only): `GET /status`, `POST /multiplier`, `POST /running`, `POST /auto-decide`, `POST /agents`. Boots paused — operator clicks Start on the console (or sets `SIM_START_RUNNING=true` / `--start-running`) to fire traffic. HIL auto-decision sidecar boots **enabled** when `--hil-url` is set and is pausable; pausing leaves Yellow-tier pendings on the HIL queue for manual approval. Each persona is **enrolled in the agent registry before its first SVID is minted** — required for the stack's `enforce` registration mode (an unregistered name would otherwise hit `403 unregistered_agent`).
-
-The `clavenar-upstream-stub` sub-binary is what compose uses as the proxy's downstream MCP echo target.
-
-**Verify.**
-
-```bash
-docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack up -d
-curl -X POST http://localhost:9100/running -d '{"running":true}'
-open http://localhost:8085/audit
-# Sim traffic streams in
-```
-
-### 11.7 `clavenar-e2e/dev/run-policies.sh`
-
-**Concept.** Console policy management e2e. Boots a minimal stack (`clavenar-policy-engine` + `clavenar-ledger` + NATS — no proxy/brain/HIL/identity) and drives the full mutation surface end-to-end: list, create, update with optimistic concurrency, deactivate / activate, rollback, soft delete. After every mutation, asserts a matching `policy.*` row landed in the ledger via `clavenar.forensic` and the chain still verifies. Mirrors `run-onboarding.sh`'s shape: focused on the §1.9 / §4.10 wire contract, not the full MCP path.
-
-**Implementation.** `repos/clavenar-e2e/dev/run-policies.sh`. Same prereqs as `run.sh` (cargo / curl / jq / NATS). Honors `E2E_KEEP_LOGS=1` and dumps tails on failure.
-
-**Verify.**
-
-```bash
-./repos/clavenar-e2e/dev/run-policies.sh
-```
-
-### 11.8 `clavenar-e2e/dev/run-stack-e2e.sh`
-
-**Concept.** Same assertion depth as `run.sh` (correlation_id join, chain `/verify`, HIL Yellow-tier roundtrip, chaos-monkey red-team suite) but against the docker-compose `--profile stack` containers instead of the host-cargo debug build. Use this when iterating on Dockerfile / compose changes — `run-stack-smoke.sh` only proves the demo is healthy; `run-stack-e2e.sh` proves the production-style image build still passes the full suite.
-
-**Implementation.** `repos/clavenar-e2e/dev/run-stack-e2e.sh`. Does **not** boot any service — expects the compose stack already running. PIDs / boot harness from `run.sh` are absent. `E2E_SKIP_CHAOS=1` skips the red-team tail.
-
-**Verify.**
-
-```bash
-docker compose -f repos/clavenar-e2e/prod/docker-compose.yml --profile stack up -d
-./repos/clavenar-e2e/dev/run-stack-e2e.sh
-```
-
-### 11.9 Cert-free local dev mode (`CLAVENAR_DEV_CERTS=1`)
-
-**Concept.** Onboarding's #1 first-run gotcha used to be `./scripts/gen_certs.sh` — without certs the proxy panics at startup. Cert-free dev mode flips this for host-cargo runs: the proxy auto-mints an ephemeral CA + server + client triplet into `CLAVENAR_CERT_DIR` on first boot. Opt-in by env var (never auto-enabled) so a misconfigured prod deploy can't self-issue a CA root, and the script never overwrites existing PEMs.
-
-**Implementation.** `clavenar-proxy/src/tls.rs`. When `CLAVENAR_DEV_CERTS=1`, the boot path uses `rcgen` to mint a self-signed CA + server cert (CN=`localhost`) + client cert (CN=`agent-001`) into `${CLAVENAR_CERT_DIR:-./certs}`. Subsequent boots reuse what's there. Container / production runs still go through `scripts/gen_certs.sh --env {prod,dev}` so the certs dir is operator-controlled. `clavenar-e2e/dev/deploy.sh` and `clavenar-e2e/prod/deploy.sh` ship a guard that runs `gen_certs.sh` automatically when the bind-mount source is empty — protects against the recurring "certs dir got wiped" failure mode.
-
-**Verify.**
-
-```bash
-CLAVENAR_DEV_CERTS=1 cargo run --bin clavenar-proxy
-# certs/ now contains ca.crt, server.crt, client.crt (all ephemeral)
-```
-
-### 11.10 Perf + chaos harness in CI
-
-**Concept.** Nightly + weekly regression gates that catch a Brain regression, a policy slowdown, or a chaos-suite drift before a release. Chaos boots the full dev compose stack and runs `run-stack-e2e.sh` (happy path + the chaos-monkey catalog from §11.5). Perf boots with the velocity tracker disabled (the in-process tracker's 100 req/60s/agent circuit-breaker pins any meaningful load run), fires a benign ping for a fixed window, and emits a JSON report with p50 / p95 / p99 / throughput / errors. The reference baseline is checked in; a regression that moves p99 by >20% fails the run.
-
-**Implementation.** `clavenar-chaos-monkey/src/bin/clavenar-perf-harness.rs` is a sister binary that reuses the chaos runner's mTLS plumbing (shared `mtls.rs` for cert loading + `reqwest::Client` build). New `--exclude-category` flag on the chaos runner so CI can drop the brain-touching `injection` family if no Anthropic key is wired. `clavenar-policy-engine` gains a third `CLAVENAR_VELOCITY_BACKEND=disabled` arm for perf measurement only (production keeps `inprocess` or `nats-kv`). Workflows at `clavenar-e2e/.github/workflows/`: `chaos.yml` (nightly + dispatch — boots dev compose, runs run-stack-e2e.sh), `perf.yml` (weekly + dispatch — boots with velocity disabled, fires harness 60s @ 30 concurrency, uploads `perf-report.json` artifact). First reference snapshot at `clavenar-e2e/perf/reference.json`: 1381 rps, p50 21.0 ms, p95 31.7 ms, p99 38.7 ms over 82880 requests, 0 errors.
-
-**Verify.**
-
-```bash
-./repos/clavenar-chaos-monkey/target/release/clavenar-perf-harness \
-  --proxy https://localhost:8443/mcp --duration 60 --concurrency 30
-# Emits perf-report.json
-```
-
-### 11.11 Brain accuracy benchmark (`clavenar-brain-bench`)
-
-**Concept.** Lakera, Prompt Security, Robust Intelligence — each publishes accuracy numbers on a private eval set. Hard to compare without a shared methodology. The Brain benchmark publishes both: a vendored eval suite (66 cases × 7 categories × 5 personas) and a sister binary that scores each case (TP / TN / FP / FN, precision / recall / F1, percentile latency) against the live `/inspect` router in-process. The published baseline is the floor; a CI gate fails any PR that regresses the deterministic-keyword subset. A transparent loss with reproducible methodology beats unverified closed-source claims.
-
-**Implementation.** `clavenar-brain/src/bin/clavenar-brain-bench.rs` reuses the Router as a library and scores `benchmark/cases.json`. Personas: `support`, `finance`, `devops`, `code-review`, `marketing`. Categories: 7 (PII egress, prompt injection, persona drift stretch, etc.). First baseline at `benchmark/baseline.json`: deterministic-keyword subset 100% (54/54), overall 81.82% (54/66, precision 1.000 / recall 0.732 / F1 0.845). The 12 missed cases are the persona-drift-stretch category — cross-persona attacks with no keyword trigger that need live Voyage embeddings + Haiku classifier to catch; their absence in mock mode is the published "live Brain delta" rather than hidden. CI gate: `tests/compliance.rs` + the bench binary's `--deterministic-floor 1.0` flag fail any PR that regresses the keyword-supported subset. Methodology: `BENCHMARK.md` covers categories, scoring rule (positive = deny), reproduction commands for both mock and live mode, known limitations, and the promote-a-fresh-baseline workflow.
-
-**Verify.**
-
-```bash
-cargo run -p clavenar-brain --bin clavenar-brain-bench -- --baseline benchmark/baseline.json
-# Mock-mode scoreboard with deterministic floor enforced
-```
-
-### 11.12 Trusted-forwarder and exact-origin boundary probes
-
-**Concept.** Treat a forwarding header as authenticated application data and
-prove both the in-network privilege boundary and the outside-host firewall/NAT
-boundary for each exact release.
-
-**Implementation.** Canonical prod/dev stack smoke invokes
-`check-ledger-trusted-proxy-boundaries.sh` before any other full-chain walk. A
-fresh read-only, capability-free container with no mounts, certs, secrets, or
-host environment proves the certificate-free route matrix and direct spoof
-resistance. A separate least-privilege website-cert fixture on production's
-actual `edge` network proves any CA-valid certificate can reach mTLS `/verify`,
-while the exact website SPIFFE identity alone controls forwarded-source trust;
-`/log` returns 401 without mutation and NATS cannot be resolved from that edge.
-Production then proves Caddy header replacement (`200/200/200/429`), the
-3/source/minute behavior, one full-chain walk in flight, the 12/global/minute
-boundary, and strict startup negatives. Ledger source tests and the governed
-listener inventories separately enforce the 64-window ceiling. The secret-free
-manual `external-boundary.yml` workflow repeats the public-port,
-internal-port, no-cert 8443, exact-version/route, and forwarding proof from a
-GitHub-hosted runner pinned to the origin IPv4. Public HTTPS probes verify the
-origin certificate and reject malformed or non-canonical semantic versions;
-host infrastructure such as SSH is declared and reported separately.
-
-**Verify.** Run the canonical stack smoke, then dispatch the independent
-workflow with the exact deployed origin and semver.
-
----
-
-## 12. Supply chain & threat model
-
-### 12.1 Uniform `cargo-deny` config
-
-**Concept.** Every Rust repo (14 of them) carries the same `deny.toml` and runs `cargo-deny check all` (advisories + licenses + bans + sources) on every push and PR. A new advisory against any transitive dep fails the next push. The license allow-list is the standard permissive set (MIT, Apache-2.0, BSD, ISC, MPL-2.0); GPL/AGPL/LGPL is denied transitively.
-
-**Implementation.** `deny.toml` at every Rust repo root. CI job `supply-chain` in `.github/workflows/ci.yml`. Seven advisories ignored with documented rationale (rustls-pemfile via tonic 0.12; bincode via regorus; three rustls-webpki 0.101.7 vulns via openidconnect 3.5 + aws-smithy 1.x; rsa Marvin via openidconnect; paste via parquet — all "no safe upgrade" upstream).
-
-**Verify.**
-
-```bash
-cd repos/clavenar-proxy
-cargo deny check all
-```
-
-### 12.2 CycloneDX SBOM artifacts
-
-**Concept.** Every PR build emits a CycloneDX 1.3 JSON SBOM per crate. Uploaded as a 90-day-retained workflow artifact. Operator-side: the security team can grep the SBOMs for affected versions across all 14 repos at once when a new advisory drops.
-
-**Implementation.** Same `supply-chain` CI job uses `cargo-binstall` to install `cargo-cyclonedx`, runs it per crate, uploads each as a workflow artifact.
-
-**Verify.**
-
-```bash
-gh run list --workflow ci.yml -R <org>/clavenar-proxy
-gh run download <run-id> -R <org>/clavenar-proxy
-# Find SBOMs in the downloaded artifacts
-```
-
-### 12.3 `SECURITY.md` + RFC 9116 `security.txt`
-
-**Concept.** Disclosure policy. `SECURITY.md` at every repo root tells security researchers where to send vulnerability reports and what response time to expect. `security.txt` at `clavenar-website/.well-known/` is the RFC 9116 surface — automated scanners and bug-bounty platforms check that path.
-
-**Implementation.** `SECURITY.md` (30 repos). `clavenar-website/public/.well-known/security.txt`. Both reference the same email contact and PGP key.
-
-**Verify.**
-
-```bash
-cat repos/clavenar-proxy/SECURITY.md
-cat repos/clavenar-website/public/.well-known/security.txt
-```
-
-### 12.4 STRIDE-organized threat model
-
-**Concept.** Public threat model at `TECH_SPEC.md#threat-model`. Layer-by-layer (proxy → brain → policy → ledger → HIL → identity → console), STRIDE-organized inside each layer (Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege). Explicit non-goals at the bottom — what we deliberately don't defend against.
-
-**Implementation.** Hand-curated. Code is the source of truth; the model is reference material; re-verify against `git log` if the model and code disagree.
-
-**Verify.**
-
-```bash
-open repos/clavenar-specs/TECH_SPEC.md     # navigate to # threat-model
-```
-
-### 12.5 Uniform `async-nats = 0.47`
-
-**Concept.** Five services use NATS (proxy, identity, ledger, HIL, policy-engine). Version-skewed clients are a debugging trap. All five pin `async-nats = 0.47`, refreshed in lock-step on each bump.
-
-**Implementation.** Per-repo `Cargo.toml`. The bump from 0.40 → 0.47 cleared one rustls-webpki advisory (RUSTSEC-2026-0049).
-
-**Verify.**
-
-```bash
-grep -r "async-nats" repos/*/Cargo.toml
-```
-
-### 12.6 Cross-service consistency (health / readyz / metrics / logs)
-
-**Concept.** Every shipping service exposes the same three observability endpoints under the same wire shape: `/health` for liveness, `/readyz` for readiness, `/metrics` for Prometheus scrape. Metric naming is uniform: `clavenar_<kebab-to-snake-service-slug>_*`. Logs switch to single-line JSON on the same env knob across services. Lets a single Helm probe template, a single Prometheus scrape config, and a single log-aggregator parser handle every service.
-
-**Implementation.** The original eight-service uniformity baseline is now
-superseded by the exact [dependency-aware readiness](#8211-dependency-aware-readiness)
-inventory. Every required service retains the same `/health` and `/readyz`
-semantics and JSON readiness shape, while the exact required checks and
-topology edges are contract-bound rather than inferred from route presence.
-Metric prefixes uniformly use `clavenar_<service>_*`.
-
-**Verify.**
-
-```bash
-for s in clavenar-proxy:9001 clavenar-brain:9002 clavenar-policy-engine:9003 \
-         clavenar-ledger:8083 clavenar-hil:8084 clavenar-identity:8086 \
-         clavenar-console:8085 clavenar-lite:8443; do
-    curl -fsS "http://localhost:${s##*:}/readyz" | jq .status
-done
-```
-
----
-
-## 13. Wire contracts
-
-### 13.1 Proxy → Brain
-
-**Concept.** The proxy posts to brain for semantic inspection.
-
-**Wire.** `POST /inspect`, body `BrainRequest { agent_id, correlation_id, jsonrpc fields... }`, response `{ authorized, intent_category, reason }`. Shared types are duplicated on each side — `clavenar-proxy/src/fork.rs` and `clavenar-brain/src/lib.rs`. **Grep both repos before renaming a shared field.**
-
-**Verify.**
-
-```bash
-curl -X POST http://localhost:8081/inspect -H 'content-type: application/json' \
-  -d '{"agent_id":"test","correlation_id":"00000000-0000-0000-0000-000000000000","method":"tools/call"}'
-```
-
-### 13.2 Proxy → Policy
-
-**Concept.** The proxy posts the resolved Brain output + agent context to policy for rule evaluation.
-
-**Wire.** `POST /evaluate`, body `PolicyInput { tool_type, agent_history, intent_score, agent_id, method, current_time, correlation_id, recent_request_count, attestation, agent_spiffe }`. Proxy maps Brain's `authorized` to `intent_score` (`0.1` if true, `0.5` if false) — Policy's `intent_score >= 0.2` rule means a Brain rejection alone fails policy.
-
-**Verify.** See §1.4.
-
-### 13.3 Proxy → HIL
-
-**Concept.** The proxy parks Yellow-tier requests at HIL for human approval.
-
-**Wire.** `POST /pending`, body `CreatePending { agent_id, correlation_id, method, request_payload, risk_summary, ttl_seconds, sandbox_report }`. Proxy long-polls `GET /pending/{id}` until status leaves `pending`. Approved → forward upstream. Denied/Expired/poll-timeout → 403.
-
-**Verify.** See §2.1.
-
-### 13.4 Proxy → Identity (signing + A2A)
-
-**Concept.** The proxy calls identity for action signatures and for A2A actor token mint/redeem.
-
-**Wire.** `POST /sign` carries a typed target/tenant/ledger-audience/purpose/operation/lifetime binding plus the action envelope. `POST /actor-token` carries the same typed dimensions for a local agent and peer audience plus one exact scope. `POST /actor-token/redeem` carries the token plus the receiving proxy's expected remote subject and local audience binding. Stable endpoint capabilities come only from exact verified workload certificates; no caller assertion header or `CLAVENAR_IDENTITY_SIGN_ALLOWED_CALLERS` decision participates.
-
-**Verify.** See §3.3, §3.6.
-
-### 13.5 Identity → Ledger (chain v3)
-
-**Concept.** Identity emits lifecycle events that anchor in chain v3 rows.
-
-**Wire.** NATS publish via the identity-side outbox (`agents_ledger.rs`). Durable retry. Ledger dispatches v3 rows through `HashableEntryV3` keyed on `event_kind` + `payload_sha256`.
-
-**Verify.** See §3.11.
-
-### 13.6 Console → Policy-engine (mutations)
-
-**Concept.** The console's `/policies` write surface (§4.10) and the `clavenarctl` policy commands talk to `clavenar-policy-engine`'s mutation API; mutations anchor in chain v3 via the policy-engine outbox.
-
-**Wire.** Endpoints listed in §1.9. Optimistic-concurrency body: `{reason: string, expected_current_version: int}`. Conflict response: `409 policy_version_conflict` with the new metadata so the UI can prompt-and-reload. Authz: every `POST/PUT/DELETE` requires `Role::Admin`. `policy.*` event kinds dispatch to chain v3 — no new chain version needed (the chain is event-kind-polymorphic).
-
-**Verify.** See §1.9, §11.7.
-
-### 13.7 Console / `clavenarctl` → Ledger (audit fan-out)
-
-**Concept.** The console and CLI need the canonical "every agent that has ever logged a row" set for default audit fan-out and for `clavenarctl agents list` joins.
-
-**Wire.** `GET /agents` on `clavenar-ledger`. Body: `{ agents: ["spiffe-name-or-cn", ...] }` (string list, NFC-normalized lowercase, deduplicated and sorted). SDK helper: `LedgerClient::list_agents()`.
-
-**Verify.** See §1.10, §4.1.
-
-### 13.8 Generated workload route capabilities
-
-**Concept.** A CA-valid workload certificate authenticates a caller; it does
-not grant every route on that listener. Ledger, Policy Engine, HIL, and Identity
-authorize application requests with one generated exact-caller/method/template
-policy derived from the reviewed endpoint matrix. Public and diagnostic router
-branches stay outside this policy.
-
-**Implementation.** `clavenar-e2e/GENERATED_WORKLOAD_CAPABILITY_BUNDLE.json`
-is deterministic and SHA-256-bound to both source matrices. Compose and the
-`clavenar-charts` ConfigMap project byte-identical policy. The four services use
-the shared `clavenar-shared` gate after mTLS identity extraction and before
-handlers. Startup refuses missing/stale bytes, wrong service identity, unknown
-callers, and malformed or ambiguous templates. The v1.124.2 inventory contains
-11 service identities, four services, 61 capability families, and 125 exact
-route records. Simulator receives only the three route-specific bootstrap
-grants needed for demo agent registration, upstream registration, and grant
-minting; recovery, envelope/lifecycle mutation, and upstream retirement remain
-operator-only. A missing route or caller grant returns 403
-`capability_denied` / `capability_not_granted`.
-
-**Verify.** From an assembled public checkout:
-
-```bash
-cd clavenar-e2e
-python3 scripts/generate_workload_capability_bundle.py --check
-python3 scripts/check_endpoint_capability_matrix.py \
-  --source-root .. --require-source
-python3 -m unittest \
-  tests.test_workload_capability_bundle \
-  tests.test_generated_route_capability_contract -v
-```
-
-The canonical dev and production stack smokes additionally derive every
-forbidden service-certificate/route pair from the bundle and require the live
-listener to return the exact 403 denial before retaining a digest-bound receipt.
-
-### 13.9 Historical signing keys and RFC 3161 trust
-
-**Concept.** A valid SHA-256 chain proves content continuity, but it does not by
-itself prove which historical issuer key signed each row or whether an external
-timestamp is trusted. Ledger publishes a separate fail-closed cryptographic
-verdict so consumers cannot confuse populated signature fields with verified
-evidence.
-
-**Implementation.** Identity serves the complete bounded-fresh retained
-Ed25519 lineage at workload-mTLS `GET /ledger-verification-keys`; generated
-capabilities grant that read only to Ledger. Ledger rejects freshness,
-rollback, lineage, fingerprint, lifecycle, timestamp, and signature failures
-across signed v2-v5 rows. Attribution-only rows with no signature/key pair
-remain explicitly unsigned. It independently re-verifies stored RFC 3161 responses
-against pinned public CA and signer files, with an exact message imprint over
-the anchored chain hash. `/verify` emits
-`clavenar.cryptographic-verification/v2` and withholds a complete chain
-commitment when required cryptography is unavailable or invalid. Frozen
-chain-v3 and exact chain-v5 sequence `416970..442530` non-execution lifecycle
-signatures with `policy_decision=null` and key `clavenar-identity:v35` or
-`clavenar-identity:v36`, whose issuer-generated position was never retained,
-are explicitly counted as `identity_lifecycle_position_not_retained`; they
-receive no cryptographic or compliance credit. A bounded chain-v4 verifier projection
-also validates retained verdict prefixes signed before one of four canonical
-egress audit suffixes was appended; unknown suffixes remain forged. Every new
-lifecycle emission transmits its exact signed UUID and timestamp in a committed
-`clavenar.lifecycle-signed-position/v1` object, omission fails append, and new
-verdict signatures cover the final persisted reasoning. Compliance register
-schema v3 counts only verified signatures and cannot satisfy Article 15 from
-field presence or the legacy exception count.
-
-**Verify.**
-
-```bash
-# In an assembled stack checkout, validate public wire examples, mirrors,
-# pinned trust, and owner wiring, then run the live boundary gate.
-cd ../clavenar-e2e
-python3 scripts/check_cryptographic_verification_contract.py --source-root ..
-prod/run-stack-smoke.sh
-```
-
-### 13.10 Tenant-qualified state migration
-
-**Concept.** Equal agent names in different tenants must never share a secret,
-pin, rate bucket, revocation flag, behavior history, pending decision, replay
-row, export, or lifecycle record. The exact inventory separates state
-partitioning from later route-authorization and retention work.
-
-**Implementation.** The deny-unknown
-[`tenant-state-migration-v1` fixture](contracts/tenant-state-migration-v1.fixture.json)
-binds all 13 state categories to a typed canonical key, collision-safe
-encoding, `(tenant, agent)` columns, or an explicit tenant predicate. Selected
-legacy tenants use read-only qualified-versus-legacy comparison; mismatch or
-missing comparison evidence fails closed, and every cutover write is
-qualified-only. Lite agent polling predicates the issuing tenant and agent in
-addition to the correlation id. Policy learning rejects mixed-tenant corpora.
-Regulatory window reads require a validated tenant on SQLite and Postgres.
-
-**Verify.**
-
-```bash
-python3 -m unittest tests.test_tenant_state_migration_contract -v
-cd ../clavenar-e2e
-python3 scripts/check_tenant_state_migration.py \
-  --source-root .. --require-source
-```
-
----
-
-## 14. Forensic-tier deep review
-
-The async heavy-LLM auditor (`clavenar-deep-review`) layered on top of the four-layer security pipeline. It does *not* gate live traffic — that's HIL's job — but reviews a sampled slice of the audit stream with a substantially smarter model (Opus 4.7) to catch what Haiku missed and to deepen verdicts on what it flagged. See `TECH_SPEC.md#forensic-tier-deep-review` for the full design.
-
-### 15.1 Durable forensic consumer and exact output outbox
-
-**Concept.** Deep-review and ledger attach independent durable consumers to the shared `clavenar-forensic` stream. Selected inputs are acknowledged only after exact strict terminal output is retained and broker-acknowledged.
-
-**Implementation.** `consumer.rs` owns durable pull intake and graceful drain; `event.rs` owns typed strict/legacy normalization and pre-history sanitization; `job.rs` persists exact envelopes and delivery phases in `clavenar_deep_review_jobs`; `forensic.rs` builds canonical `clavenar.forensic-event/v1` observations. Sampling is deterministic, history is tenant-isolated and globally bounded, and strict producer identity prevents self-review.
-
-**Verify.**
-
-```bash
-# Boot the stack with the deep-review profile enabled
-./repos/clavenar-e2e/dev/run.sh
-
-# Drive any agent → see deep-review rows land in /audit
-docker logs clavenar-dev-deep-review-1 | grep -E 'deep_review_(finding|failed|skipped)'
-```
-
-### 15.2 Per-event pipeline (sample → permit → budget → mask → prompt → review → emit)
-
-**Concept.** Receive/validate → sanitize and read prior tenant-agent history → stable sample → permit → resume job or reserve durable budget → independent prompt → deadline-bounded provider call → retain exact output → acknowledged publish → input ack.
-
-**Implementation.** `clavenar-deep-review/src/review.rs::review_event`. Brain verdict fields are recursively stripped from current and historical provider-safe snapshots. Only transient failures retry, and calls plus deterministic jitter share one absolute deadline.
-
-### 15.3 `brain_delta` computation (server-side)
-
-**Concept.** Three-valued summary of whether the heavy model agreed: `Agreed` / `Escalated` / `Downgraded`. The single number ops care about.
-
-**Implementation.** `clavenar-deep-review/src/finding.rs::compute_brain_delta`. Table:
-
-| Brain authorized | Deep verdict | brain_delta |
-|---|---|---|
-| true | Green | Agreed |
-| true | Yellow | Escalated |
-| true | Red | Escalated |
-| false | Green | Downgraded |
-| false | Yellow | Downgraded |
-| false | Red | Agreed |
-
-### 15.4 Three sentinel event types
-
-**Concept.** Established domain method shapes carried inside strict `clavenar.forensic-event/v1` observations. Ledger validates/claims strict provenance and projects the domain into its existing read model.
-
-**Implementation.**
-
-| `method` | When | Payload |
-|---|---|---|
-| `deep_review_finding` | Successful review | `{verdict, confidence, reasoning, brain_delta, reviewing_model, review_latency_ms, reviewed_at, original_method, original_correlation_id}` |
-| `deep_review_failed` | Retry budget exhausted | `{reason ∈ Timeout\|Vendor5xx\|ParseError\|QuotaExceeded\|RateLimited\|UnknownVendorError, reviewing_model, original_method, original_correlation_id}` |
-| `deep_review_skipped` | Daily token cap hit | `{reason: "budget", original_method, original_correlation_id}` |
-
-**Verify.** `curl http://localhost:8083/audit | jq '.[] | select(.method | startswith("deep_review_"))'`.
-
-### 15.5 Durable per-tenant daily token budget
-
-**Concept.** Fleet-wide per-tenant UTC-day cap on a conservative retry-sequence reservation.
-
-**Implementation.** `clavenar-deep-review/src/budget.rs`. JetStream KV CAS values survive restart and replica hand-off. Reservations include system/user input, maximum output, and every possible attempt and are not refunded because failed calls may be billable.
-
-### 15.6 Pre-history secret and PII sanitization
-
-**Concept.** Raw broker input never enters history or provider prompts. Sensitive keys are removed wholesale, values are masked recursively, and depth/string/collection bounds constrain hostile payloads.
-
-**Implementation.** `clavenar-deep-review/src/pii.rs`. Patterns + sentinels:
-
-| Pattern | Sentinel |
+| Claim | Authority |
 |---|---|
-| SSN (`\d{3}-\d{2}-\d{4}` + variants) | `[SSN]` |
-| Credit card (Luhn-shape 13-19 digit) | `[CC]` |
-| Email | `[EMAIL]` |
-| IPv4 | `[IPV4]` |
-| PEM private-key block | `[PEM_PRIVATE_KEY]` |
-| AWS access key (`AKIA…`) | `[AWS_ACCESS_KEY_ID]` |
-| Bearer/JWT/GitHub/generic assigned secrets | typed redaction sentinel |
+| Wire shape or compatibility | Versioned schema and fixture in [`contracts/`](contracts/) |
+| Source implementation | Owning repository, tests, and `AGENTS.md` |
+| Cross-service behavior | `clavenar-e2e` contract checker or runner |
+| Published artifact | Protected-distribution receipt and external-install contract |
+| Live environment | Environment-bound deployment and smoke receipt |
 
-The masker is idempotent — masking twice produces the same string — verified by the compliance harness on every benchmark case.
+Verification commands in this guide either include their working directory or
+are written from the workspace directory containing `repos/`. This guide does
+not prescribe one universal boot command; select the runner for the feature
+and topology from `clavenar-e2e/docs/RUNNERS.md`.
 
-### 15.7 Durable alert webhook (Red + high-confidence)
+## Contents
 
-**Concept.** Page on `verdict == Red && confidence >= page_confidence` (default `0.85`). Rate-limit by tenant-agent and retain unsuccessful delivery in the job outbox.
+1. [Request control plane](#1-request-control-plane)
+2. [Human-in-the-loop control](#2-human-in-the-loop-control)
+3. [Identity, tenancy, and onboarding](#3-identity-tenancy-and-onboarding)
+4. [Operator surfaces and authentication](#4-operator-surfaces-and-authentication)
+5. [Forensic evidence and compliance projection](#5-forensic-evidence-and-compliance-projection)
+6. [SDKs, CLI, and execution contracts](#6-sdks-cli-and-execution-contracts)
+7. [Reliability, recovery, and lifecycle](#7-reliability-recovery-and-lifecycle)
+8. [Assurance, detection, and evaluation](#8-assurance-detection-and-evaluation)
+9. [Distribution and adoption paths](#9-distribution-and-adoption-paths)
+10. [Security and release controls](#10-security-and-release-controls)
+11. [Governed customer-facing boundaries](#11-governed-customer-facing-boundaries)
+12. [Verification routes](#12-verification-routes)
 
-**Implementation.** `clavenar-deep-review/src/alert.rs`. Slack-shape JSON POST occurs only after evidence persistence. HTTP non-2xx is failure; bounded immediate retries plus the durable sweeper handle outages and rate limiting.
+---
 
-**Verify.**
+## 1. Request control plane
+
+An agent request reaches an upstream effect only after the configured identity,
+semantic, deterministic-policy, and human-review controls have resolved. The
+Proxy owns ordering and fail posture; downstream services own their specific
+decisions.
+
+| Capability | Implemented behavior | Primary owner |
+|---|---|---|
+| Authenticated ingress | Mutual TLS validates the peer and extracts its SPIFFE identity before agent traffic enters the pipeline. | `clavenar-proxy` |
+| Serial enforcement | Security resolution completes before any upstream call; denied, expired, or unresolved decisions cannot race an effect. | `clavenar-proxy` |
+| Semantic inspection | Intent, injection, supply-chain, malicious-code, persona-drift, and sequence signals are evaluated through bounded provider-neutral routes. | `clavenar-brain` |
+| Deterministic policy | Rego policy is evaluated by `regorus` over server-owned time, velocity, spend, identity, history, and attestation inputs. | `clavenar-policy-engine` |
+| Stateful breakers | Distributed velocity, spend, history, revocation, and containment state fail closed when the selected durable authority is unavailable. | Proxy, Policy, NATS KV |
+| Explicit execution | Side-effect-free decisions and durable server execution use different selectors and recovery semantics. | Proxy, Lite, SDKs |
+| Observe mode | A configured observe profile records the decision that enforcement would have made without representing it as an enforced block. | Proxy, Lite |
+| Bounded admission | Body, request-rate, provider, queue, and concurrency ceilings prevent unbounded work from becoming an enforcement bypass. | Owning service |
+
+### Semantic provider routing and qualification
+
+[`clavenar.brain-provider-routing/v2`](contracts/brain-provider-routing-v2.fixture.json)
+separates credential references, provider targets, named models, and workload
+assignments. Inline secrets, ambiguous fallback, unknown versions, and
+provider/credential mismatches fail validation. Runtime fallback is bounded to
+declared replay-safe transient cases; authentication, invalid request,
+malformed output, policy outcome, and ambiguous post-dispatch failures do not
+silently try another provider.
+
+Adapters are not automatically supported merely because they compile.
+[`clavenar.brain-model-qualification/v1`](contracts/brain-model-qualification-v1.fixture.json)
+binds the qualification corpus, repeated live runs, quality, cost, latency,
+degradation, and evidence requirements. The generated support matrix is the
+authority for qualification status.
 
 ```bash
-# Stub sink
-nc -lk 9999 &
-CLAVENAR_DEEP_REVIEW_ALERT_WEBHOOK=http://localhost:9999/page ./run.sh
-# Drive a scenario known to produce a Red verdict
-# Observe one JSON POST; subsequent Reds remain rate-limited and pending
+cd repos/clavenar-specs
+python3 -m unittest -v \
+  tests.test_brain_provider_routing_contract \
+  tests.test_brain_model_qualification_contract
+cd ../clavenar-e2e
+python3 scripts/check_brain_provider_routing.py
+python3 scripts/check_brain_model_qualification.py --source-root .. --require-source
 ```
 
-### 15.8 25-case seed benchmark + hermetic compliance harness
+### Policy management and backtesting
 
-**Concept.** Seed benchmark targeting the four Haiku blind-spot classes (slow exfiltration, persona drift, indirect injection via tool output, recon under varied encodings). Hermetic so CI runs without vendor tokens.
+Policy Engine persists versioned policy mutations with required reasons and a
+durable forensic outbox. Console provides list, edit, diff, activation,
+deactivation, rollback, and deletion workflows under server-side role checks.
+Policy Lab evaluates a candidate against retained replay inputs before
+activation. Signed policy exchange adds publisher verification, provenance,
+and a mandatory backtest; it does not bypass local authorization.
 
-**Implementation.** `clavenar-deep-review/benchmark/cases.json` — 25 cases across 6 categories: slow_exfiltration (4), persona_drift (4), indirect_injection (4), recon_probing (6), benign_workflow (5), mixed (2). Verdict distribution: 11 Red / 8 Yellow / 6 Green. `tests/compliance.rs` drives the full corpus through prompt builder + PII mask + `MockProvider`; published baseline against real Opus is operator-run (token cost, network dependence).
-
-### 15.9 Console `/deep-review` route + narrative summary strip
-
-**Concept.** Operator surface for the new findings. Paginated list view + a summary strip on the per-agent `/audit/agents/{id}/narrative` so the answer to "did this thing earn its keep?" is one click away.
-
-**Implementation.** `clavenar-console/src/handlers.rs::deep_review_index` + `templates/deep_review.html` (paginated 50/page, columns timestamp · correlation · agent · model · brain → deep verdict · confidence · latency, filters: kind/verdict/brain_delta/per_page). Narrative-strip in `templates/audit_narrative.html` shows last-7d findings count, brain_delta donut, top disagreement category, link to filtered `/deep-review`. Demo-prefix gate mirrors `/audit`.
-
-**Verify.**
+The curated catalog is release-manifest governed rather than documented by a
+hand-maintained count. Use
+[`clavenar.curated-policy-release/v1`](contracts/curated-policy-release-v1.fixture.json)
+and the owning Policy Engine tests for the current inventory.
 
 ```bash
-# Local
-curl http://localhost:8085/deep-review
-
-# Live demo VPS
-curl -sf https://demo.clavenar.com/deep-review | grep -o 'Deep review'
+cd repos/clavenar-policy-engine
+cargo test
+cd ../clavenar-e2e
+./dev/run-policies.sh
 ```
 
 ---
 
-## 15. Deception layer (decoys)
+## 2. Human-in-the-loop control
 
-A decoy is a tool name that must never be legitimately called. The proxy advertises some as bait in `tools/list` and treats any `tools/call` naming one as a deterministic, zero-false-positive compromise signal — hard-denied and, in enforce mode, contained through the same rails as deep-review's closed loop. See `TECH_SPEC.md#deception-layer` for the full design.
+HIL converts a policy review outcome into a durable state machine. The
+effective request is held until an accountable terminal decision exists.
 
-### 15.1 Identity registry + curated seed
+| Capability | Implemented behavior |
+|---|---|
+| Tri-state decision | Green continues, Yellow parks for review, and Red denies. Missing or expired Yellow decisions do not become approvals. |
+| Exact payload custody | The pending record binds the request that was reviewed; a different payload cannot reuse the decision. |
+| Modify and resume | An authorized approver may replace bounded typed fields, after which policy is re-evaluated against the effective request. |
+| Sandbox preview | Static analysis summarizes operation class and targets for the approver; the preview is not authorization. |
+| Callback delivery | Approved asynchronous work may notify an allowlisted normalized callback target through bounded, durable delivery. |
+| Assignment and annotation | Queue ownership and reviewer context are durable operator workflow, separate from the terminal decision. |
+| Notification lifecycle | Slack, Teams, and webhook delivery records trigger, retry, terminal result, and resolution without fabricating a human decision. |
+| Tenant and demo isolation | Authenticated tenant scope or a validated demo prefix constrains every collection, object, stream, and mutation route. |
 
-**Concept.** Identity owns the registry: a `decoys` SQLite table (`PRIMARY KEY (tenant, name)`, tenant `*` = fleet-wide default, a same-name tenant row shadows the wildcard), an admin-gated `/decoys` API (`GET` allowlist-only, `POST`/`DELETE` OIDC `agents:admin`), and a first-boot curated seed of three advertised lures + three trap names. Register/retire emit `decoy.registered`/`decoy.retired` chain v3 rows through the agent-lifecycle outbox.
-
-**Implementation.** `clavenar-identity/src/decoys.rs` (+ `db.rs` schema, `main.rs::seed_and_reconcile` on boot). `CLAVENAR_IDENTITY_SEED_DECOYS=off` disables the seed. SQLite is the source of truth; `seed_and_reconcile` pushes every row into the `clavenar_decoys` NATS-KV bucket the proxy watches, healing broadcasts lost while NATS was down.
-
-**Verify.**
-
-```bash
-# Six seeded fleet-wide rows (over the identity mTLS listener / console)
-curl -s "$IDENTITY/decoys?tenant=*" | jq 'length'   # 6
-nats kv ls clavenar_decoys | wc -l                   # 6
-```
-
-### 15.2 Proxy splice + deterministic deny + containment
-
-**Concept.** The proxy mirrors the KV bucket (degraded-until-synced, like the revocation/upstream mirrors: a stale mirror denies nothing and advertises nothing). On `tools/list` it splices advertised bait *after* the supply-chain pin has observed the real catalog (bait is never pinned; a name colliding with a real tool is skipped). On `tools/call` — before the brain/policy fork — a name matching the effective decoy set is hard-denied with a body indistinguishable from a policy deny; the truth rides the forensic row (`rejection_signal=decoy_tripped`). In enforce mode the proxy publishes a `containment.request.v1` with `actor: system:proxy`; identity executes the suspend / force-HIL.
-
-**Implementation.** `clavenar-proxy/src/decoy_registry.rs` (mirror + splice + containment publish), gate in `handler/gates.rs::enforce_decoy_or_reject`, wired into both `handler/mcp.rs` (`/mcp`) and `handler/tool.rs` (`/tool/{name}`). Metrics `clavenar_proxy_decoy_trips_total{action}` and `clavenar_proxy_decoy_cache_degraded`.
-
-**Verify.**
+Console supplies the primary Approval Center. Mobile-responsive browser flows
+remain the supported small-screen path; a separate native mobile product is
+not implied.
 
 ```bash
-# Firing a trap decoy is denied and looks like a policy block (chaos catalog)
-clavenar-chaos-monkey --category deception   # decoy_trap_dump_secrets, decoy_lure_export_credentials
+cd repos/clavenar-hil
+cargo test
+cd ../clavenar-e2e
+python3 -m unittest -v \
+  tests.test_hil_notification_lifecycle \
+  tests.test_hil_retention
 ```
 
 ---
 
-## 16. Governed language SDK execution
+## 3. Identity, tenancy, and onboarding
 
-### 16.1 Cross-language decision and execution parity
+Identity owns agents, workload credentials, grants, signatures, federation,
+attestation results, lifecycle state, and their durable evidence.
 
-**Concept.** An SDK inspection call must never select a server-execution route by accident. Every language allocates one stable request identity locally, selects the side-effect-free decision contract explicitly, and submits a model turn as one ordered atomic batch. The host registers the only executor and supplies durable storage, so an authorization is committed before the effect and the actual result, effect identity, and terminal receipt are committed together afterward.
+### Agent and workload identity
 
-**Implementation.** The TypeScript, Python, Go, Java, and .NET packages mirror [`contracts/sdk-cross-language-v1.fixture.json`](contracts/sdk-cross-language-v1.fixture.json) byte for byte. Their legacy inspection surfaces now send `x-clavenar-decision-contract: clavenar.decision/v1` and a canonical `x-clavenar-idempotency-id`; batch helpers encode `clavenar.atomic-tool-call-batch/v1`. Their explicit governed-execution APIs validate the returned `clavenar.execution/v1` authorization, commit durable intent, call one registered executor, and persist completion plus the workload-signed receipt without exposing an executable authorization to the host loop.
+| Capability | Boundary |
+|---|---|
+| Agent SVID issuance | The agent generates its key and CSR locally. Identity constructs the subject and SPIFFE URI, binds verified attestation, and never returns a private key. |
+| Exact-current renewal | Renewal authenticates the exact current SVID and supersedes it atomically. Missing or corrupt enrolled state requires an explicit recovery ceremony. |
+| Workload SVID refresh | Services renew short-lived workload credentials through exact-current generation state; automatic bootstrap fallback is forbidden. |
+| Revocation | Revocation and supersession withdraw runtime authority and emit lifecycle evidence. |
+| Credential recovery | A bounded, reasoned operator action revokes the current generation and opens one-use recovery authority. |
 
-### 6.9 Durable Proxy and Lite server execution
+### Delegation, signatures, and federation
 
-**Concept.** Server execution is an explicit alternative to side-effect-free authorization. Its caller supplies a stable identity before the request; the server commits what it is about to execute, makes at most one upstream attempt, and durably retains the actual result before returning it. Retrying a completed identity reads that result. Retrying an interrupted identity reports uncertainty and never guesses that another effect is safe.
-
-**Implementation.** Send `x-clavenar-server-execution-contract: clavenar.server-execution/v1` together with a canonical `x-clavenar-idempotency-id` on `POST /mcp`. Proxy requires a verified SPIFFE workload and durable server-execution store; Lite requires an authenticated agent and uses its SQLite store. Both bind caller, route, method/tool, submitted request digest, and effective request digest in `execution.intent`; atomically commit exact response status/body/digest, a stable `execution.completed` receipt, and the forensic outbox obligation before response; replay exact completed calls; conflict substitutions; and return a non-executable uncertain error for retained in-flight calls. [`contracts/server-execution-v1.fixture.json`](contracts/server-execution-v1.fixture.json) is mirrored byte for byte in both services.
-
-**Verify.** Run the shared fixture and a counting upstream against each service. Exact replay must leave the count at one, a changed payload under the same identity must return 409 with the count unchanged, a retained in-flight record must return the uncertain outcome without a call, and missing storage must return 503 without a call.
-
-### 6.10 Retry separation
-
-**Concept.** Automatic retry is safe only when the selected operation is provably side-effect-free. An SDK may retry an explicit `clavenar.decision/v1` request after a transport failure or 5xx response, but every attempt must carry the original canonical idempotency ID and the same request semantics. Effect-capable execution is single-attempt: recovery happens through retained completed results, explicit lookup, or an uncertain outcome, never by silently invoking the executor or upstream again.
-
-**Implementation.** [`contracts/retry-separation-v1.fixture.json`](contracts/retry-separation-v1.fixture.json) classifies every decision, polling, SDK-executor, Proxy/Lite server-execution, legacy, invalid-selector, replay, uncertain, and receipt-delivery surface. The language SDKs construct their retrying transport internally with the exclusive decision selector and stable pre-network ID. Registered executors sit outside that loop. Proxy and Lite call an upstream at most once after durable intent; exact client retries use the WP-06.9 durable lookup. Pending polling is bounded lookup-only behavior and never resubmits the original request. Receipt outbox retry is delivery-only and cannot execute an effect.
-
-**Verify.** Validate the fixture with its schema and compare its bytes across all five SDKs, Proxy, Lite, and assembled E2E. Counting tests must show more than one decision transport attempt under injected 5xx/network failures while every registered-executor and server-upstream effect count remains at most one. Invalid, partial, mixed, unknown, and legacy-unselected traffic receives no automatic retry.
-
-### 6.11 Explicit client migration
-
-**Concept.** A tool call must never change from inspection to execution because a client omitted a selector. Side-effect-free decision and durable server execution are explicit, mutually exclusive contracts. Selector-free compatibility is limited to effect-free MCP control methods.
-
-**Implementation.** Proxy 0.5.0 and Lite 0.9.0 return HTTP 426 `client_contract_required` with `executable:false` for every unselected effect-capable `/mcp` request before any mutable gate or tool effect. The maintained SDKs select `clavenar.decision/v1`; intentional server executors select `clavenar.server-execution/v1`; both allocate their canonical ID before network access. [`docs/SDK_MIGRATION.md`](docs/SDK_MIGRATION.md) publishes the client-first rollout and gateway-first rollback procedure, and [`contracts/client-migration-v1.fixture.json`](contracts/client-migration-v1.fixture.json) is the exact cross-repository matrix.
-
-**Verify.** Validate the migration fixture and compare every mirror byte-for-byte. Gateway owner tests must count zero Ledger, HIL, receipt, and upstream effects for an unselected tool call; unselected control methods must remain available with zero tool effects. The assembled and live suites retain decision, atomic batch, pending, lost-response, durable replay, uncertain reconciliation, and receipt-redelivery proofs.
-
-### 6.12 Tenant-qualified identity keys
-
-**Concept.** A bare agent name is not a storage identity: two tenants may
-legitimately enroll the same name. Every production key must therefore retain
-both identity dimensions without an implicit tenant or lossy normalization.
-
-**Implementation.** `clavenar-shared` provides distinct `TenantId` and
-`AgentId` labels plus an `AgentKey` that can exist only as a validated pair.
-Its canonical string and optional Serde form are exactly `<tenant>/<agent>`.
-The migration helper requires an explicit tenant and permits a bounded
-read-only lookup of the legacy agent component; no API constructs a bare
-production key or permits legacy dual-write fallback. The exact grammar,
-serialization, and migration rules are frozen in
-[`contracts/tenant-agent-key-v1.fixture.json`](contracts/tenant-agent-key-v1.fixture.json).
-
-**Verify.** Run the Specs, Shared all-features, and assembled E2E owner tests.
-They reject empty, overlong, unsafe, bare, extra-separator, mismatched,
-unknown-field, implicit-tenant, and bare-dual-write inputs; string and Serde
-round trips must preserve the exact conformance vector.
-
-**Verify.** Run each package's owner test suite, then compare the fixture across all five repositories byte-for-byte. The conformance tests assert one decision request, zero decision-side effects, one executor invocation after authorization, intent-before-effect ordering, actual provider result return, and fail-closed behavior for missing durability, identity/payload substitution, and persistence errors.
-
-### 6.13 State namespace isolation
-
-**Concept.** Disposable demo state must never be identified by a name pattern
-or cleared by replacing shared storage. Every new state row instead declares
-an immutable `operator` or `demo` owner, and cleanup selects only the latter.
-
-**Implementation.** The Proxy derives demo ownership only from a validated
-demo-session prefix and projects it to HIL and Ledger. Ledger chain v6 commits
-the owner and uses a separate live-view tombstone; HIL requires explicit
-ownership and deletes only demo pending rows while retaining forensic
-evidence. Exact Console workload-mTLS capabilities authorize both bounded
-cleanup endpoints. The contract and collision vector live in
-[`contracts/state-namespace-isolation-v1.fixture.json`](contracts/state-namespace-isolation-v1.fixture.json).
-
-**Verify.** Interleave same-tenant, same-agent operator and demo writes; prove
-distinct IDs and hash-bound ownership; run cleanup twice; verify operator and
-legacy retention, zero second selection, unchanged Ledger head/length,
-retained HIL forensic envelopes, uninterrupted services, and byte-identical
-volume identities.
-
-### 6.14 Tenant-bearing route authorization
-
-**Concept.** Authentication is not sufficient when one credential can still
-name or discover another tenant's work. Every production agent identity and
-every authenticated queue route must carry an independently verified tenant
+OIDC delegation grants intersect requested scopes with the registered agent
+envelope. Per-action and detached-blob signatures carry typed target, tenant,
+audience, purpose, operation, and lifetime bindings. A2A actor tokens add peer
+trust-domain validation and durable replay prevention. Historical public keys
+remain available for verification without retaining obsolete signing
 authority.
 
-**Implementation.** Proxy rejects production certificates without an exact
-tenant-bearing agent SPIFFE URI SAN before pipeline work. HIL binds list,
-stream, decide, poll, and get-by-id to its authenticated principal/workload
-scope. Lite requires `tenant/agent:token` entries for multi-agent mode and
-supports `tenant:token` operator entries via `--deciders`; target reads and
-updates include the tenant predicate. Request headers, JSON, query strings,
-and correlation IDs are never tenant authority. The frozen conformance vector
-is
-[`contracts/tenant-route-authorization-v1.fixture.json`](contracts/tenant-route-authorization-v1.fixture.json).
+Federation accepts only current signed peer bundles and exact trust-domain,
+issuer, audience, subject, scope, and lifetime bindings. Unknown or stale
+peers, wrong recipients, replayed token identities, and unavailable replay
+state fail closed.
 
-**Verify.** Enroll two tenants with the same agent label. Exercise valid and
-forged identity inputs, collection and object routes, and same/cross-tenant
-decisions. Foreign and unknown object responses must share the 404 class,
-foreign collections must be empty, and denied decisions must leave the target
-unchanged.
+### Attestation
+
+[`clavenar.attestation-verifier/v1`](contracts/attestation-verifier-v1.fixture.json)
+binds evidence to nonce, CSR, SVID, workload, tenant, measurement, verifier,
+and freshness. Production excludes development mock evidence. Approval
+retirement, rotation, binding substitution, stale results, or verifier
+unavailability withdraws attestation-required authority.
+
+### Registry, tenant state, and lifecycle
+
+The WAO registry implements create, suspend, unsuspend, decommission,
+capability-envelope, transfer, migration, and certification workflows.
+Production storage identities retain both tenant and agent dimensions.
+Authenticated queue and control routes derive tenant authority from verified
+identity rather than a request field.
+
+[`clavenar.tenant-state-migration/v1`](contracts/tenant-state-migration-v1.fixture.json)
+and [`clavenar.tenant-lifecycle-saga/v1`](contracts/tenant-lifecycle-saga-v1.fixture.json)
+govern qualified cutover, restart-safe provisioning, authority fencing,
+offboarding, export, deletion, and terminal receipts.
+
+```bash
+cd repos/clavenar-identity
+cargo test
+cd ../clavenar-e2e
+./dev/run-onboarding.sh
+./dev/run-federation.sh
+python3 scripts/check_tenant_state_migration.py --source-root .. --require-source
+python3 scripts/check_tenant_lifecycle_saga.py --source-root .. --require-source
+```
 
 ---
 
-## 17. Durable tenant lifecycle
+## 4. Operator surfaces and authentication
 
-**Concept.** Tenant provisioning and offboarding are restart-safe workflows,
-not a sequence of best-effort HTTP calls. Identity durably records immutable
-intent and each step before invoking its owner. Offboarding fences live
-authority before deleting tenant-visible state, and never reports success
-until final export, tombstone, and retained-backup disposition are recorded.
+Console is a server-rendered operator plane. It consumes service APIs through
+named workload identity and enforces user roles again at every mutation.
 
-**Implementation.** The public
-`clavenar.tenant-lifecycle-saga/v1` contract fixes the two step plans, operation
-and step state machines, one-active-operation rule, five-attempt retry schedule,
-lease recovery, and terminal receipt. Identity owns the journal; Policy, HIL,
-Ledger, Proxy, and platform operations remain idempotent owner effects. The SDK
-exposes typed start/status/claim/complete methods, while Console resumes the
-same operation after restart or a lost response.
+### Operator surfaces
 
-**Verify.**
+| Surface | Purpose |
+|---|---|
+| Audit and correlation views | Filtered event inspection, complete request reconstruction, verification, saved views, and bounded live tail |
+| Agent narrative | Activity summary, tool and intent distribution, HIL outcomes, notable events, and deep-review context |
+| Approval Center | Tenant-scoped pending work, assignment, annotation, decision, and notification status |
+| Agent registry | Lifecycle, capability, SVID, grant, and status inspection |
+| Policy management | Versioned policy editing, diff, replay, activation, rollback, catalog, and exchange |
+| Compliance | Evidence-register projection and signed export entry point |
+| Configuration | Redaction-safe dependency, feature, authentication, and readiness diagnostics |
+| Operations | Cost/latency, fleet posture, incident cases, assurance, deep review, and simulator controls |
+| Demo run | Scoped synthetic pipeline replay; demo evidence is never represented as customer-production state |
+
+### Authentication and accountable decisions
+
+Supported operator modes are selected explicitly: WebAuthn, OIDC, operator
+mTLS, SAML where feature-enabled, and tightly bounded compatibility modes.
+Non-loopback use refuses unsafe auth-disabled settings.
+
+Roles are monotonic: Viewer reads, Approver may decide HIL work, and Admin may
+mutate policy and registry state. Console derives a typed decision principal
+from its authenticated session. HIL independently verifies the exact Console
+workload and records subject, tenant, method, and credential provenance. A
+caller-supplied display name is never the decision authority.
+
+WebAuthn bootstrap and invitation state is durable and one-use. OIDC and SAML
+validate issuer, audience, keys, tenant, groups, and configured assurance.
+Authentication-generation rotation retains bounded overlap and invalidates
+stale sessions after the transition.
 
 ```bash
-python3 -m unittest tests/test_tenant_lifecycle_saga_contract.py
-python3 repos/clavenar-e2e/scripts/check_tenant_lifecycle_saga.py \
-  --source-root repos --require-source
+cd repos/clavenar-console
+cargo test
+cd ../clavenar-e2e
+python3 -m unittest -v \
+  tests.test_hil_decision_principals \
+  tests.test_hil_enrollment_state_contract \
+  tests.test_hil_tenant_scope
 ```
-
-The live matrix starts two same-agent-name tenants, forces a dependency failure
-and a lost response at every step boundary, restarts the coordinator, and
-proves no owner effect is duplicated under a new intent. A forged or
-cross-tenant operation identifier returns the same 404 as an unknown one.
 
 ---
 
-## 18. HIL legal hold and erasure
+## 5. Forensic evidence and compliance projection
 
-**Concept.** Sensitive approval payloads must disappear at their approved
-deadline, while an authorized legal hold may extend that deadline without
-turning raw reasons or deleted content into permanent audit data.
+### Durable forensic pipeline
 
-**Implementation.** HIL runs a 100-row bounded sweeper that replaces terminal
-payloads with a fixed tombstone and later deletes expired metadata. Tenant
-offboarding immediately deletes every unheld tenant row and records held rows
-for deletion upon release. Exact tenant-authorized legal-hold operations are
-idempotent and substitution-safe. Every purge or deletion transaction includes
-immutable local evidence and a minimized WP-09 intent/commit pair. SQLite
-secure deletion, truncating WAL checkpoint, and vacuum remove physical
-remnants. The exact boundary is
-[`contracts/hil-erasure-v1.fixture.json`](contracts/hil-erasure-v1.fixture.json);
-backup and restored-copy enforcement remains a separate contract.
+Every accepted producer emits a versioned event with causal identity. Mutable
+stages first commit intent and a durable outbox, then terminal state. Ledger
+deduplicates the logical stage transactionally and appends it to a
+tenant-qualified chain. Crash reconciliation and delivery-health telemetry
+make missing or delayed stages observable.
 
-**Verify.**
+The hash chain, signed lifecycle and decision rows, historical-key lineage,
+and optional RFC 3161 anchors are distinct verification layers. A populated
+signature field is not treated as verified unless the matching cryptographic
+authority and lineage validate.
+
+### Regulatory export
+
+Ledger produces a signed Article 11/12-oriented archive containing bounded
+chain rows, manifest, detached signature, verification instructions, and
+optional technical documentation, analytical pointers, compliance register,
+anchors, Annex IV projection, and post-market plan. Manifest schema v8 commits
+every included block and a complete verified-chain summary.
+
+The archive is independently verifiable with published historical keys. It is
+evidence, not a claim of legal admissibility, conformity assessment, regulator
+acceptance, or deployment compliance.
 
 ```bash
-python3 -m unittest tests/test_hil_erasure_contract.py
-python3 repos/clavenar-e2e/scripts/check_hil_erasure.py \
-  --source-root repos --require-source
+cd repos/clavenar-ledger
+cargo test
+cd ../clavenar-e2e
+python3 scripts/check_cryptographic_verification_contract.py --source-root ..
 ```
 
-The live proof interleaves two tenants, applies a hold, offboards its tenant,
-verifies only the held row remains, releases the hold, replays the same
-operation exactly, and confirms both rows and their sentinels are absent while
-the minimized deletion evidence remains.
+### Continuous evidence projection
+
+The compliance register derives control-specific status from one explicit
+time window. `satisfied`, `partial`, and `no_data` are mechanical outcomes of
+the declared predicates. Human-oversight projections require attributable
+human decisions and channel provenance; robustness projections require the
+declared denial and cryptographic evidence. Control mappings remain evidence
+projections, not certification or legal advice.
+
+### Cold tier and SIEM
+
+Ledger can emit Iceberg v2 metadata with Parquet data to LocalFS or
+S3-compatible storage and can stream bounded audit events to configured SIEM
+sinks. Export pointers can be committed into a regulatory archive. Sink
+availability, lifecycle, and retention remain deployment configuration, not a
+universal product duration.
 
 ---
 
-## 19. HIL backup and restore erasure
+## 6. SDKs, CLI, and execution contracts
 
-**Concept.** Recovery must not reset a retention deadline or revive a tenant
-that was offboarded after the selected recovery point.
+### Client surfaces
 
-**Implementation.** Scheduled backup takes an application-consistent HIL
-SQLite copy and applies the accepted retention and erasure rules to that copy
-before restic encryption. Restore verifies the original capture commitment,
-then re-applies the rules before any restored workload starts. A private
-HMAC-authenticated, monotonically advancing tenant-erasure disposition is
-kept outside the backup chain; receipts expose only commitments and aggregate
-counts. Active legal holds remain protected and auditable. Each destructive
-transaction is limited to 100 rows and is followed by secure deletion, a
-truncating WAL checkpoint, vacuum, quick-check, and forbidden-fixture scans.
+| Surface | Role |
+|---|---|
+| `clavenar-sdk` | Typed Rust clients for Ledger, HIL, Identity, Policy, Simulator, and operator workflows |
+| `clavenarctl` | Device auth, agent lifecycle, migration, certification, policy generation, diagnostics, and regulatory export |
+| TypeScript and Python SDKs | Anthropic/OpenAI wrappers, direct inspection, pending resolution, streaming, and realtime helpers |
+| Go, Java, and .NET SDKs | Wire-compatible decision, pending, streaming, and governed-execution clients |
+| Secure transport profile | Reloadable CA, client identity, token, proxy, deadline, and destination policy shared by maintained client paths |
 
-**Verify.**
+Published versions and exact install commands come from
+[`clavenar.external-install/v1`](contracts/external-install-v1.fixture.json),
+not from prose in this section.
+
+### Decision and execution separation
+
+[`clavenar.sdk-cross-language/v1`](contracts/sdk-cross-language-v1.fixture.json)
+requires each maintained language client to allocate one stable request
+identity before network access and explicitly select the side-effect-free
+decision contract. Atomic batch helpers retain order and request identity.
+
+Governed execution is a separate host-controlled API. It validates an
+authorization, commits durable intent, invokes one registered executor, and
+persists the actual result and receipt. Proxy/Lite server execution similarly
+commits intent before one upstream attempt and replays only retained completed
+results. An interrupted execution reports uncertainty; it is never retried by
+guessing that a second effect is safe.
+
+[`clavenar.retry-separation/v1`](contracts/retry-separation-v1.fixture.json)
+permits automatic transport retry only for explicit side-effect-free decisions.
+[`clavenar.client-migration/v1`](contracts/client-migration-v1.fixture.json)
+rejects unselected effect-capable requests before any mutable gate or effect.
 
 ```bash
-python3 -m unittest tests/test_hil_backup_erasure_contract.py
-python3 repos/clavenar-e2e/scripts/check_hil_backup_erasure.py \
-  --source-root repos --require-source
+cd repos/clavenar-e2e
+python3 scripts/check-server-execution-contract.py --require-source
+python3 scripts/check-retry-separation-contract.py \
+  --source-root .. --require-source
+python3 scripts/check-client-migration-contract.py \
+  --source-root .. --require-source
 ```
-
-The acceptance matrix creates an older recovery point, offboards one of two
-same-agent-name tenants, advances the external disposition, and restores the
-older point. The offboarded unheld row must be absent before workload
-startup, the other tenant must be unchanged, an active-held row must remain
-protected, and no disallowed raw fixture may remain recoverable.
 
 ---
 
-## 20. Production federated identity
+## 7. Reliability, recovery, and lifecycle
 
-**Concept.** OIDC and SAML are alternate transports for one operator identity,
-not separate authorization models. Neither may create an unscoped or
-password-only production session.
+Reliability requirements are contract-tested independently of any one
+deployment topology.
 
-**Implementation.** One strict projection requires one-to-one external tenant
-aliases, exact canonical tenant labels, disjoint configured role groups, and
-accepted MFA evidence. It emits a protocol/issuer/tenant/subject-bound
-commitment rather than persisting a raw subject. OIDC uses code flow, S256
-PKCE, nonce, bounded reactive JWKS refresh, and provider logout. The production
-Console artifact includes SAML and accepts only signed, request- and
-audience-bound assertions from pinned metadata before applying the same
-projection. The frozen behavior is
-[`contracts/production-federated-identity-v1.fixture.json`](contracts/production-federated-identity-v1.fixture.json).
+| Capability | Implemented boundary |
+|---|---|
+| Storage | SQLite remains the local/default store where declared; the staged PostgreSQL Ledger path has explicit TLS, migration, and acceptance gates. |
+| State inventory | Every durable or reconstructible state family has an owner, source, backup, restore, migration, and disposition. |
+| Backup | Scheduled sets are encrypted, committed to exact source state, and written to configured offsite custody. |
+| Restore | Recovery runs in isolation, verifies the restored state, and does not overwrite the active writer during validation. |
+| Failover | Passive promotion requires writer fencing; ambiguous or double-writer state fails. |
+| Readiness | Direct and transitive dependencies withdraw readiness without conflating process liveness. |
+| Promotion | Candidate, smoke, public pointer, rollback, and terminal receipt form one transaction. |
+| Upgrade | Stateful changes have compatibility, migration, candidate, and rollback rules before source state advances. |
+| Alerts | Trigger, retry, terminal delivery, acknowledgement, and resolution are retained without treating best-effort notification as control success. |
+| Erasure | Tenant and HIL deletion preserve required forensic evidence and apply explicit retained-backup disposition. |
 
-**Verify.**
+The active deployment and retained portability/recovery harnesses are selected
+through `clavenar-e2e`; source documentation does not claim that one local
+command proves a live environment.
 
 ```bash
-cargo test --all-targets --features saml \
-  --manifest-path repos/clavenar-console/Cargo.toml
-python3 repos/clavenar-e2e/scripts/check_production_federated_identity.py \
-  --source-root repos --require-source
+cd repos/clavenar-e2e
+python3 scripts/check_dependency_readiness.py --source-root .. --require-source
+python3 scripts/check_tenant_state_migration.py --source-root .. --require-source
+python3 scripts/check_deployment_promotion.py --require-source
 ```
-
-The acceptance matrix drives a pinned real IdP through OIDC and signed SAML,
-then rejects missing/unmapped tenants, ambiguous groups, absent MFA, wrong
-issuer/audience/key, stale rotation after one refresh, unsigned or replayed
-SAML, and IdP outage.
 
 ---
 
-## 21. Optional Exec containment
+## 8. Assurance, detection, and evaluation
 
-**Concept.** The execution gateway remains outside official production until
-the complete WP-13 package closes. Its evaluation path must not turn a
-Proxy-injected identity header into an unauthenticated workspace selector.
+<a id="14-forensic-tier-deep-review"></a>
 
-**Implementation.** Default and production Helm values omit Exec, and the
-production profile rejects opt-in. Evaluation requires workload TLS and
-NetworkPolicy. Proxy selects a dedicated outbound mutual-TLS transport and
-injects verified agent identity only on that hop. Exec requires the exact
-Proxy SPIFFE identity, rejects missing or malformed agent identity, and serves
-plain liveness/readiness on a separate unpublished listener with no MCP
-fallback. The strict boundary is
-[`contracts/exec-surface-containment-v1.fixture.json`](contracts/exec-surface-containment-v1.fixture.json).
+### Deep review and containment
 
-**Verify.**
+Deep Review consumes selected forensic events asynchronously. It strips
+untrusted prior verdict fields, minimizes provider input, applies durable
+budget and retry rules, and writes a terminal finding or explicit failure
+sentinel before acknowledging selected input. It never gates the live request.
+High-confidence findings may request containment only after the primary finding
+is durable; shadow mode records the proposed action without issuing it.
+
+### Deception
+
+Identity owns tenant-aware decoy registration and broadcasts the effective
+set. Proxy may advertise reviewed lures and deterministically deny a matching
+tool call before semantic evaluation. Degraded or stale decoy state advertises
+and denies nothing rather than inventing registry contents. Decoy evidence and
+containment requests remain explicit forensic events.
+
+### Catalogs, simulator, and assurance
+
+The chaos catalog and policy catalog are governed by exact release manifests.
+[`clavenar.attack-release/v1`](contracts/attack-release-v1.fixture.json)
+currently records **93 listed scenarios total** across proxy and direct-Identity
+paths. Runtime selection accepts `--release-manifest`; owning tests prove the
+compiled catalog matches the manifest. Do not copy category totals elsewhere.
+
+The Simulator supplies scoped synthetic traffic for demonstrations and load
+tests. Continuous Assurance schedules governed catalog execution and records
+the exact release, environment, result, and verification status. Synthetic,
+mock, or partial runs do not become customer or production evidence.
+
+### Sandbox and outbound isolation
+
+Sandbox statically summarizes a requested operation as a
+`safe`/`risky`/`destructive` annotation; it does not authorize the operation.
+Authorization, tenant authority, and isolation are enforced by their own
+boundaries. The `clavenar.sandbox-adversarial-corpus/v1` binding in
+[`clavenar.residual-product-disposition/v1`](contracts/residual-product-disposition-v1.fixture.json)
+governs parser and classification adversarial cases.
+
+Rooted-path validation prevents symlink and path escape. Outbound target
+normalization rejects credentials, fragments, ambiguous domain boundaries,
+local-use names, and unsafe IP targets. DNS pinning validates the complete
+answer set and every bounded redirect before connecting.
+
+Optional Exec remains evaluation-only. It requires exact Proxy workload
+identity, an immutable allowlisted command policy, structured arguments,
+cleared environment, default-deny egress, and hard CPU, process, memory,
+file, output, and wall-clock ceilings. Production profiles reject opt-in.
+
+### Discovery scanner
+
+Shadow Scanner inventories likely agent integrations and credential exposure
+from explicitly authorized sources. Scanner findings stay private by default;
+publication requires a separately governed sanitized artifact. Discovery
+output is a lead for review, not proof of compromise or customer state.
+
+---
+
+## 9. Distribution and adoption paths
+
+### Lite evaluation path
+
+`clavenar-lite` is the single-binary local evaluation edition. It combines
+authenticated ingress, heuristic inspection, Rego policy, local HIL record and
+decision APIs, callbacks, a hash-chained SQLite ledger, backup/restore, and
+observe/enforce modes. It does not claim the managed Console approval workflow,
+federation, compliance export, or full-edition resume-on-approve path.
+
+`clavenarctl init --guard` can scaffold a local policy and Lite configuration.
+The graduation report summarizes observed would-deny and would-review outcomes
+and verifies the local chain. An optional local signature makes that report
+tamper-evident; it is not an Identity-issued production attestation.
+
+### Packages, images, and Helm
+
+Protected distribution publishes only after exact source, artifact, SBOM,
+provenance, license, and immutable-reference gates pass. Package registry,
+release asset, image, and Helm availability is verified externally rather than
+inferred from a badge or repository.
+
+### Existing-cluster installation
+
+The governed installer targets an existing Kubernetes or K3s API. It confirms
+context, permissions, storage, immutable chart and image inputs, selected
+credential references, workload readiness, and functional proof. It does not
+create or reconfigure clusters, nodes, runtimes, firewalls, provisioners, or
+cloud resources. Uninstall is plan-first and retains persistent data by
+default.
+
+### Documentation portal
+
+The public documentation site is generated by Eleventy and validated before
+and after rendering. Quickstarts, API references, recipes, install paths,
+claims, routes, fragments, and served artifacts are reconciled with exact
+inventories. A successful local build is source evidence, not a live-release
+receipt.
+
+---
+
+## 10. Security and release controls
+
+### Internal service identity and capabilities
+
+Application hops use workload mTLS and exact SPIFFE identities. Generated
+route capabilities map caller, method, path template, and capability with a
+deny-unknown default. Health and metrics listeners remain separate where the
+service contract requires them. Named forwarding identity grants only the
+specific forwarding behavior; it does not become general internal authority.
+
+### Supply chain
+
+`clavenar-specs/deny.toml` is the byte-identical Rust fleet policy. Owning
+repositories run their language-native dependency, license, test, lint, SBOM,
+and provenance gates. Artifact publication is driven from a verified signed
+stack BOM; mutable tags and source substitution are not release authority.
+
+### Disclosure and threat model
+
+All 30 repositories carry the same root `SECURITY.md`, governed by
+[`clavenar.security-policy/v1`](contracts/security-policy-v1.fixture.json).
+The public `security.txt` points reporters to the same private disclosure
+channel. Threat documentation organizes trust boundaries and mitigations; it
+does not claim that every deployment enabled every optional control.
+
+### Route and schema inventory
+
+[`clavenar.route-schema-release/v1`](contracts/route-schema-release-v1.fixture.json)
+generates the exact governed route and schema inventory from owning source. It
+rejects duplicate, missing, renamed, invalid, or non-identical projections.
 
 ```bash
-python3 -m pytest tests/test_exec_surface_containment_contract.py
-python3 repos/clavenar-e2e/scripts/check_exec_surface_containment.py
-python3 -m pytest repos/clavenar-charts/tests/test_exec_surface_containment.py
+cd repos/clavenar-e2e
+python3 scripts/check_security_policy.py --source-root .. --require-source
+python3 scripts/generate_route_schema_release.py --check
+python3 scripts/check_endpoint_capability_matrix.py --source-root .. --require-source
 ```
 
-### 21.2 Structured allowlisted execution
+---
 
-**Concept.** Evaluation access to an execution pod is not permission to submit
-a shell program. The process boundary accepts a command identifier and typed
-argument slots from one immutable allowlist; it never interprets a command
-line, searches `PATH`, or inherits ambient process environment.
+## 11. Governed customer-facing boundaries
 
-**Implementation.** The exact
-[`clavenar.structured-execution/v1`](contracts/structured-execution-v1.fixture.json)
-contract replaces `bash` and its `cmd` string with `execute_command`. Calls
-provide the policy command identifier, exactly ordered named arguments, and an
-exact environment object. The initial `render_text` command directly invokes
-`/usr/bin/printf`; a fixed literal format precedes one bounded text argument,
-fixed locale is injected after environment clearing, and only `TERM=dumb` may
-be requested. The chart requires a digest-pinned Exec image, mounts the
-immutable policy read-only, and binds non-root UID/GID 65532, read-only root,
-64 MiB memory scratch, RuntimeDefault seccomp, dropped capabilities, no
-privilege escalation, and default-deny egress with only cluster DNS and the
-in-cluster fallback peer admitted. Production remains resource-absent and
-rejects opt-in.
-
-**Verify.**
-
-```bash
-python3 -m pytest tests/test_structured_execution_contract.py
-python3 repos/clavenar-e2e/scripts/check_structured_execution.py
-python3 -m pytest repos/clavenar-charts/tests/test_structured_execution.py
-```
-
-### 21.3 Hard execution ceilings
-
-**Concept.** Evaluation isolation must stay bounded when a command hangs,
-forks descendants, exhausts output, or encounters unexpectedly large file or
-HTTP bodies. Limit selection is a server responsibility, never a caller
-option.
-
-**Implementation.** The exact
-[`clavenar.execution-ceilings/v1`](contracts/execution-ceilings-v1.fixture.json)
-contract fixes the JSON-RPC, wall-clock, CPU, address-space, process,
-file-size, open-file, stdout/stderr, file-tool, directory, search, and fetch
-body limits. Commands start in a new process group. A timeout kills the group
-and reaps the direct child. Pipe readers continue draining after their retain
-limit and append a deterministic truncation marker without retaining discarded
-bytes. The former timeout environment override is rejected. Evaluation-only
-isolation and production exclusion remain unchanged.
-
-**Verify.**
-
-```bash
-python3 -m pytest tests/test_execution_ceilings_contract.py
-python3 repos/clavenar-e2e/scripts/check_execution_ceilings.py
-python3 -m pytest repos/clavenar-charts/tests/test_execution_ceilings.py
-```
-
-## Verification — end to end
-
-The single command that exercises ~80% of the features above:
-
-```bash
-./repos/clavenar-e2e/dev/run.sh
-```
-
-Boots all six services, drives the happy path through every layer, runs the chaos-monkey catalog, asserts the chain verifies, exits 0 on success. Read the runner's stdout — every assertion that passes corresponds to a feature in this document.
-### Rooted paths and normalized outbound targets
-
-[`clavenar.rooted-path-target-validation/v1`](contracts/rooted-path-target-validation-v1.fixture.json)
-requires file tools to operate beneath an already-opened per-agent directory
-without following intermediate, final, or magic symlinks. Fetch and callback
-allowlists compare parsed and normalized HTTP(S) scheme, IDNA host, effective
-port, and a path-segment boundary. Credentials, fragments, ambiguous sibling
-domains, local-use names, and non-public IP literals fail closed.
-
-```bash
-python3 -m pytest tests/test_rooted_path_target_validation_contract.py
-python3 repos/clavenar-e2e/scripts/check_rooted_path_target_validation.py
-python3 -m pytest repos/clavenar-charts/tests/test_rooted_path_target_validation.py
-```
-
-### Pinned DNS answers and bounded redirects
-
-[`clavenar.outbound-resolution-pinning/v1`](contracts/outbound-resolution-pinning-v1.fixture.json)
-requires Exec fetches and Lite callbacks to validate every answer from a
-bounded DNS lookup, reject mixed public/non-public sets, select one answer
-deterministically, and pin it into the connection without replacing the
-normalized hostname used for Host, SNI, and certificate verification.
-Redirects run through a manual five-hop loop; each target is normalized,
-allowlisted, freshly resolved, validated, and pinned before connecting.
-Downgrades, loops, unsafe locations, excessive bodies, and hop overflow fail
-closed.
-
-```bash
-python3 -m pytest tests/test_outbound_resolution_pinning_contract.py
-python3 repos/clavenar-e2e/scripts/check_outbound_resolution_pinning.py
-python3 -m pytest repos/clavenar-charts/tests/test_outbound_resolution_pinning.py
-```
-
-### Fail-closed hosted Lite profile
-
-[`clavenar.hosted-lite-safety/v1`](contracts/hosted-lite-safety-v1.fixture.json)
-keeps local developer defaults available while requiring every hosted template
-to select a startup-enforced profile. Hosted Lite requires distinct agent and
-operator credentials, enforce mode, a bounded per-agent rate limit, durable
-absolute SQLite state on a persistent volume, at least one running machine,
-and an explicit `mcp-jsonrpc-v1` HTTPS adapter. Request and response bodies,
-operation time, JSON-RPC version, and response identity are server-bounded.
-Missing, ambiguous, overlapping, ephemeral, placeholder, incompatible, or
-otherwise unsafe combinations refuse startup.
-
-```bash
-python3 -m pytest tests/test_hosted_lite_safety_contract.py
-python3 repos/clavenar-e2e/scripts/check_hosted_lite_safety.py
-```
+These contracts keep public product, commercial, legal, privacy, and release
+claims tied to the evidence that can support them.
 
 ### Contract-tested documentation claims
 
 [`clavenar.documentation-claim-boundaries/v1`](contracts/documentation-claim-boundaries-v1.fixture.json)
 classifies attestation, approver provenance, signing, admissibility, retention,
-and deployment claims by the exact evidence that supports them. Public source,
-built pages, and the deployed origin reject retired unconditional wording.
-Retention is configured per deployment; control mappings are not certification
-or legal advice; and release, evaluation, demo, and customer-production states
+and deployment wording. Public source, built pages, and the deployed origin reject retired
+unconditional claims. Release, evaluation, demo, and customer-production state
 remain distinct.
 
 ```bash
-python3 -m pytest tests/test_documentation_claim_boundaries_contract.py
-python3 repos/clavenar-e2e/scripts/check_documentation_claim_boundaries.py
+python3 repos/clavenar-e2e/scripts/check_documentation_claim_boundaries.py \
+  --source-root repos --require-source
 ```
 
 ### Explicit compliance derivation boundaries
 
 [`clavenar.compliance-derivation-boundaries/v1`](contracts/compliance-derivation-boundaries-v1.fixture.json)
-binds attestation, delegation JWKS, and schema-v3 register evidence to their
-configured authorities and freshness limits. It inventories five fail-open
-paths with their exact loud signals, four fail-closed verification paths, and
-the `satisfied` / `partial` / `no_data` predicates and limitations. Cold or
-stale JWKS rejects presented delegation, and satisfied is a mechanical
-predicate for one exact window, not a conformity assessment.
+binds configured authorities, freshness, loud degraded modes, fail-closed
+verification, and exact register status semantics. A derived result describes
+one evidence window; it is not a conformity assessment.
 
 ```bash
-python3 -m pytest tests/test_compliance_derivation_boundaries_contract.py
-python3 repos/clavenar-e2e/scripts/check_compliance_derivation_boundaries.py
+python3 repos/clavenar-e2e/scripts/check_compliance_derivation_boundaries.py \
+  --source-root repos --require-source
 ```
 
 ### Contract-tested retention claims
 
 [`clavenar.retention-claim-boundaries/v1`](contracts/retention-claim-boundaries-v1.fixture.json)
-separates deployment-configured retention policy from exact HIL payload
-deadlines, the opt-in Ledger vacuum minimum, weekly recovery-point cadence, and
-LocalFS/S3-compatible export support. Those implementation facts do not create
-a universal duration, immutable lifecycle, or permanent-retention promise. A
-fixed-duration claim remains prohibited until one deployment has the complete
-approved lifecycle receipt.
+separates deployment-configured policy, HIL payload deadlines, Ledger vacuum
+floors, recovery cadence, and export support. A fixed-duration public claim
+requires its own approved lifecycle receipt.
 
 ```bash
-python3 -m pytest tests/test_retention_claim_boundaries_contract.py
-python3 repos/clavenar-e2e/scripts/check_retention_claim_boundaries.py
+python3 repos/clavenar-e2e/scripts/check_retention_claim_boundaries.py \
+  --source-root repos --require-source
 ```
 
 ### Contract-tested public operational information
 
 [`clavenar.public-operational-information/v1`](contracts/public-operational-information-v1.fixture.json)
-selects the restrictive publication policy. Public repositories retain
-sanitized product architecture, public interfaces, portable contracts and
-defaults, externally observable behavior, and protected release or security
-evidence. Deployment-specific operating procedures are maintained privately.
-Public entry points are interfaces, not a topology disclosure.
-
-Live host/provider/region maps, internal listeners and hostnames, perimeter
-configuration, backup destinations and lifecycle, destructive reset
-procedures, cost, and operator access are prohibited without an exception.
-There is no approved exception in release 1.232.0. A public exception requires
-a reviewed classification receipt bound to an exact source commit, surface,
-necessity, threat review, Docs/Security approvals, and expiry.
+permits sanitized architecture, public interfaces, portable contracts and
+defaults, externally observable behavior, and protected release/security
+evidence. Deployment-specific procedures remain private. A public exception
+requires a reviewed classification receipt with exact source, surface,
+necessity, threat review, approvals, and expiry.
 
 ```bash
-python3 -m pytest tests/test_public_operational_information_contract.py
-python3 repos/clavenar-e2e/scripts/check_public_operational_information.py
+python3 repos/clavenar-e2e/scripts/check_public_operational_information.py \
+  --source-root repos --require-source
 ```
 
 ### Generated route and schema release inventory
 
 [`clavenar.route-schema-release/v1`](contracts/route-schema-release-v1.fixture.json)
-projects the exact 139 generated-enforced application routes and twelve
-machine-validated schemas/examples into one release artifact. Thirteen
-source-item digests bind the Policy, HIL, Ledger, Console SAML, Helm Postgres,
-and Rust SDK documentation to the owning code. The generator rejects
-duplicate/missing routes, stale listener or capability inputs, renamed or
-changed source items, invalid examples, and non-identical public/deployment
-mirrors.
+binds generated application routes and machine-validated schemas/examples to
+their owning code and exact public/deployment mirrors.
 
 ```bash
-python3 -m pytest tests/test_route_schema_release_contract.py
+python3 -m pytest repos/clavenar-specs/tests/test_route_schema_release_contract.py
 python3 repos/clavenar-e2e/scripts/generate_route_schema_release.py --check
 ```
 
 ### Executable staged and public documentation
 
 [`clavenar.executable-documentation/v1`](contracts/executable-documentation-v1.fixture.json)
-binds eight SDK/Rust/Lite/CLI install and quickstart paths, six Helm recipes,
-and website local/external link, fragment, asset, route, behavior, and schema
-checks to exact `staged` and `public` executions. Both phases use immutable
-clean-container runners; the public phase additionally verifies the released
-BOM before repeating the commands.
+binds SDK, Rust, Lite, CLI, Helm, and website recipes to exact `staged` and
+`public` phases. Both use clean immutable runners; public execution additionally
+verifies the released BOM.
 
 ```bash
-python3 -m pytest tests/test_executable_documentation_contract.py
 python3 repos/clavenar-e2e/scripts/check_executable_documentation.py \
   --source-root repos --require-source
-DOCKER="sudo -n docker" \
-  repos/clavenar-e2e/scripts/run-executable-documentation.sh \
-  --phase staged --source-root repos --release-version 1.235.0
 ```
 
 ### Exact public external installs
 
 [`clavenar.external-install/v1`](contracts/external-install-v1.fixture.json)
-binds the advertised npm, PyPI, Maven, NuGet, four-module Go, Rust Git/release,
-Lite, CLI, OCI image, and OCI Helm surfaces to exact immutable versions. The
-protected distribution runs all eight package/binary paths from clean
-containers, downloads seventeen anonymous release assets, verifies checksums,
-and installs chart 0.39.2 with the exact 1.250.3 image values in a new Kind
-cluster. All workloads must become ready and every Clavenar image must remain
-an anonymously readable digest.
+binds maintained package, binary, release-asset, image, and Helm surfaces to
+exact immutable versions. It verifies anonymous downloads and pulls, checksums,
+clean package use, and a fresh Helm installation using exact image digests.
 
 ```bash
-python3 -m pytest tests/test_external_install_contract.py
 python3 repos/clavenar-e2e/scripts/check_external_install.py \
   --source-root repos
 ```
@@ -3380,45 +614,12 @@ python3 repos/clavenar-e2e/scripts/check_external_install.py \
 ### Existing-cluster operator install
 
 [`clavenar.cluster-install/v1`](contracts/cluster-install-v1.fixture.json)
-binds `curl -fsSL https://clavenar.ai/install.sh | sh` to a checksum-verified,
-immutable installer for an existing Kubernetes or K3s API. It confirms the
-context before mutation, verifies cluster permissions and storage, installs the
-exact chart and digest values, waits for Jobs and workloads, runs the bundled
-functional proof, and writes a non-secret in-cluster receipt. It never creates
-or reconfigures a cluster, node, runtime, firewall, provisioner, or cloud
-resource.
-
-Model setup uses non-secret provider/model values plus Kubernetes Secret
-references. The credential-free default is mock mode. Operators can select
-Anthropic, OpenAI, Google AI, or Ollama generation independently from disabled,
-Voyage, OpenAI, or Ollama embeddings. The installer performs a read-only check
-of only the Secret keys required by those selections and reports the exact
-missing reference before mutation; it never accepts an inline API key or
-writes credential material to its receipt.
-
-The default profile renders the full WebAuthn operator console and rejects
-anonymous demo access. It prints a localhost port-forward command and a setup
-URL whose fragment carries the deployment's one-use bootstrap token. The
-browser removes the fragment before starting the passkey ceremony; successful
-completion creates the deployment's durable Admin identity, and bootstrap
-replay remains terminal across restart. The token is never written to the
-non-secret receipt. Native operator mTLS remains available through explicit
-`--console-auth mtls`; that mode can reuse existing public trust or generate a
-local Admin authority, client certificate, and browser PKCS#12 bundle below
-`~/.clavenar/operator-bootstrap`. Signer and operator private keys remain on the
-invoking workstation. The curated demo console is an explicit
-`--profile evaluation` opt-in, never the default customer installation.
-
-The same contract binds `curl -fsSL https://clavenar.ai/uninstall.sh | sh` to
-a checksum-verified immutable uninstaller. It verifies release ownership and
-shows a read-only plan before removing Helm workloads. Persistent data is
-retained by default. The shared authentication Secret and public-only operator
-trust registry are retained even when explicitly deleting data; data deletion
-requires `--delete-data` plus an exact `namespace/release` confirmation, and
-namespace deletion is never an available action.
+binds `install.sh` and `uninstall.sh` to checksum-verified immutable releases
+for an existing Kubernetes or K3s cluster. Credential selection uses existing
+Secret references; persistent data is retained unless the operator supplies
+the explicit destructive confirmation required by the uninstaller.
 
 ```bash
-python3 -m pytest tests/test_cluster_install_contract.py
 python3 repos/clavenar-e2e/scripts/check_cluster_install.py \
   --source-root repos
 ```
@@ -3426,99 +627,96 @@ python3 repos/clavenar-e2e/scripts/check_cluster_install.py \
 ### Minimized public pilot intake
 
 [`clavenar.pilot-privacy-intake/v1`](contracts/pilot-privacy-intake-v1.fixture.json)
-limits the homepage and design-partner forms to a business email and
-allowlisted non-sensitive qualification enums. The backend rejects unknown,
-legacy, and cross-form fields; neither free text nor production-system,
-credential, incident, vulnerability, personal, or regulated-data detail has
-a public intake field. Turnstile and honeypot values remain transient and are
-never forwarded.
-
-The same contract publishes 90-day inactive and 180-day absolute
-general-intake limits, a 30-day verified-request completion target, a bounded
-conversion rule, and a four-provider inventory reviewed every 90 days.
-Plausible is disabled in the official 1.242.0 build and cannot be re-enabled
-without a reviewed bounded analytics lifecycle.
+limits public forms to a business email and allowlisted non-sensitive
+qualification values. It rejects free text and production-system, credential,
+incident, vulnerability, personal, or regulated-data detail. Retention and
+provider inventory remain explicit and contract-tested.
 
 ```bash
-python3 -m pytest tests/test_pilot_privacy_intake_contract.py
 python3 repos/clavenar-e2e/scripts/check_pilot_privacy_intake.py \
-  --source-root repos
+  --source-root repos --require-source
 ```
 
 ### Customer-controlled legal and secure-exchange pack
 
 [`clavenar.customer-legal-exchange/v1`](contracts/customer-legal-exchange-v1.fixture.json)
-commits the exact MSA, pilot agreement, Order Form, DPA, SCC election,
-Founding Design Partner Offer, Security and Data Schedule, Procurement
-Response, pack index, exchange guide, and local-only exchange tool. Templates
-and the offer schedule remain non-binding until a completed signed Order Form
-selects their versions and supplies the customer-specific commercial,
-deployment, data, transfer, support, retention, and signature fields.
-
-The Python tool creates distinct customer and order-specific Clavenar X25519
-recipients, derives wrapping keys with HKDF-SHA-256, and authenticates the
-bounded payload and manifest with AES-256-GCM. It has no network path. Unsafe
-paths, symlinks, duplicate or over-limit entries, wrong/substituted recipients,
-metadata or ciphertext tampering, expiry, and mutable reuse fail closed.
+binds the legal templates, offer schedule, pack index, exchange guide, and
+local-only exchange tool. Customer-specific terms remain unsigned blanks until
+an executed Order Form selects them. The exchange uses customer/order-specific
+X25519 recipients and AES-256-GCM authenticated encryption without a network
+path.
 
 ```bash
-python3 -m pytest tests/test_customer_legal_exchange_contract.py
 python3 repos/clavenar-e2e/scripts/check_customer_legal_exchange.py \
-  --source-root repos
-python3 repos/clavenar-website/public/tools/clavenar-secure-exchange.py \
-  inspect --input exchange.clex.json
+  --source-root repos --require-source
 ```
 
 ### Evidence-gated outreach and onboarding
 
 [`clavenar.onboarding-prospect-evidence/v1`](contracts/onboarding-prospect-evidence-v1.fixture.json)
-binds exact case-sensitive playbook paths and explicit environment aliases for
-the private prospect register, outreach templates, and opaque evidence
-register. The release graph contains no prospect identities or raw contact
-data.
-
-Each private record must have an owner and dated next action. Discovery moves
-only when the register cites SHA-256-committed evidence for actual outreach and
-an actual interview; source completeness, templates, builds, and deploys never
-count as prospect evidence. Production-pilot approval remains a separate gate.
+keeps prospect identities and raw contact data outside the release graph.
+Discovery advances only from committed evidence of actual outreach and an
+actual interview; source completeness and builds are not customer evidence.
+Production-pilot approval remains separate.
 
 ```bash
-python3 -m pytest tests/test_onboarding_prospect_evidence_contract.py
 python3 repos/clavenar-e2e/scripts/check_onboarding_prospect_evidence.py \
-  --source-root repos \
-  --require-source \
-  --require-private-inputs
+  --source-root repos --require-source --require-private-inputs
 ```
 
 ### Exact commercial offer and validation gate
 
 [`clavenar.commercial-offer/v1`](contracts/commercial-offer-v1.fixture.json)
-defines Founding Design Partner Offer 1.0.0 once: four-week USD $0 evaluation,
+defines Founding Design Partner Offer 1.0.0 once: a four-week USD $0 evaluation,
 one agent, one tool/action surface, optional signed 12-month USD $15,000 first
 subscription year for up to 25 per-tenant registered agents, and a separately
 signed USD $36,000 renewal. It grants no production approval, automatic
 renewal, lifetime lock, automatic overage, or publicity right.
 
-The Website renders from an exact contract copy and publishes the versioned
-offer schedule. The legal pack commits that schedule and the aligned Order
-Form. The onboarding playbooks and private strategy carry the same duration,
-price, unit, conversion, renewal, and non-claim terms.
-
-The source checker keeps cash, burn, runway, prospect identity, and pricing
-notes private. Its delivery mode requires complete financial inputs, at least
-one SHA-256-committed actual pricing conversation, and an exact
-Founder/Product/Finance/Legal/GTM approval. Receipts contain only status and
-opaque accepted/rejected/countered counts.
-
-Release 1.245.0 delivered this source boundary under an owner-directed scope
-reduction. The private register remains pending, contains zero pricing
-conversations, and has no exact release approval; those missing states are not
-market validation.
+Private commercial validation requires founder-supplied financial inputs, an
+actual pricing conversation, and exact cross-functional approval. Source
+completeness is not market validation.
 
 ```bash
-python3 -m pytest tests/test_commercial_offer_contract.py
 python3 repos/clavenar-e2e/scripts/check_commercial_offer.py \
-  --source-root repos \
-  --require-source \
-  --require-private-inputs
+  --source-root repos --require-source --require-private-inputs
 ```
+
+---
+
+## 12. Verification routes
+
+Choose the smallest proof that matches the claim, then escalate when the claim
+crosses a service or release boundary.
+
+### Source and contract verification
+
+```bash
+cd repos/clavenar-specs
+python3 -m unittest discover -v -s tests -p 'test_*.py'
+
+cd ../clavenar-e2e
+python3 scripts/check_repository_documentation.py --source-root .. --require-source
+python3 -m unittest discover -v -s tests -p 'test_*.py'
+```
+
+### Service verification
+
+Run the changed repository's commands from its `AGENTS.md`. Those commands own
+the language toolchain, formatting, unit/integration tests, supply-chain gate,
+and any required sibling dependencies. A passing unrelated service test is not
+evidence for a cross-service feature.
+
+### Integration verification
+
+Select a focused runner from `repos/clavenar-e2e/docs/RUNNERS.md`. The runner
+catalog records its boot model, dependencies, mutation level, and assertions.
+Retained Compose runners and the adopted Kubernetes paths are distinct proofs;
+do not silently substitute one for the other.
+
+### Release and live verification
+
+Use the exact signed BOM, protected-distribution receipt, external-install
+runner, deployment-promotion receipt, and environment smoke appropriate to the
+claim. Public endpoints must report the promoted release. Repository state,
+local builds, demos, and simulators do not prove customer deployment state.

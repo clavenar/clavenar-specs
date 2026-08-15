@@ -616,8 +616,8 @@ The signing service returns `{ signature, key_id, signed_at }`. The proxy's NATS
 
 ### 6. Capability attestation
 
-**Implementation status.** The `k8s-key-bound` and `tpm2-quote` verifiers,
-signed measurement approval lifecycle, strict SVID issuance binding,
+**Implementation status.** Supported profiles are explicit: real `k8s-key-bound` and `tpm2-quote` verifiers implemented; production refuses mock evidence.
+The signed measurement approval lifecycle, strict SVID issuance binding,
 operator-mediated one-use TPM enrollment, exact-current renewal and runtime
 lookup, Proxy cache, and Policy input are implemented. Production refuses
 `dev-mock`, caller-supplied headers, unbound cache entries,
@@ -5769,7 +5769,7 @@ Seven sessions, paced to keep blast radius small:
 
 | # | Scope | Touches | Status |
 |---|---|---|---|
-| 1 | **This section** — pre-agree the wire shape. No code. | `clavenar-specs/TECH_SPEC.md` (this section), `clavenar-specs/FEATURES.md` §14.12 | **Shipped** v0.7.1 |
+| 1 | **This section** — pre-agree the wire shape. No code. | `clavenar-specs/TECH_SPEC.md` (this section), [`FEATURES.md` — internal service identity](FEATURES.md#internal-service-identity-and-capabilities) | **Shipped** v0.7.1 |
 | 2 | Extend `gen_certs.sh` to mint per-service bootstrap certs. Helm chart `proxyTls.secretName` → `tlsBundle.secretName` with per-pod `items:` projection. Identity allowlist gains `spiffe://clavenar.local/service/`. | `clavenar-proxy/scripts/gen_certs.sh`, `clavenar-charts/`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.7.3 |
 | 3 | **Brain pilot** — `axum-server` + `rustls` TLS receive path on the application port; SPIFFE SAN allowlist verifier. Proxy gains client-cert outbound on `/inspect`. Plain-HTTP health port preserved for kubelet (Q4 decision). | `clavenar-brain`, `clavenar-proxy` | **Shipped** v0.8.0 |
 | 4 | **Policy-engine receive** — mirror brain pattern: rustls + SPIFFE allowlist on `:8082`, plain-HTTP `/health` + `/readyz` + `/metrics` on `:9082`. Proxy's existing outbound mTLS (reqwest identity from session 3) auto-covers the new hop via URL scheme flip; no proxy code change. Helm chart `clavenar.backendEnvs` auto-injects the engine's TLS envs when `tlsBundle.secretName` is set, and the probe + metrics helpers now prefer `healthPort` so kubelet probes land on the plain port under TLS. Hil + ledger + console outbound are deferred to session 5 because hil/ledger both ship browser-facing routes on the same listener (WebAuthn approver UI, demo-session-scoped `/audit` reads); coupling them with the console outbound rollout keeps the dual-mode listener question in one place. Deep-review needs no receive-side mTLS — it consumes NATS only, has no inter-service inbound HTTP. | `clavenar-policy-engine`, `clavenar-charts`, `clavenar-e2e/{prod,dev}/docker-compose.yml` | **Shipped** v0.8.1 |
@@ -6155,7 +6155,7 @@ Five sessions, each independently shippable:
 
 | # | Scope | Touches | Status |
 |---|---|---|---|
-| 1 | **This section** — pre-agree the wire shape, refresh state machine, and SDK helper API. No code. | `clavenar-specs/TECH_SPEC.md` (this section), `clavenar-specs/FEATURES.md` §14.20 | **Shipped** v0.8.5 |
+| 1 | **This section** — pre-agree the wire shape, refresh state machine, and SDK helper API. No code. | `clavenar-specs/TECH_SPEC.md` (this section), [`FEATURES.md` — agent and workload identity](FEATURES.md#agent-and-workload-identity) | **Shipped** v0.8.5 |
 | 2 | **Helper crate + `/workload-svid` endpoint + identity self-refresh.** Whichever location §11 Q1 settles for the helper. New endpoint on `clavenar-identity` with auth via the existing `service/*` allowlist. Chain v3 `svid.workload_refreshed` event. Identity itself adopts the helper as the first caller (proves the no-cold-start path). | `clavenar-workload-identity`, `clavenar-identity`, `clavenar-ledger` (chain v3 event type) | **Shipped** v0.9.1 |
 | 3 | **Roll helper through proxy + brain + policy-engine.** Three services already speak mTLS on every receive path (B7 sessions 3+4). One-line callsite change: pass `WorkloadIdentity::rustls_server_config()` instead of static `RustlsConfig::from_pem` to `axum_server::bind_rustls`. Outbound `reqwest::Client` similarly. | `clavenar-proxy`, `clavenar-brain`, `clavenar-policy-engine` | **Shipped** v0.9.2 |
 | 4 | **Roll helper through ledger + hil + console + simulator + deep-review + demo-mint.** Same pattern as session 3 across the remaining six services. Receive-side dual-listener pattern (ledger, hil, identity) keeps both ports; only the mTLS port consumes the helper's server config. | `clavenar-ledger`, `clavenar-hil`, `clavenar-console`, `clavenar-simulator`, `clavenar-deep-review`, `clavenar-demo-mint` | **Shipped** v0.9.5 |

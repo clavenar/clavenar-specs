@@ -16,8 +16,8 @@
 - `README.md` — system overview: problem space, four-layer architecture
   (Layer 1 proxy / 2 brain / 3 policy-engine / 4 ledger), per-layer behaviour,
   glossary (MCP, SPIFFE/SVID, A2A, PBAC, HIL, WAO).
-- `FEATURES.md` — implementation-first companion: per-feature Concept /
-  Implementation / Verify, with copy-paste verification recipes.
+- `FEATURES.md` — implementation-first companion: feature-family boundaries,
+  owning sources, evidence authority, and executable verification routes.
 - `SECURITY.md` — vulnerability-disclosure policy in the GitHub `SECURITY.md`
   convention; kept a separate root file so it surfaces in the GitHub Security tab.
 - `deny.toml` — the **canonical** `cargo-deny` config for the whole Rust fleet.
