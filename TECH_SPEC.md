@@ -8332,8 +8332,8 @@ The strict schema is
 
 [`clavenar.route-schema-release/v1`](contracts/route-schema-release-v1.fixture.json)
 is the versioned documentation authority for the governed service surface. Its
-139 application routes are projected byte-for-byte from the generated
-workload-capability bundle: 29 HIL, 49 Identity, 36 Ledger, and 25 Policy
+141 application routes are projected byte-for-byte from the generated
+workload-capability bundle: 29 HIL, 51 Identity, 36 Ledger, and 25 Policy
 Engine routes. Every record binds the service, method, path template,
 capability, family, and exact allowed caller IDs. Public and diagnostics
 branches that are deliberately outside the generated application middleware

@@ -1,29 +1,25 @@
-# Cargo dependency conventions
+# Cargo dependency policy
 
-clavenar has **no Cargo workspace today** — each repo is its own
-standalone crate, pulled together by `path = "../..."` deps in local
-dev and by sibling-checkout (`gh repo clone`) in CI.
+Clavenar is a collection of independently released Rust crates, not a Cargo
+workspace. Local development and CI place the repositories in sibling
+directories so path dependencies resolve without a shared root manifest or
+lockfile.
 
-That decision is deliberate. A real workspace would force every repo
-to share a single `Cargo.lock`, every consumer rebuild on every
-unrelated bump, and complicate the per-repo CI matrix that today is
-the unit of independent releases. The trade-off is dependency drift:
-nothing structurally prevents repo A from running `reqwest = "0.13"`
-while repo B is on `0.12`, and we have hit that exact case (May 2026
-audit found brain + ledger on 0.13 while everyone else was 0.12).
+This preserves repository-level release and test boundaries, but Cargo cannot
+prevent dependency drift across repositories. This document supplies the
+coordination policy; each crate's `Cargo.toml` and `Cargo.lock` remain the
+executable record of what that crate builds.
 
-## Convention (until a meta-workspace is justified)
+## Fleet pins
 
-For deps that appear in three or more sibling repos, pin to a
-**single workspace-canonical version**. The canonical pins live in
-this document; per-repo `Cargo.toml` files mirror them. When a pin
-needs to move, edit this doc first, then mirror into every consumer
-in the same change set.
+A dependency used by three or more Clavenar repositories should use the fleet
+pin below. Features may differ by consumer, but transport and TLS choices must
+remain compatible. A deliberate exception belongs in the consuming manifest
+with a reason and must be reviewed during the next coordinated bump.
 
-This is the same convention `deny.toml` already uses (see
-`clavenar-specs/deny.toml` — synced verbatim across 20 Rust repos).
-
-### Canonical pins
+Change this table and all affected manifests as one coordinated change set.
+Unlike this version table, the root [`deny.toml`](../deny.toml) is copied
+byte-for-byte into every Rust repository.
 
 | Crate | Version | Features (typical) | Notes |
 |---|---|---|---|
@@ -55,47 +51,45 @@ This is the same convention `deny.toml` already uses (see
 | `clap` | `4.5` | `derive`, `env` | CLI parsers. |
 | `tempfile` | `3` | — | dev-dependencies for fixtures. |
 
-`async-trait` (`0.1`), `futures` (`0.3`), `sha2` (`0.10`), `hex`
-(`0.4`), `base64` (`0.22`) follow the same loose-version pattern.
+`async-trait` (`0.1`), `futures` (`0.3`), `sha2` (`0.10`), `hex` (`0.4`),
+and `base64` (`0.22`) follow the same major-or-minor pinning pattern.
 
-### Shared crate: `clavenar-shared`
+## Shared infrastructure
 
-Truly duplicated infrastructure (byte-identical helpers, near-identical
-middleware) lives in `repos/clavenar-shared/`, opted into via path-dep
-and optional cargo features:
+Infrastructure used by at least three services belongs in `clavenar-shared`.
+Consumers select only the features they need:
 
 ```toml
 clavenar-shared = { path = "../clavenar-shared", features = ["mtls"] }
 ```
 
-Modules today: `nats_tls` (always-on), `mtls` (gated behind the
-`mtls` feature so non-mTLS consumers don't pull axum + x509-parser).
-New extractions only land in `clavenar-shared` when **three or more
-consumers** carry the same logic — the "three similar lines beat
-the wrong abstraction" rule cuts both ways.
+The crate's `[features]` table is the authoritative feature inventory. Do not
+copy that evolving list into this guide. New abstractions belong there only
+after three consumers carry materially identical logic; service-specific
+behavior remains local.
 
-### When a meta-workspace becomes worth it
+## When to reconsider a Cargo workspace
 
-The per-repo independent build model breaks down if:
+Re-evaluate the independent-crate model when one or more of these conditions
+becomes persistent:
 
-- We start needing atomic version bumps across services (e.g.,
-  a wire-contract change that touches 5 repos in one PR).
-- CI minutes spent re-resolving the same dep graph repo-by-repo start
-  to dominate the bill (currently fine — Actions free tier 2000 min/
-  month resets on the 1st; supply-chain job runs only on PR + weekly).
-- A new dep needs a `[patch.crates-io]` override across all consumers.
+- releases routinely require one atomic lockfile change across many services;
+- repeated dependency resolution dominates CI time; or
+- a fleet-wide `[patch.crates-io]` override becomes necessary.
 
-When any of those land, revisit. The migration would be a single
-`repos/Cargo.toml` with `[workspace]` + `[workspace.dependencies]`,
-plus a `workspace = true` rewrite in each member's deps section.
+A migration would introduce a root `[workspace]` and
+`[workspace.dependencies]`, then replace member pins with `workspace = true`.
+That is a release-boundary change, not a dependency cleanup.
 
-## Process: bumping a pin
+## Changing a pin
 
-1. Edit the canonical version in this file.
-2. Apply the same edit to every consumer's `Cargo.toml`.
-3. Run `cargo update` per repo, commit the `Cargo.lock` churn alongside.
-4. Verify `cargo deny check all` + `cargo clippy --all-targets -- -D warnings`
-   per repo (workspace-wide via `for r in repos/clavenar-*; do …; done`).
-5. Land one PR per repo (no PRs in this workspace — direct to main per
-   workspace convention). Group commits in the same session so the
-   dep graph stays internally consistent during the rollout.
+1. Identify every consumer from canonical `Cargo.toml` files.
+2. Update this table and every affected manifest.
+3. Run `cargo update` in each consumer and review its `Cargo.lock` diff.
+4. Run the commands required by each repository's `AGENTS.md`, including its
+   tests, Clippy, and supply-chain checks.
+5. Keep the coordinated commits together so the fleet does not advertise a pin
+   that its consumers have not adopted.
+
+Review lockfile changes for unexpected TLS backends, duplicate major versions,
+new native dependencies, and newly introduced advisories or license classes.

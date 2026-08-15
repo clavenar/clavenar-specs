@@ -2,27 +2,37 @@
 
 Release 1.234.0 publishes
 [`clavenar.route-schema-release/v1`](../contracts/route-schema-release-v1.fixture.json).
-The JSON fixture is authoritative; this page is the readable integration
-guide.
+The fixture is authoritative. This guide summarizes its scope and highlights
+integration edges where guessed routes or payloads have caused drift.
+
+| Release field | Value |
+|---|---:|
+| Services | 4 |
+| Generated-enforced routes | 141 |
+| Integration contracts | 6 |
+| JSON Schemas | 12 |
+| Source bindings | 13 |
 
 ## Route authority
 
-The inventory contains 139 exact generated-enforced application routes.
+The route inventory is projected from the generated workload-capability bundle.
+Each record binds the method and path template to its capability, family, and
+exact allowed caller IDs.
 
 | Service | Routes | Authority |
 |---|---:|---|
 | HIL | 29 | method, path template, capability, family, allowed caller IDs |
-| Identity | 49 | method, path template, capability, family, allowed caller IDs |
+| Identity | 51 | method, path template, capability, family, allowed caller IDs |
 | Ledger | 36 | method, path template, capability, family, allowed caller IDs |
 | Policy Engine | 25 | method, path template, capability, family, allowed caller IDs |
 
 Console SAML browser routes and Ledger's public aggregate verification route
-are documented by the integration contracts but are not added to the 139-route
+are documented by the integration contracts but are not added to the 141-route
 generated application total.
 
-## Correct contract examples
+## Integration examples
 
-### Policy
+### Policy evaluation
 
 Policy evaluation is `POST /evaluate`, not `/eval`. The request is
 `PolicyInput`; the response is `PolicyDecision`.
@@ -40,7 +50,7 @@ Policy evaluation is `POST /evaluate`, not `/eval`. The request is
 }
 ```
 
-### HIL
+### HIL decision
 
 A decision targets the pending UUID in the route:
 `POST /decide/{id}`. The correlation ID is not the route identifier and an
@@ -55,7 +65,7 @@ not from caller-supplied attribution fields.
 }
 ```
 
-### Ledger and audit
+### Ledger verification and audit
 
 `GET /verify` always uses the `VerifyResult` shape and reports an invalid chain
 in the response body; it does not use an alternate 409 body.
@@ -79,7 +89,7 @@ in the response body; it does not use an alternate 409 body.
 Correlation replay is `GET /audit/correlation/{correlation_id}` on Ledger's
 authenticated internal surface.
 
-### Federated identity and SAML
+### Console SAML
 
 SAML is a Console feature. Build Console with `--features saml`, set
 `CLAVENAR_CONSOLE_AUTH=saml`, then configure:
@@ -99,7 +109,7 @@ CLAVENAR_CONSOLE_FEDERATED_MFA_VALUES=otp,webauthn
 The browser flow is `GET /auth/saml/login` followed by the IdP's signed form
 POST to `/auth/saml/acs`.
 
-### PostgreSQL Ledger
+### PostgreSQL Ledger deployment
 
 The supported chart path is one Ledger writer, verified TLS, and no SQLite
 PVC. It requires every existing Secret name and key:
@@ -120,7 +130,7 @@ persistence:
     enabled: false
 ```
 
-### Rust SDK
+### Rust HIL client
 
 `HilClient::decide` posts to `POST /decide/{id}` and returns the updated
 `PendingRequest`. The caller supplies the pending UUID, typed decision,
@@ -128,6 +138,8 @@ optional reason/diff/assertion, a `HilDecideCredential`, and optional operator
 surface. Non-2xx responses preserve HIL's exact status and body.
 
 ## Verification
+
+From `clavenar-specs` with the canonical sibling repositories checked out:
 
 ```bash
 python3 -m pytest tests/test_route_schema_release_contract.py

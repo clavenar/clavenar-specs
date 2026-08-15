@@ -27,6 +27,7 @@
   customer legal-exchange mirror.
 - `tests/` — regression tests for contract fixtures, source mirrors, and public
   claim boundaries.
+- `docs/README.md` — guide index and authority map for the documentation set.
 - `docs/ARCHITECTURE.md` — C4 context + container view, deployment topology,
   trust chain; the visual index over `TECH_SPEC.md`.
 - `docs/CARGO_DEPENDENCIES.md` — cross-repo dependency conventions (no Cargo
@@ -60,4 +61,4 @@
 ## Pointers
 README.md — system overview · TECH_SPEC.md — wire contracts ·
 FEATURES.md — verification recipes · SECURITY.md — disclosure policy ·
-docs/ARCHITECTURE.md · docs/CARGO_DEPENDENCIES.md.
+docs/README.md — focused integration and design guides.

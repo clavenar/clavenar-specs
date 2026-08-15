@@ -29,7 +29,7 @@
     {"name": "clavenar-shadow-scanner", "visibility": "public", "markdownFiles": 7},
     {"name": "clavenar-shared", "visibility": "public", "markdownFiles": 4},
     {"name": "clavenar-simulator", "visibility": "public", "markdownFiles": 6},
-    {"name": "clavenar-specs", "visibility": "public", "markdownFiles": 11},
+    {"name": "clavenar-specs", "visibility": "public", "markdownFiles": 12},
     {"name": "clavenar-typescript-sdk", "visibility": "public", "markdownFiles": 15},
     {"name": "clavenar-website", "visibility": "public", "markdownFiles": 16},
     {"name": "clavenar-workload-identity", "visibility": "public", "markdownFiles": 5}
@@ -215,7 +215,7 @@
     "repositories": 30,
     "publicRepositories": 29,
     "restrictedRepositories": 1,
-    "markdownFiles": 275,
+    "markdownFiles": 276,
     "workspaceInputs": 2,
     "checks": 9,
     "claimStates": 4,

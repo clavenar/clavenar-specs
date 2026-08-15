@@ -1,26 +1,34 @@
-# Governed execution migration
+# SDK migration to explicit execution contracts
 
-Clavenar Proxy 0.5.0 and Lite 0.9.0 require every effect-capable `POST /mcp`
-request to select exactly one execution model. An unselected tool call returns
-HTTP 426 with `error: "client_contract_required"` and `executable: false`
-before authentication-side mutation, rate limiting, policy evaluation, HIL,
-Ledger, receipt creation, or an upstream call.
+Use this guide when upgrading a client, Proxy, or Lite across the explicit
+execution boundary. The machine-readable authority is
+[`clavenar.client-migration/v1`](../contracts/client-migration-v1.fixture.json),
+validated by
+[`client-migration-v1.schema.json`](../contracts/client-migration-v1.schema.json).
+
+Proxy 0.5.0 and Lite 0.9.0 require every effect-capable `POST /mcp` request to
+select exactly one execution model. An unselected tool call returns HTTP 426
+with `error: "client_contract_required"` and `executable: false` before
+authentication-side mutation, rate limiting, policy evaluation, HIL, Ledger,
+receipt creation, or an upstream call.
 
 Unselected MCP control methods remain compatible because they cannot execute a
 tool: `initialize`, `initialized`, `notifications/*`, `ping`, and `tools/list`.
 
-## Upgrade versions
+## Minimum safe versions
 
-| Component | Minimum version |
-|---|---:|
-| Proxy | 0.5.0 |
-| Lite | 0.9.0 |
-| Rust SDK | 0.3.0 |
-| TypeScript SDK | 1.5.0 |
-| Python SDK | 1.4.0 |
-| Go SDK | 1.3.0 |
-| Java SDK | 1.4.0 |
-| .NET SDK | 1.5.0 |
+| Surface | Minimum version | Decision entry point |
+|---|---:|---|
+| Proxy | 0.5.0 | Gateway contract enforcement |
+| Lite | 0.9.0 | Gateway contract enforcement |
+| Rust `clavenar-sdk` | 0.3.0 | `ClavenarClient` prepared/governed execution APIs |
+| TypeScript `@clavenar/agent-sdk` | 1.5.0 | `clavenarWrap` |
+| Python `clavenar-agent-sdk` | 1.4.0 | `clavenar_wrap` |
+| Go SDK | 1.3.0 | `Inspect` / `InspectAll` |
+| Java `com.clavenar:agent-sdk` | 1.4.0 | `ClavenarInspector` |
+| .NET `Clavenar.AgentSdk` | 1.5.0 | `ClavenarInspector` |
+
+## Rollout order
 
 Upgrade the client before the gateway. During a rolling deployment, upgraded
 clients remain compatible with the preceding gateway because they already send
@@ -30,8 +38,17 @@ caller still receives 426; do not restore silent execution in the client.
 
 ## Choose one execution model
 
-Use side-effect-free decision when the host application owns execution. Create
-a canonical UUID before the first network attempt and send:
+| Property | Side-effect-free decision | Durable server execution |
+|---|---|---|
+| Execution owner | Host application | Gateway |
+| Selector | `clavenar.decision/v1` | `clavenar.server-execution/v1` |
+| Gateway may execute | No | Yes, once through the retained execution record |
+| Automatic transport retry | Allowed with the same ID and byte-equivalent request | Never |
+
+### Side-effect-free decision
+
+Use this model when the host application owns execution. Create a canonical
+UUID before the first network attempt and send:
 
 ```http
 POST /mcp
@@ -45,9 +62,10 @@ decision. Persist the exact intent before invoking the registered executor,
 invoke it at most once, persist the actual result and effect identity, and
 deliver the terminal receipt from the durable outbox.
 
-Use durable server execution only when the gateway intentionally owns the
-upstream call. Create a canonical UUID before the first network attempt and
-send:
+### Durable server execution
+
+Use this model only when the gateway intentionally owns the upstream call.
+Create a canonical UUID before the first network attempt and send:
 
 ```http
 POST /mcp
@@ -60,16 +78,7 @@ result before returning it. Repeating the same identity and payload reads the
 retained result. A changed payload conflicts, and an in-flight record remains a
 non-executable uncertain outcome.
 
-## Language migration
-
-| Language | Upgrade | Decision entry point |
-|---|---|---|
-| Rust | `clavenar-sdk` 0.3.0 | `ClavenarClient` prepared/governed execution APIs |
-| TypeScript | `@clavenar/agent-sdk` 1.5.0 | `clavenarWrap` |
-| Python | `clavenar-agent-sdk` 1.4.0 | `clavenar_wrap` |
-| Go | `clavenar-go-sdk` 1.3.0 | `Inspect` / `InspectAll` |
-| Java | `com.clavenar:agent-sdk` 1.4.0 | `ClavenarInspector` |
-| .NET | `Clavenar.AgentSdk` 1.5.0 | `ClavenarInspector` |
+## Client behavior
 
 The maintained clients allocate and retain the canonical ID, select only the
 decision contract for inspection, submit siblings atomically, and keep the
@@ -93,8 +102,3 @@ the model to manufacture a replacement call.
   do not execute again.
 - Redeliver retained receipts from the outbox without entering an execution
   path.
-
-The machine-readable source of this matrix is
-[`client-migration-v1.fixture.json`](../contracts/client-migration-v1.fixture.json),
-validated by
-[`client-migration-v1.schema.json`](../contracts/client-migration-v1.schema.json).

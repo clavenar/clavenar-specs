@@ -1,19 +1,16 @@
 # Clavenar — architecture
 
-System-wide architecture diagrams. The wire contracts behind every box and
-arrow live in [`../TECH_SPEC.md`](../TECH_SPEC.md); this file is the
-visual index. Five views, top-down by abstraction:
+This is the visual index for the system. The diagrams explain relationships;
+[`TECH_SPEC.md`](../TECH_SPEC.md) and the machine-readable contracts define the
+wire behavior behind every box and arrow.
 
-1. [System Context](#1-system-context) — who talks to Clavenar, and what
-   external services Clavenar depends on.
-2. [Container View](#2-container-view) — the four-layer hot path plus
-   the orchestrators around it.
-3. [Deployment Boundary](#3-deployment-boundary) — sanitized product roles
-   without live host or environment mapping.
-4. [Demo-Prefix End-to-End](#4-demo-prefix-end-to-end) — visitor →
-   token → cookie → correlation ID, the per-visitor isolation flow.
-5. [Trust Chain](#5-trust-chain) — every credential Clavenar issues,
-   from CA root down to the per-action ed25519 signature.
+| View | Question answered |
+|---|---|
+| [System context](#1-system-context) | Who calls Clavenar, and which external systems does it use? |
+| [Container view](#2-container-view) | Which service owns each step in governed execution? |
+| [Deployment boundary](#3-deployment-boundary) | Which public product roles exist without disclosing a live topology? |
+| [Demo-prefix flow](#4-demo-prefix-end-to-end) | How is browser-demo traffic isolated by visitor? |
+| [Trust chain](#5-trust-chain) | Which roots issue or verify each credential and evidence type? |
 
 Per-repo behavior diagrams live in each service's own `docs/SEQUENCES.md`.
 
@@ -26,7 +23,7 @@ flowchart LR
 
   Visitor[Visitor — browser]
   Operator[Operator — console, clavenarctl]
-  Agent[AI Agent — any LLM]
+  Agent[Agent runtime — Codex or another MCP client]
   Upstream[Upstream MCP target]
 
   subgraph Clavenar[Clavenar]
@@ -62,13 +59,11 @@ flowchart LR
 
 ## 2. Container View
 
-The four-layer hot path is serial: the proxy awaits Brain `/inspect`,
-derives `intent_score` from that verdict, then calls Policy `/evaluate`
-(`proxy → brain → policy`). The ledger row is written downstream over
-the NATS forensic bus once the verdict resolves. Everything else is an
-orchestrator hanging off the side: HIL gates Yellow-tier traffic,
-identity roots the trust chain, sandbox annotates HIL pendings,
-deep-review samples forensic rows.
+The governed hot path is serial: Proxy awaits Brain `/inspect`, derives
+`intent_score`, then calls Policy `/evaluate`. Once the verdict resolves, Proxy
+publishes the forensic event for Ledger persistence. HIL gates Yellow-tier
+traffic, Identity supplies credentials and signatures, Sandbox annotates HIL
+pendings, and Deep Review samples forensic rows.
 
 ```mermaid
 flowchart TD
@@ -233,19 +228,21 @@ sequenceDiagram
 
 ## 5. Trust Chain
 
-Every credential Clavenar issues, top to bottom. The root is the mTLS
-CA (`clavenar-proxy/certs/ca.crt`). The Vault transit key
-`clavenar-identity` (ed25519) is the only signing key the rest of the
-stack trusts; the `/jwks.json` endpoint on `clavenar-identity` is the
-sole verifier.
+The trust chain has two distinct roots. The deployment CA signs bootstrap,
+agent, and workload certificates. Identity's Ed25519 signer—Vault Transit by
+default—signs grants, actor tokens, and finalized actions. Identity publishes
+current public keys through `/jwks.json`; Ledger obtains the authorized,
+bounded historical key set through workload-mTLS
+`/ledger-verification-keys`. Private keys remain with their owner or signing
+backend.
 
 ```mermaid
 flowchart TD
   accTitle: Clavenar credential trust chain
-  accDescr: The mTLS CA and Vault signing key root bootstrap credentials, workload and agent SVIDs, delegation grants, actor tokens, and per-action signatures whose public verification material and previous hashes bind ledger rows.
+  accDescr: The deployment CA signs bootstrap certificates and agent or workload SVIDs, while the Identity Ed25519 backend signs delegation grants, actor tokens, and finalized actions; current and historical public-key endpoints support verification of the resulting ledger chain.
 
   CA[mTLS CA root — clavenar-proxy/certs/ca.crt]
-  Vault[Vault transit key — clavenar-identity ed25519]
+  Signer[Identity Ed25519 signer — Vault Transit by default]
 
   Bootstrap[Bootstrap certs — service-name.crt per service]
   AgentAttest[Agent attestation — hardware or k8s projected]
@@ -256,17 +253,18 @@ flowchart TD
   ActorToken[A2A actor token — audience-bound, TTL up to 60s, single use]
   WorkloadSVID[Workload SVID — per service, refresh every TTL/2 via ArcSwap]
   Sign[Per-action ed25519 signature — over canonical hashable row]
-  LedgerRow[Ledger row — chain v2 or v3, prev_hash linked]
+  LedgerRow[Ledger row — versioned chain, prev_hash linked]
 
-  JWKS[/jwks.json — public verifier endpoint/]
+  JWKS[/jwks.json — current public keys/]
+  HistoryKeys[/ledger-verification-keys — authorized historical keys/]
 
   CA --> Bootstrap
-  Bootstrap --> WorkloadSVID
-  Vault --> SVID
-  Vault --> Grant
-  Vault --> ActorToken
-  Vault --> WorkloadSVID
-  Vault --> Sign
+  CA --> SVID
+  CA --> WorkloadSVID
+  Bootstrap -->|authorizes initial enrollment| WorkloadSVID
+  Signer --> Grant
+  Signer --> ActorToken
+  Signer --> Sign
 
   AgentAttest -->|durable intent + CSR-bound POST /svid; key stays local| SVID
   HumanOIDC -->|POST /grant — RFC 8693 token exchange| Grant
@@ -278,8 +276,10 @@ flowchart TD
   Sign -->|POST /sign — proxy after verdict resolves| LedgerRow
   LedgerRow -->|prev_hash links every prior row| LedgerRow
 
-  Vault --> JWKS
+  Signer --> JWKS
+  Signer --> HistoryKeys
   JWKS -->|verify| Sign
   JWKS -->|verify| Grant
   JWKS -->|verify| ActorToken
+  HistoryKeys -->|verify retained signatures| LedgerRow
 ```

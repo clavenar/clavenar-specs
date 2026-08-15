@@ -5,12 +5,28 @@ profile layered on `clavenar.ledger-chain/v5`. It distinguishes a valid
 unkeyed hash walk from evidence whose historical signatures and RFC 3161
 timestamps have also been verified against explicit trust.
 
+Use this profile to answer three separate questions: whether the hash chain is
+intact, whether signed rows verify against trusted historical keys, and whether
+retained timestamps verify against a pinned TSA trust bundle. None of those
+results is, by itself, a conformity assessment or legal conclusion.
+
+## Contract authority
+
 The machine-readable sources are:
 
-- `contracts/historical-signing-keys-v1.schema.json`
-- `contracts/historical-signing-keys-v1.fixture.json`
-- `contracts/cryptographic-verification-v2.schema.json`
-- `contracts/cryptographic-verification-v2.fixture.json`
+- [`historical-signing-keys-v1.schema.json`](../contracts/historical-signing-keys-v1.schema.json)
+- [`historical-signing-keys-v1.fixture.json`](../contracts/historical-signing-keys-v1.fixture.json)
+- [`cryptographic-verification-v2.schema.json`](../contracts/cryptographic-verification-v2.schema.json)
+- [`cryptographic-verification-v2.fixture.json`](../contracts/cryptographic-verification-v2.fixture.json)
+
+The schema defines four result states:
+
+| Status | Meaning |
+|---|---|
+| `verified` | Every required signature and timestamp verifies; no legacy exception is present. |
+| `verified_with_legacy_exceptions` | Every verifiable item passes, and only the bounded lifecycle exception described below remains. |
+| `unavailable` | Required key or TSA trust material is unavailable, so verification cannot complete. |
+| `invalid` | Available evidence fails a cryptographic, lineage, shape, or trust check. |
 
 ## Historical signing keys
 
@@ -20,11 +36,12 @@ listener. The exact Ledger workload certificate must receive the
 are the two exact service SPIFFE IDs; HTTP reachability, a caller header, or the
 public `/jwks.json` endpoint cannot supply this authority.
 
-`generated_at <= evaluation_time < expires_at`, and the response lifetime is at
-most 120 seconds. `sequence` is the greatest retained Vault Transit key
-version. A verifier remembers the greatest sequence it has accepted and rejects
-a lower value. `lineage_sha256` is SHA-256 over RFC 8785/JCS canonical JSON of
-this exact object:
+The response is valid only while
+`generated_at <= evaluation_time < expires_at`, and its lifetime is at most 120
+seconds. `sequence` is the greatest retained Vault Transit key version. A
+verifier remembers the greatest accepted sequence and rejects a lower value.
+`lineage_sha256` is SHA-256 over RFC 8785/JCS canonical JSON of this exact
+object:
 
 ```json
 {
@@ -50,7 +67,7 @@ independently committed attribution and does not create a signing shape when
 both `signature` and `key_id` are absent. Such optional-signature rows remain
 explicitly unsigned hash-chain evidence.
 
-### Bounded legacy lifecycle classification
+### Bounded legacy lifecycle exception
 
 The historical Identity lifecycle publisher generated the UUID and timestamp
 used in its signature but omitted both from the request. Ledger therefore
@@ -140,5 +157,17 @@ count only cryptographically verified RFC 3161 responses. `unavailable` or
 `invalid` cryptography yields partial or no evidence and cannot satisfy Article
 15.
 
-This profile is evidence verification, not a conformity assessment or legal
-conclusion.
+## Verification order
+
+1. Walk and validate the complete unkeyed hash chain.
+2. Fetch and validate the bounded historical key lineage.
+3. Verify every complete signing shape with the row's temporally valid key.
+4. Re-verify every retained RFC 3161 response against the configured trust
+   bundle and exact anchored chain hash.
+5. Publish a complete `clavenar.verified-chain/v1` commitment only when the
+   aggregate status permits it.
+6. Derive compliance metrics only from the verified counts, never from field
+   presence.
+
+This ordering prevents a valid hash walk from being presented as proof of
+signature or timestamp trust.
