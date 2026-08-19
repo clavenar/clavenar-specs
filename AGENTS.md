@@ -3,8 +3,13 @@
 
 ## Build, test, lint
 - Contract tests: `python3 -m unittest discover -v -s tests -p 'test_*.py'`
-- Validate prose links and anchors through the repository-documentation gate in
-  sibling `clavenar-e2e` after cross-repository documentation changes.
+- For documentation or cross-repository contract changes, run these commands
+  from sibling `clavenar-e2e` to validate prose, agent guides, and contract
+  regression coverage:
+  ```bash
+  python3 scripts/check_repository_documentation.py --source-root .. --require-source
+  python3 -m unittest discover -v -s tests -p 'test_*.py'
+  ```
 - There is no compiled application here, but the JSON schemas, fixtures, sync
   scripts, and Python regression tests are executable release inputs—not prose.
 
