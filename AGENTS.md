@@ -12,6 +12,11 @@
   ```
 - There is no compiled application here, but the JSON schemas, fixtures, sync
   scripts, and Python regression tests are executable release inputs—not prose.
+- This repository currently has no repository-local GitHub Actions workflow.
+  The assembled `clavenar-e2e` documentation/contract gates are the downstream
+  CI owner, so run the cross-repository commands above before pushing a contract
+  or documentation change rather than assuming this checkout will validate
+  itself remotely.
 
 ## Layout
 - `TECH_SPEC.md` — the consolidated wire-contract spec; **source of truth**. Each
@@ -64,6 +69,7 @@
 - Commit subjects must start with a lowercase letter.
 
 ## Pointers
-README.md — system overview · TECH_SPEC.md — wire contracts ·
-FEATURES.md — verification recipes · SECURITY.md — disclosure policy ·
-docs/README.md — focused integration and design guides.
+
+[README](README.md) — system overview · [technical specification](TECH_SPEC.md) —
+wire contracts · [features](FEATURES.md) — verification recipes ·
+[security policy](SECURITY.md) · [focused guides](docs/README.md).
